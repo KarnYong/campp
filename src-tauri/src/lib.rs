@@ -21,6 +21,11 @@ pub fn run() {
             // Settings commands
             commands::get_settings,
             commands::save_settings,
+            // Runtime download commands
+            commands::check_runtime_installed,
+            commands::download_runtime,
+            commands::get_runtime_dir,
+            commands::reset_installation,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

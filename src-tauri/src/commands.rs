@@ -3,9 +3,13 @@
 //! This module contains all Tauri commands that are exposed to the frontend.
 
 use crate::process::{ServiceMap, ServiceType};
+use crate::runtime::downloader::{DownloadProgress, RuntimeDownloader};
+use std::fs;
+use std::sync::Mutex;
+use tauri::Emitter;
 
-// Global process manager instance (using lazy_static or once_cell in production)
-// For now, we'll use a simple approach
+// Global state for download progress
+static DOWNLOAD_PROGRESS: Mutex<Option<DownloadProgress>> = Mutex::new(None);
 
 /// Start a service
 #[tauri::command]
@@ -45,6 +49,57 @@ pub async fn get_settings() -> Result<crate::config::AppSettings, String> {
 pub async fn save_settings(_settings: crate::config::AppSettings) -> Result<(), String> {
     // TODO: Implement settings persistence in Phase 4
     Ok(())
+}
+
+/// Check if runtime binaries are already installed
+#[tauri::command]
+pub async fn check_runtime_installed() -> Result<bool, String> {
+    let downloader = RuntimeDownloader::new();
+    Ok(downloader.is_installed())
+}
+
+/// Reset installation (for testing/debug - deletes runtime directory)
+#[tauri::command]
+pub async fn reset_installation() -> Result<String, String> {
+    let downloader = RuntimeDownloader::new();
+    let runtime_dir = downloader.get_runtime_dir().map_err(|e| e.to_string())?;
+
+    if runtime_dir.exists() {
+        fs::remove_dir_all(&runtime_dir)
+            .map_err(|e| format!("Failed to remove runtime directory: {}", e))?;
+    }
+
+    Ok("Installation reset. Run the app again to see first-run wizard.".to_string())
+}
+
+/// Get the runtime directory path
+#[tauri::command]
+pub async fn get_runtime_dir() -> Result<String, String> {
+    let downloader = RuntimeDownloader::new();
+    downloader
+        .get_runtime_dir()
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+/// Download and install runtime binaries
+#[tauri::command]
+pub async fn download_runtime(app: tauri::AppHandle) -> Result<String, String> {
+    let downloader = RuntimeDownloader::new();
+    let app_clone = app.clone();
+
+    // Emit progress updates via Tauri events
+    downloader
+        .download_all(Box::new(move |progress| {
+            let _ = app_clone.emit("download-progress", &progress);
+
+            // Store latest progress
+            if let Ok(mut p) = DOWNLOAD_PROGRESS.lock() {
+                *p = Some(progress);
+            }
+        }))
+        .await?;
+
+    Ok("Runtime binaries installed successfully".to_string())
 }
 
 // Helper function for mock data
