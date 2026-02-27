@@ -3,6 +3,26 @@
 version = 4
 
 [[package]]
+name = "CAMPP"
+version = "0.1.0"
+dependencies = [
+ "dirs 5.0.1",
+ "flate2",
+ "futures-util",
+ "hex",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tar",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-opener",
+ "tokio",
+ "zip",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4074,26 +4094,6 @@ dependencies = [
  "webview2-com",
  "window-vibrancy",
  "windows",
-]
-
-[[package]]
-name = "tauri-app"
-version = "0.1.0"
-dependencies = [
- "dirs 5.0.1",
- "flate2",
- "futures-util",
- "hex",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sha2",
- "tar",
- "tauri",
- "tauri-build",
- "tauri-plugin-opener",
- "tokio",
- "zip",
 ]
 
 [[package]]

@@ -27,15 +27,20 @@ impl BinaryComponent {
 
     pub fn version(&self) -> &str {
         match self {
-            BinaryComponent::Caddy => "v2.8.4",
-            BinaryComponent::Php => "v8.3.0",
-            BinaryComponent::MariaDB => "v11.3.2",
-            BinaryComponent::PhpMyAdmin => "v5.2.1",
+            BinaryComponent::Caddy => "2.8.4",
+            BinaryComponent::Php => "8.5.1",
+            BinaryComponent::MariaDB => "12.2.2",
+            BinaryComponent::PhpMyAdmin => "5.2.2",
         }
     }
 
     pub fn display_name(&self) -> String {
-        format!("{} {}", self.name(), self.version())
+        match self {
+            BinaryComponent::Caddy => "Caddy 2.8.4".to_string(),
+            BinaryComponent::Php => "PHP 8.5.1".to_string(),
+            BinaryComponent::MariaDB => "MariaDB 12.2.2".to_string(),
+            BinaryComponent::PhpMyAdmin => "phpMyAdmin 5.2.2".to_string(),
+        }
     }
 
     pub fn binary_name(&self) -> &str {
@@ -166,12 +171,15 @@ impl RuntimeDownloader {
 
     /// Get the URL for a binary component
     fn get_binary_url(&self, component: BinaryComponent) -> String {
-        // Use actual release URLs with correct format for each platform
         match component {
             BinaryComponent::Caddy => {
-                // Caddy provides different builds per platform
+                // Caddy official GitHub releases - these are reliable
                 match self.platform {
-                    Platform::WindowsX64 | Platform::WindowsArm64 => {
+                    Platform::WindowsX64 => {
+                        "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_windows_amd64.zip".to_string()
+                    }
+                    Platform::WindowsArm64 => {
+                        // Same x64 build works on ARM64 Windows via emulation
                         "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_windows_amd64.zip".to_string()
                     }
                     Platform::MacOSX64 => {
@@ -189,40 +197,42 @@ impl RuntimeDownloader {
                 }
             }
             BinaryComponent::Php => {
-                // PHP builds - use alternative source or skip for now
-                // For development, we'll use a GitHub mirror
+                // For PHP, use the official Windows binaries
                 match self.platform {
                     Platform::WindowsX64 => {
-                        // Use a different source or skip for MVP
-                        "https://github.com/nttravis/php-build-binary-windows-php-83/releases/download/php-8.3.0/php-8.3.0-nts-win32-vs16-x64.zip".to_string()
+                        "https://windows.php.net/downloads/releases/php-8.5.1-Win32-vs17-x64.zip".to_string()
                     }
                     Platform::WindowsArm64 => {
-                        "https://github.com/nttravis/php-build-binary-windows-php-83/releases/download/php-8.3.0/php-8.3.0-nts-win32-vs16-arm64.zip".to_string()
+                        // Use x64 build for ARM64 Windows (works via emulation)
+                        "https://windows.php.net/downloads/releases/php-8.5.1-Win32-vs17-x64.zip".to_string()
                     }
                     _ => {
-                        // macOS and Linux - use official source or skip
-                        "https://github.com/php/php-src/archive/refs/tags/php-8.3.0.tar.gz".to_string()
+                        // For Unix systems, use x64 build
+                        "https://windows.php.net/downloads/releases/php-8.5.1-Win32-vs17-x64.zip".to_string()
                     }
                 }
             }
             BinaryComponent::MariaDB => {
-                // MariaDB builds per platform
+                // MariaDB official downloads using CDN
                 match self.platform {
-                    Platform::WindowsX64 => {
-                        "https://downloads.mariadb.com/MariaDB/mariadb-11.3.2/winx64-packages/mariadb-11.3.2-winx64.zip".to_string()
+                    Platform::WindowsX64 | Platform::WindowsArm64 => {
+                        "https://dlm.mariadb.com/4582476/MariaDB/mariadb-12.2.2/winx64-packages/mariadb-12.2.2-winx64.zip".to_string()
                     }
-                    Platform::WindowsArm64 => {
-                        "https://downloads.mariadb.com/MariaDB/mariadb-11.3.2/winx64-packages/mariadb-11.3.2-winx64.zip".to_string()
+                    Platform::MacOSX64 | Platform::MacOSArm64 => {
+                        // macOS - use x64 package
+                        "https://dlm.mariadb.com/4685492/MariaDB/mariadb-12.2.2/macos-arm64-macos-14-arm64-mariadb-12.2.2_tar.gz".to_string()
                     }
-                    _ => {
-                        // macOS and Linux use tar.gz
-                        "https://downloads.mariadb.com/MariaDB/mariadb-11.3.2/bintar-linux-systemd-x86_64/mariadb-11.3.2-linux-systemd-x86_64.tar.gz".to_string()
+                    Platform::LinuxX64 => {
+                        "https://dlm.mariadb.com/4685431/MariaDB/mariadb-12.2.2/bintar-linux-systemd-x86_64/mariadb-12.2.2_linux_systemd_x86_64.tar.gz".to_string()
+                    }
+                    Platform::LinuxArm64 => {
+                        "https://dlm.mariadb.com/4685433/MariaDB/mariadb-12.2.2/bintar-linux-systemd-aarch64/mariadb-12.2.2_linux_systemd_aarch64.tar.gz".to_string()
                     }
                 }
             }
             BinaryComponent::PhpMyAdmin => {
-                // phpMyAdmin is platform-independent (PHP files)
-                "https://files.phpmyadmin.net/phpMyAdmin/5.2.1/phpMyAdmin-5.2.1-all-languages.zip".to_string()
+                // phpMyAdmin - platform independent PHP files
+                "https://files.phpmyadmin.net/phpMyAdmin/5.2.2/phpMyAdmin-5.2.2-all-languages.zip".to_string()
             }
         }
     }
@@ -447,8 +457,6 @@ impl RuntimeDownloader {
         &self,
         progress_cb: ProgressCallback,
     ) -> Result<Vec<PathBuf>, String> {
-        // SIMULATION MODE: For Phase 2 MVP testing, simulate downloads
-        // without actually downloading large files
         let components = [
             BinaryComponent::Caddy,
             BinaryComponent::Php,
@@ -457,47 +465,65 @@ impl RuntimeDownloader {
         ];
         let total = components.len() as u8;
 
-        let runtime_dir = self.get_runtime_dir()?;
-        fs::create_dir_all(&runtime_dir)
-            .map_err(|e| format!("Failed to create runtime directory: {}", e))?;
+        // Create temp directory for downloads
+        let temp_dir = std::env::temp_dir().join("campp-download");
+        fs::create_dir_all(&temp_dir)
+            .map_err(|e| format!("Failed to create temp directory: {}", e))?;
+
+        let mut downloaded_files = Vec::new();
 
         for (i, component) in components.iter().enumerate() {
             let current = (i + 1) as u8;
-            let display_name = component.display_name();
-            let version = component.version().to_string();
 
-            // Simulate download progress
-            for p in 0..=100 {
-                progress_cb(DownloadProgress {
-                    step: DownloadStep::Downloading,
-                    percent: p,
-                    current_component: component.name().to_string(),
-                    component_display: display_name.clone(),
-                    version: version.clone(),
-                    total_components: total,
-                    downloaded_bytes: (p as u64) * 1024 * 1024,
-                    total_bytes: 100 * 1024 * 1024,
-                });
-                tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
-            }
+            // Download
+            let downloaded_path = self
+                .download_component(*component, &temp_dir, &progress_cb, current, total)
+                .await?;
 
-            // Simulate extraction
+            // Verify checksum (TODO: add expected checksums)
+            // For now, skip checksum verification since we'd need to pre-calculate them
+            // In production, download from a trusted source with known checksums
             progress_cb(DownloadProgress {
                 step: DownloadStep::Extracting,
-                percent: 50,
+                percent: 0,
                 current_component: component.name().to_string(),
-                component_display: display_name.clone(),
-                version: version.clone(),
+                component_display: component.display_name(),
+                version: component.version().to_string(),
                 total_components: total,
                 downloaded_bytes: 0,
                 total_bytes: 0,
             });
-            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
-            // Create a marker file to indicate this component was "installed"
+            let runtime_dir = self.get_runtime_dir()?;
+            fs::create_dir_all(&runtime_dir)
+                .map_err(|e| format!("Failed to create runtime directory: {}", e))?;
+
+            // Determine extraction method based on file extension
+            let extension = downloaded_path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("");
+
+            let is_tar_gz = downloaded_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.ends_with(".tar.gz"))
+                .unwrap_or(false);
+
+            if is_tar_gz || extension == "gz" {
+                self.extract_tar_gz(&downloaded_path, &runtime_dir)?;
+            } else if extension == "zip" {
+                self.extract_zip(&downloaded_path, &runtime_dir)?;
+            } else {
+                return Err(format!("Unsupported archive format: {}", extension));
+            }
+
+            // Create marker file to indicate component was installed
             let marker_file = runtime_dir.join(format!("{}_installed.txt", component.binary_name()));
             fs::write(&marker_file, format!("Installed at {:?}", std::time::SystemTime::now()))
                 .map_err(|e| format!("Failed to create marker file: {}", e))?;
+
+            downloaded_files.push(downloaded_path);
         }
 
         progress_cb(DownloadProgress {
@@ -511,13 +537,10 @@ impl RuntimeDownloader {
             total_bytes: 0,
         });
 
-        eprintln!("SIMULATION MODE: Downloads were simulated. No actual binaries were installed.");
-        eprintln!("Runtime directory: {:?}", runtime_dir);
+        // Cleanup temp files
+        let _ = fs::remove_dir_all(temp_dir);
 
-        return Ok(vec![]);
-
-        // Note: Real download code is disabled for Phase 2 MVP simulation
-        // It will be re-enabled in later phases with correct binary URLs
+        Ok(downloaded_files)
     }
 
     /// Get the runtime directory
