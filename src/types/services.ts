@@ -33,10 +33,14 @@ export interface AppSettings {
 }
 
 export interface DownloadProgress {
-  step: "downloading" | "extracting" | "installing" | "complete";
+  step: "downloading" | "extracting" | "installing" | "complete" | "error";
   percent: number;
   currentComponent: string;
+  componentDisplay: string;
+  version: string;
   totalComponents: number;
+  downloadedBytes: number;
+  totalBytes: number;
 }
 
 export const DEFAULT_PORTS = {
