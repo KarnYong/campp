@@ -21,8 +21,8 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
   const [error, setError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
+  // Listen for download progress events
   useEffect(() => {
-    // Listen for download progress events
     const unlisten = listen<DownloadProgressType>("download-progress", (event) => {
       setProgress(event.payload);
     });
@@ -30,6 +30,24 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
     return () => {
       unlisten.then((fn) => fn());
     };
+  }, []);
+
+  // Keyboard shortcut handler for Ctrl+Shift+D / Cmd+Shift+D
+  useEffect(() => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'd') {
+        e.preventDefault();
+        try {
+          const downloadDir = await invoke<string>("get_download_dir");
+          await invoke("open_folder", { path: downloadDir });
+        } catch (err) {
+          console.error("Failed to open download folder:", err);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   const startDownload = async () => {
@@ -49,15 +67,21 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
   const getStepLabel = () => {
     switch (progress.step) {
       case "downloading":
-        return "Downloading runtime binaries...";
+        return progress.componentDisplay
+          ? `Download ${progress.componentDisplay}`
+          : "Downloading...";
       case "extracting":
-        return "Extracting files...";
+        return progress.componentDisplay
+          ? `Extract ${progress.componentDisplay}`
+          : "Extracting...";
       case "installing":
-        return "Installing components...";
+        return "Installing...";
       case "complete":
         return "Installation complete!";
       case "error":
         return "An error occurred";
+      default:
+        return "Preparing...";
     }
   };
 
@@ -110,25 +134,32 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
             <div className="download-progress">
               <div className="progress-header">
                 <h3>{getStepLabel()}</h3>
-                <span className="progress-percent">{progress.percent}%</span>
+                {progress.step === "downloading" && (
+                  <span className="progress-percent">{progress.percent}%</span>
+                )}
               </div>
 
-              {progress.currentComponent && (
-                <div className="current-component">
-                  <span className="component-label">Downloading:</span>
-                  <span className="component-name">
-                    {progress.componentDisplay || progress.currentComponent}
-                  </span>
-                  {progress.version && (
-                    <span className="component-version">{progress.version}</span>
-                  )}
+              {progress.componentDisplay && (
+                <div className="current-component-info">
+                  <div className="component-info-main">
+                    <span className="component-name">
+                      {progress.currentComponent || progress.componentDisplay}
+                    </span>
+                    {progress.version && (
+                      <span className="component-version">{progress.version}</span>
+                    )}
+                  </div>
                 </div>
               )}
 
               <div className="progress-bar-container">
                 <div
-                  className="progress-bar"
-                  style={{ width: `${progress.percent}%` }}
+                  className={`progress-bar ${progress.step === "extracting" || progress.step === "installing" ? "progress-animated" : ""}`}
+                  style={{
+                    width: progress.step === "extracting" || progress.step === "installing"
+                      ? "100%"
+                      : `${progress.percent}%`
+                  }}
                 />
               </div>
 
@@ -144,6 +175,27 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
               {progress.step === "complete" && (
                 <div className="complete-message">
                   <p>Runtime binaries installed successfully!</p>
+                  <div className="installed-components">
+                    <div className="installed-component">
+                      <span className="installed-name">Caddy</span>
+                      <span className="installed-version">2.8.4</span>
+                    </div>
+                    <div className="installed-component">
+                      <span className="installed-name">PHP</span>
+                      <span className="installed-version">8.5.1</span>
+                    </div>
+                    <div className="installed-component">
+                      <span className="installed-name">MariaDB</span>
+                      <span className="installed-version">12.2.2</span>
+                    </div>
+                    <div className="installed-component">
+                      <span className="installed-name">phpMyAdmin</span>
+                      <span className="installed-version">5.2.2</span>
+                    </div>
+                  </div>
+                  <p className="shortcut-hint">
+                    Press <kbd>Ctrl+Shift+D</kbd> (Mac: <kbd>Cmd+Shift+D</kbd>) to open download folder
+                  </p>
                   <button onClick={onComplete} className="btn-primary">
                     Continue to Dashboard
                   </button>

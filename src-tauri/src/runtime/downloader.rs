@@ -2,9 +2,11 @@ use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use reqwest::Client;
 use sha2::{Digest, Sha256};
+use tokio::time::sleep;
 
 /// Binary component types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -128,6 +130,7 @@ pub struct BinaryInfo {
 
 /// Download progress information
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DownloadProgress {
     pub step: DownloadStep,
     pub percent: u8,
@@ -537,8 +540,8 @@ impl RuntimeDownloader {
             total_bytes: 0,
         });
 
-        // Cleanup temp files
-        let _ = fs::remove_dir_all(temp_dir);
+        // Keep temp files for user to access if needed
+        // Uncomment to cleanup: let _ = fs::remove_dir_all(temp_dir);
 
         Ok(downloaded_files)
     }

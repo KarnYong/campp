@@ -81,6 +81,50 @@ pub async fn get_runtime_dir() -> Result<String, String> {
         .map(|p| p.to_string_lossy().to_string())
 }
 
+/// Get the download directory path (where ZIP files are stored)
+#[tauri::command]
+pub async fn get_download_dir() -> Result<String, String> {
+    let temp_dir = std::env::temp_dir().join("campp-download");
+    Ok(temp_dir.to_string_lossy().to_string())
+}
+
+/// Open a folder in the system's file explorer
+#[tauri::command]
+pub async fn open_folder(path: String) -> Result<(), String> {
+    // Ensure folder exists before opening
+    let path_obj = std::path::Path::new(&path);
+    if !path_obj.exists() {
+        fs::create_dir_all(path_obj)
+            .map_err(|e| format!("Failed to create folder: {}", e))?;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+
+    Ok(())
+}
+
 /// Download and install runtime binaries
 #[tauri::command]
 pub async fn download_runtime(app: tauri::AppHandle) -> Result<String, String> {

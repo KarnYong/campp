@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Dashboard } from "./components/Dashboard";
 import { FirstRunWizard } from "./components/FirstRunWizard";
@@ -20,7 +21,16 @@ function App() {
     };
 
     window.addEventListener("keydown", handleKeyPress);
-    return () => window.removeEventListener("keydown", handleKeyPress);
+
+    // Listen for show-wizard event from menu
+    const unlisten = listen("show-wizard", () => {
+      setIsFirstRun(true);
+    });
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyPress);
+      unlisten.then((fn) => fn());
+    };
   }, []);
 
   const checkRuntimeInstalled = async () => {
@@ -61,6 +71,16 @@ function App() {
     }
   };
 
+  const handleOpenDownloadFolder = async () => {
+    try {
+      const downloadDir = await invoke<string>("get_download_dir");
+      await invoke("open_folder", { path: downloadDir });
+    } catch (error) {
+      console.error("Failed to open download folder:", error);
+      alert("Failed to open download folder: " + error);
+    }
+  };
+
   if (isFirstRun === null) {
     return (
       <div className="loading-screen">
@@ -83,6 +103,7 @@ function App() {
           </div>
           <div className="debug-items">
             <button onClick={handleOpenRuntimeFolder}>Open Runtime Folder</button>
+            <button onClick={handleOpenDownloadFolder}>View Download Folder</button>
             <button onClick={handleResetInstallation}>Reset Installation</button>
             <button onClick={() => setIsFirstRun(true)}>Show First-Run Wizard</button>
           </div>

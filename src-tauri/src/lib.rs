@@ -12,6 +12,61 @@ pub use process::{ServiceInfo, ServiceMap, ServiceState, ServiceType};
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            #[cfg(debug_assertions)]
+            {
+                use tauri::menu::{Menu, MenuItem, Submenu};
+
+                // Create menu items with IDs
+                let open_download_folder = MenuItem::with_id(app, "open-download-folder", "View Download Folder (ZIP files)", true, None::<&str>)?;
+                let open_runtime_folder = MenuItem::with_id(app, "open-runtime-folder", "Open Runtime Folder", true, None::<&str>)?;
+                let separator = tauri::menu::PredefinedMenuItem::separator(app)?;
+                let reset_installation = MenuItem::with_id(app, "reset-installation", "Reset Installation", true, None::<&str>)?;
+                let show_wizard = MenuItem::with_id(app, "show-wizard", "Show First-Run Wizard", true, None::<&str>)?;
+
+                // Create submenu with items
+                let debug_menu = Submenu::with_items(app, "Debug", true, &[&open_download_folder, &open_runtime_folder, &separator, &reset_installation, &show_wizard])?;
+                let menu = Menu::with_items(app, &[&debug_menu])?;
+                app.set_menu(menu)?;
+
+                // Handle menu events
+                app.on_menu_event(|app, event| {
+                    use tauri::Emitter;
+                    match event.id.as_ref() {
+                        "open-download-folder" => {
+                            let app = app.clone();
+                            tauri::async_runtime::spawn(async move {
+                                if let Ok(download_dir) = commands::get_download_dir().await {
+                                    let _ = commands::open_folder(download_dir).await;
+                                }
+                            });
+                        }
+                        "open-runtime-folder" => {
+                            let app = app.clone();
+                            tauri::async_runtime::spawn(async move {
+                                if let Ok(runtime_dir) = commands::get_runtime_dir().await {
+                                    let _ = tauri_plugin_opener::reveal_item_in_dir(runtime_dir);
+                                }
+                            });
+                        }
+                        "reset-installation" => {
+                            let app = app.clone();
+                            tauri::async_runtime::spawn(async move {
+                                if let Ok(_) = commands::reset_installation().await {
+                                    let _ = app.emit("show-wizard", ());
+                                }
+                            });
+                        }
+                        "show-wizard" => {
+                            let _ = app.emit("show-wizard", ());
+                        }
+                        _ => {}
+                    }
+                });
+            }
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             // Service management commands
             commands::start_service,
@@ -25,6 +80,8 @@ pub fn run() {
             commands::check_runtime_installed,
             commands::download_runtime,
             commands::get_runtime_dir,
+            commands::get_download_dir,
+            commands::open_folder,
             commands::reset_installation,
         ])
         .run(tauri::generate_context!())

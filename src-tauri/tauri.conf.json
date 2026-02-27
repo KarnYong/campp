@@ -14,12 +14,14 @@
       {
         "title": "CAMPP",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "dragDropEnabled": true
       }
     ],
     "security": {
       "csp": null
-    }
+    },
+    "withGlobalTauri": true
   },
   "bundle": {
     "active": true,
