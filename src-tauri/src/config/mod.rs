@@ -2,30 +2,40 @@ pub mod generator;
 pub mod ports;
 pub mod settings;
 
+pub use generator::ConfigGenerator;
+pub use ports::{find_available_port, is_port_available, is_port_in_use};
 pub use settings::{AppSettings, DEFAULT_PORTS};
 
-use serde::{Deserialize, Serialize};
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AppConfig {
-    pub web_port: u16,
-    pub php_port: u16,
-    pub mysql_port: u16,
-    pub project_root: String,
-}
+    #[test]
+    fn test_default_ports() {
+        assert_eq!(DEFAULT_PORTS.web, 8080);
+        assert_eq!(DEFAULT_PORTS.php, 9000);
+        assert_eq!(DEFAULT_PORTS.mysql, 3307);
+    }
 
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            web_port: 8080,
-            php_port: 9000,
-            mysql_port: 3307,
-            project_root: dirs::home_dir()
-                .unwrap_or_default()
-                .join(".campp")
-                .join("projects")
-                .to_string_lossy()
-                .to_string(),
-        }
+    #[test]
+    fn test_default_settings() {
+        let settings = AppSettings::default();
+        assert_eq!(settings.web_port, 8080);
+        assert_eq!(settings.php_port, 9000);
+        assert_eq!(settings.mysql_port, 3307);
+    }
+
+    #[test]
+    fn test_is_port_available() {
+        // Port 1 is typically unavailable (reserved)
+        // This test just verifies the function works
+        let _result = is_port_available(8080);
+    }
+
+    #[test]
+    fn test_find_available_port() {
+        // Should return the preferred port if available
+        let port = find_available_port(8080);
+        assert!(port >= 8080);
     }
 }

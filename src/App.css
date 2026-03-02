@@ -746,3 +746,235 @@ body {
     justify-content: center;
   }
 }
+
+/* Settings Panel */
+.settings-panel-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.settings-panel {
+  background-color: var(--color-bg);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.settings-header h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.settings-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--color-neutral);
+  padding: 0;
+  line-height: 1;
+}
+
+.settings-close:hover {
+  color: var(--color-error);
+}
+
+.settings-content {
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.settings-section {
+  margin-bottom: 1.5rem;
+}
+
+.settings-section:last-child {
+  margin-bottom: 0;
+}
+
+.settings-section h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.settings-hint {
+  font-size: 0.875rem;
+  color: var(--color-neutral);
+  margin-bottom: 1rem;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.settings-row label {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.settings-row input[type="number"],
+.settings-row input[type="text"] {
+  width: 180px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background-color: var(--color-bg);
+}
+
+.settings-row input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.checkbox-row {
+  justify-content: flex-start;
+  gap: 0.5rem;
+}
+
+.checkbox-row label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.checkbox-row input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+}
+
+.settings-error {
+  background-color: #fee2e2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  color: #b91c1c;
+}
+
+.settings-success {
+  background-color: #d1fae5;
+  border: 1px solid #a7f3d0;
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  color: #047857;
+}
+
+.settings-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.btn-cancel {
+  padding: 0.625rem 1.25rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: #0f0f0f;
+}
+
+.btn-cancel:hover {
+  background-color: var(--color-bg-secondary);
+}
+
+.btn-save {
+  padding: 0.625rem 1.25rem;
+  border-radius: 6px;
+  border: none;
+  background-color: var(--color-primary);
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn-save:hover:not(:disabled) {
+  background-color: #1ba8b9;
+}
+
+.btn-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-loading {
+  padding: 3rem;
+  text-align: center;
+  color: var(--color-neutral);
+}
+
+/* Dark mode for settings */
+@media (prefers-color-scheme: dark) {
+  .settings-panel {
+    background-color: var(--color-bg);
+  }
+
+  .settings-header h2 {
+    color: #f6f6f6;
+  }
+
+  .settings-row input[type="number"],
+  .settings-row input[type="text"] {
+    background-color: var(--color-bg-secondary);
+    border-color: var(--color-border);
+    color: #f6f6f6;
+  }
+
+  .settings-error {
+    background-color: #450a0a;
+    border-color: #7f1d1d;
+    color: #fca5a5;
+  }
+
+  .settings-success {
+    background-color: #064e3b;
+    border-color: #065f46;
+    color: #6ee7b7;
+  }
+
+  .btn-cancel {
+    background-color: var(--color-bg-secondary);
+    border-color: var(--color-border);
+    color: #f6f6f6;
+  }
+
+  .btn-cancel:hover {
+    background-color: #374151;
+  }
+}

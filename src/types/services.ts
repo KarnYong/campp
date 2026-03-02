@@ -26,10 +26,10 @@ export interface ServiceInfo {
 export type ServiceMap = Record<ServiceType, ServiceInfo>;
 
 export interface AppSettings {
-  webPort: number;
-  mysqlPort: number;
-  phpPort: number;
-  projectRoot: string;
+  web_port: number;
+  mysql_port: number;
+  php_port: number;
+  project_root: string;
 }
 
 export interface DownloadProgress {

@@ -4,9 +4,11 @@ import { useState, useEffect, useCallback } from "react";
 import { ServiceMap, ServiceType, ServiceState } from "../types/services";
 import { ServiceCard } from "./ServiceCard";
 import { StatusBar } from "./StatusBar";
+import { SettingsPanel } from "./SettingsPanel";
 
 export function Dashboard() {
   const [services, setServices] = useState<Partial<ServiceMap>>({});
+  const [showSettings, setShowSettings] = useState(false);
 
   // Get Caddy port from services
   const caddyPort = services[ServiceType.Caddy]?.port || 8080;
@@ -103,6 +105,14 @@ export function Dashboard() {
               <span className="btn-icon">🗄️</span>
               phpMyAdmin
             </button>
+            <button
+              className="btn-quick-action"
+              onClick={() => setShowSettings(true)}
+              title="Open Settings"
+            >
+              <span className="btn-icon">⚙️</span>
+              Settings
+            </button>
           </div>
         </div>
       </header>
@@ -129,6 +139,13 @@ export function Dashboard() {
       </main>
 
       <StatusBar services={services} data-testid="status-bar" />
+
+      {showSettings && (
+        <SettingsPanel
+          onClose={() => setShowSettings(false)}
+          onSettingsChanged={refreshStatuses}
+        />
+      )}
     </div>
   );
 }

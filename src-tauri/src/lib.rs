@@ -93,6 +93,8 @@ pub fn run() {
             // Settings commands
             commands::get_settings,
             commands::save_settings,
+            commands::validate_settings,
+            commands::check_ports,
             // Runtime download commands
             commands::check_runtime_installed,
             commands::download_runtime,

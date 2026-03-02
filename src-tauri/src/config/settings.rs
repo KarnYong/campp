@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::PathBuf;
 
 pub const DEFAULT_PORTS: Ports = Ports {
     web: 8080,
@@ -19,6 +21,8 @@ pub struct AppSettings {
     pub php_port: u16,
     pub mysql_port: u16,
     pub project_root: String,
+    #[serde(default)]
+    pub auto_start_services: bool,
 }
 
 impl Default for AppSettings {
@@ -33,16 +37,121 @@ impl Default for AppSettings {
                 .join("projects")
                 .to_string_lossy()
                 .to_string(),
+            auto_start_services: false,
         }
     }
 }
 
-pub fn load_settings() -> AppSettings {
-    // TODO: Implement loading from config file in Phase 4
-    AppSettings::default()
+impl AppSettings {
+    /// Get the path to the settings file
+    fn settings_path() -> Option<PathBuf> {
+        dirs::data_local_dir()
+            .map(|p| p.join("campp").join("config").join("settings.json"))
+    }
+
+    /// Load settings from file, or return defaults if file doesn't exist
+    pub fn load() -> Self {
+        let path = match Self::settings_path() {
+            Some(p) => p,
+            None => return Self::default(),
+        };
+
+        if !path.exists() {
+            return Self::default();
+        }
+
+        match fs::read_to_string(&path) {
+            Ok(content) => {
+                match serde_json::from_str(&content) {
+                    Ok(settings) => settings,
+                    Err(e) => {
+                        eprintln!("Failed to parse settings file: {}, using defaults", e);
+                        Self::default()
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to read settings file: {}, using defaults", e);
+                Self::default()
+            }
+        }
+    }
+
+    /// Save settings to file
+    pub fn save(&self) -> Result<(), String> {
+        let path = Self::settings_path()
+            .ok_or_else(|| "Cannot determine settings file path".to_string())?;
+
+        // Ensure parent directory exists
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create config directory: {}", e))?;
+        }
+
+        let content = serde_json::to_string_pretty(self)
+            .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+
+        fs::write(&path, content)
+            .map_err(|e| format!("Failed to write settings file: {}", e))?;
+
+        Ok(())
+    }
+
+    /// Validate settings (check for port conflicts, valid paths, etc.)
+    pub fn validate(&self) -> Result<Vec<String>, Vec<String>> {
+        let mut warnings = Vec::new();
+        let mut errors = Vec::new();
+
+        // Check if project root exists
+        let project_path = PathBuf::from(&self.project_root);
+        if !project_path.exists() {
+            warnings.push(format!(
+                "Project root '{}' does not exist. It will be created when services start.",
+                self.project_root
+            ));
+        }
+
+        // Check for port conflicts
+        if let Err(e) = std::net::TcpListener::bind(format!("127.0.0.1:{}", self.web_port)) {
+            warnings.push(format!(
+                "Web port {} may be in use: {}",
+                self.web_port, e
+            ));
+        }
+
+        if let Err(e) = std::net::TcpListener::bind(format!("127.0.0.1:{}", self.php_port)) {
+            warnings.push(format!(
+                "PHP-FPM port {} may be in use: {}",
+                self.php_port, e
+            ));
+        }
+
+        if let Err(e) = std::net::TcpListener::bind(format!("127.0.0.1:{}", self.mysql_port)) {
+            warnings.push(format!(
+                "MySQL port {} may be in use: {}",
+                self.mysql_port, e
+            ));
+        }
+
+        // Check for valid port ranges
+        if self.web_port == 0 || self.php_port == 0 || self.mysql_port == 0 {
+            errors.push("Port numbers must be greater than 0".to_string());
+        }
+
+        if errors.is_empty() {
+            Ok(warnings)
+        } else {
+            Err(errors)
+        }
+    }
 }
 
-pub fn save_settings(_settings: &AppSettings) -> Result<(), String> {
-    // TODO: Implement saving to config file in Phase 4
-    Ok(())
+/// Legacy function for backward compatibility
+pub fn load_settings() -> AppSettings {
+    AppSettings::load()
+}
+
+/// Legacy function for backward compatibility
+pub fn save_settings(settings: &AppSettings) -> Result<(), String> {
+    settings.save()
 }

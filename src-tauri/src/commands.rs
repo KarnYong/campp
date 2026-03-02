@@ -86,14 +86,40 @@ pub async fn get_all_statuses(
 /// Get app settings
 #[tauri::command]
 pub async fn get_settings() -> Result<crate::config::AppSettings, String> {
-    Ok(crate::config::AppSettings::default())
+    Ok(crate::config::AppSettings::load())
 }
 
 /// Save app settings
 #[tauri::command]
-pub async fn save_settings(_settings: crate::config::AppSettings) -> Result<(), String> {
-    // TODO: Implement settings persistence in Phase 4
-    Ok(())
+pub async fn save_settings(settings: crate::config::AppSettings) -> Result<(), String> {
+    settings.save()
+}
+
+/// Validate settings (check port conflicts, valid paths)
+#[tauri::command]
+pub async fn validate_settings(settings: crate::config::AppSettings) -> Result<Vec<String>, Vec<String>> {
+    settings.validate()
+}
+
+/// Check if specific ports are available
+#[tauri::command]
+pub async fn check_ports(web_port: u16, php_port: u16, mysql_port: u16) -> serde_json::Value {
+    use crate::config::is_port_available;
+
+    serde_json::json!({
+        "web": {
+            "port": web_port,
+            "available": is_port_available(web_port)
+        },
+        "php": {
+            "port": php_port,
+            "available": is_port_available(php_port)
+        },
+        "mysql": {
+            "port": mysql_port,
+            "available": is_port_available(mysql_port)
+        }
+    })
 }
 
 /// Check if runtime binaries are already installed
