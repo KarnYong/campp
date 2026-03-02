@@ -59,8 +59,10 @@ function App() {
   };
 
   const handleResetInstallation = async () => {
-    if (confirm("Reset installation? This will delete runtime binaries and show first-run wizard again.")) {
+    if (confirm("Reset installation? This will stop all services and delete runtime binaries.")) {
       try {
+        // Stop all services first
+        await invoke("cleanup_all_services");
         await invoke("reset_installation");
         setIsFirstRun(true);
         setShowDebugMenu(false);
