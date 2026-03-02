@@ -113,6 +113,20 @@ export function Dashboard() {
               <span className="btn-icon">⚙️</span>
               Settings
             </button>
+            <button
+              className="btn-quick-action btn-help"
+              onClick={async () => {
+                try {
+                  await invoke("open_manual");
+                } catch (err) {
+                  console.error("Failed to open manual:", err);
+                }
+              }}
+              title="Read User Manual"
+            >
+              <span className="btn-icon">?</span>
+              Help
+            </button>
           </div>
         </div>
       </header>

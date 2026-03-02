@@ -127,6 +127,19 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
               <button onClick={startDownload} className="btn-primary">
                 Download and Install
               </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await invoke("open_manual");
+                  } catch (err) {
+                    console.error("Failed to open manual:", err);
+                  }
+                }}
+                className="btn-help"
+                title="Read User Manual"
+              >
+                ?
+              </button>
             </div>
           )}
 

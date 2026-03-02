@@ -196,6 +196,46 @@ pub async fn open_folder(path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Open the user manual in the browser
+#[tauri::command]
+pub async fn open_manual(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|e| format!("Failed to get resource dir: {}", e))?;
+
+    let manual_path = resource_dir.join("MANUAL.html");
+
+    // Open in default browser
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", &manual_path.to_string_lossy()])
+            .spawn()
+            .map_err(|e| format!("Failed to open manual: {}", e))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&manual_path)
+            .spawn()
+            .map_err(|e| format!("Failed to open manual: {}", e))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&manual_path)
+            .spawn()
+            .map_err(|e| format!("Failed to open manual: {}", e))?;
+    }
+
+    Ok(())
+}
+
 /// Download and install runtime binaries
 #[tauri::command]
 pub async fn download_runtime(app: tauri::AppHandle) -> Result<String, String> {

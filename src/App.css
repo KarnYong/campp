@@ -465,6 +465,28 @@ body {
   background-color: #1ba8b9;
 }
 
+.btn-help {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--color-neutral);
+  font-size: 0.875rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.5rem;
+}
+
+.btn-help:hover {
+  background-color: var(--color-bg-secondary);
+}
+
+.btn-help .btn-icon {
+  font-size: 1rem;
+}
+
 /* Download Progress */
 .download-progress {
   display: flex;

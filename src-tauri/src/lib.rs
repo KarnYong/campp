@@ -101,6 +101,7 @@ pub fn run() {
             commands::get_runtime_dir,
             commands::get_download_dir,
             commands::open_folder,
+            commands::open_manual,
             commands::reset_installation,
             commands::cleanup_all_services,
         ])
