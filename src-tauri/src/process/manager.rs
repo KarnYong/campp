@@ -6,6 +6,23 @@ use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
 
+// Windows-specific: Constant to hide console window
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+/// Configure command to hide console window on Windows
+#[cfg(target_os = "windows")]
+fn configure_no_window(mut command: Command) -> Command {
+    use std::os::windows::process::CommandExt;
+    command.creation_flags(CREATE_NO_WINDOW);
+    command
+}
+
+#[cfg(not(target_os = "windows"))]
+fn configure_no_window(command: Command) -> Command {
+    command
+}
+
 /// Open a log file with retry logic for Windows file locking
 fn open_log_file_with_retry(log_path: &PathBuf, service_name: &str) -> Result<File, String> {
     let max_retries = 5;
@@ -290,7 +307,7 @@ fn start_caddy(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> Re
     let log_file = open_log_file_with_retry(&log_path, "Caddy")?;
 
     // Start Caddy
-    let mut child = Command::new(&paths.caddy)
+    let mut child = configure_no_window(Command::new(&paths.caddy))
         .arg("run")
         .arg("--config")
         .arg(&caddyfile_path)
@@ -331,7 +348,7 @@ fn start_php_fpm(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> 
 
     // For MVP, we'll use PHP-CGI in a simple mode
     // In production, you'd want to use php-fpm with a proper configuration
-    let mut child = Command::new(&paths.php_cgi)
+    let mut child = configure_no_window(Command::new(&paths.php_cgi))
         .arg("-b")
         .arg("127.0.0.1:9000")
         .arg("-c")
@@ -371,7 +388,7 @@ fn start_mariadb(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> 
     let log_file = open_log_file_with_retry(&log_path, "MariaDB")?;
 
     // Start MariaDB with minimal options for testing
-    let mut child = Command::new(&paths.mariadb)
+    let mut child = configure_no_window(Command::new(&paths.mariadb))
         .arg("--no-defaults")
         .arg("--datadir")
         .arg(&data_dir_str)
