@@ -7,11 +7,28 @@ mod runtime;
 
 // Re-exports
 pub use process::{ServiceInfo, ServiceMap, ServiceState, ServiceType};
+pub use process::manager::ProcessManager;
+
+use std::sync::Mutex;
+
+// Global state for the process manager
+pub struct AppState {
+    pub process_manager: Mutex<process::manager::ProcessManager>,
+}
+
+impl AppState {
+    pub fn new() -> Self {
+        Self {
+            process_manager: Mutex::new(process::manager::ProcessManager::new()),
+        }
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .manage(AppState::new())
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
@@ -83,7 +100,9 @@ pub fn run() {
             commands::get_download_dir,
             commands::open_folder,
             commands::reset_installation,
+            commands::cleanup_all_services,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+

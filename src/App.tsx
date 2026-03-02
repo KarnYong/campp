@@ -27,8 +27,18 @@ function App() {
       setIsFirstRun(true);
     });
 
+    // Cleanup all services when window closes
+    const handleBeforeUnload = () => {
+      invoke("cleanup_all_services").catch((error) => {
+        console.error("Failed to cleanup services:", error);
+      });
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
     return () => {
       window.removeEventListener("keydown", handleKeyPress);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
       unlisten.then((fn) => fn());
     };
   }, []);

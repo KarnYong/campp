@@ -46,6 +46,18 @@ body {
   padding: 1.5rem 2rem;
 }
 
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header-title {
+  flex: 1;
+}
+
 .dashboard-header h1 {
   font-size: 1.5rem;
   font-weight: 600;
@@ -55,6 +67,41 @@ body {
 .dashboard-subtitle {
   color: var(--color-neutral);
   margin-top: 0.25rem;
+}
+
+/* Quick Actions */
+.quick-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.btn-quick-action {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-quick-action:hover:not(:disabled) {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+
+.btn-quick-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-icon {
+  font-size: 1rem;
 }
 
 .dashboard-main {
@@ -81,8 +128,29 @@ body {
   transition: box-shadow 0.2s;
 }
 
+.service-card-error {
+  border-color: var(--color-error);
+  background-color: #fef2f2;
+}
+
 .service-card:hover {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.service-error {
+  background-color: #fee2e2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin: 0.75rem 0;
+  font-size: 0.875rem;
+  color: #b91c1c;
+  word-break: break-word;
+}
+
+.service-error strong {
+  display: block;
+  margin-bottom: 0.25rem;
 }
 
 .service-header {
@@ -256,6 +324,18 @@ body {
 
   .service-actions button:hover:not(:disabled) {
     background-color: var(--color-bg-secondary);
+  }
+
+  .btn-quick-action {
+    background-color: var(--color-bg);
+    border-color: var(--color-border);
+    color: #f6f6f6;
+  }
+
+  .btn-quick-action:hover:not(:disabled) {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
   }
 }
 
@@ -542,6 +622,17 @@ body {
 
 /* Dark mode for wizard */
 @media (prefers-color-scheme: dark) {
+  .service-card-error {
+    background-color: #450a0a;
+    border-color: #7f1d1d;
+  }
+
+  .service-error {
+    background-color: #7f1d1d;
+    border-color: #991b1b;
+    color: #fecaca;
+  }
+
   .error-message {
     background-color: #450a0a;
     border-color: #7f1d1d;
@@ -636,4 +727,22 @@ body {
 
 .debug-items button:hover {
   background-color: var(--color-bg-secondary);
+}
+
+/* Responsive styles */
+@media (max-width: 640px) {
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .quick-actions {
+    width: 100%;
+  }
+
+  .btn-quick-action {
+    flex: 1;
+    justify-content: center;
+  }
 }

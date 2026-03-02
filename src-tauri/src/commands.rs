@@ -4,38 +4,83 @@
 
 use crate::process::{ServiceMap, ServiceType};
 use crate::runtime::downloader::{DownloadProgress, RuntimeDownloader};
+use crate::AppState;
 use std::fs;
 use std::sync::Mutex;
 use tauri::Emitter;
+use tauri::State;
 
 // Global state for download progress
 static DOWNLOAD_PROGRESS: Mutex<Option<DownloadProgress>> = Mutex::new(None);
 
 /// Start a service
 #[tauri::command]
-pub async fn start_service(_service: ServiceType) -> Result<ServiceMap, String> {
-    // TODO: Implement actual process control in Phase 3
-    Ok(get_mock_statuses())
+pub async fn start_service(
+    service: ServiceType,
+    state: State<'_, AppState>,
+) -> Result<ServiceMap, String> {
+    let mut manager = state.process_manager.lock()
+        .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
+
+    // Initialize if needed
+    let _ = manager.initialize();
+
+    // Start the service
+    manager.start(service)?;
+
+    // Update health and return statuses
+    manager.update_health();
+    Ok(manager.get_all_statuses())
 }
 
 /// Stop a service
 #[tauri::command]
-pub async fn stop_service(_service: ServiceType) -> Result<ServiceMap, String> {
-    // TODO: Implement actual process control in Phase 3
-    Ok(get_mock_statuses())
+pub async fn stop_service(
+    service: ServiceType,
+    state: State<'_, AppState>,
+) -> Result<ServiceMap, String> {
+    let mut manager = state.process_manager.lock()
+        .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
+
+    // Stop the service
+    manager.stop(service)?;
+
+    // Update health and return statuses
+    manager.update_health();
+    Ok(manager.get_all_statuses())
 }
 
 /// Restart a service
 #[tauri::command]
-pub async fn restart_service(_service: ServiceType) -> Result<ServiceMap, String> {
-    // TODO: Implement actual process control in Phase 3
-    Ok(get_mock_statuses())
+pub async fn restart_service(
+    service: ServiceType,
+    state: State<'_, AppState>,
+) -> Result<ServiceMap, String> {
+    let mut manager = state.process_manager.lock()
+        .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
+
+    // Initialize if needed
+    let _ = manager.initialize();
+
+    // Restart the service
+    manager.restart(service)?;
+
+    // Update health and return statuses
+    manager.update_health();
+    Ok(manager.get_all_statuses())
 }
 
 /// Get the status of all services
 #[tauri::command]
-pub async fn get_all_statuses() -> Result<ServiceMap, String> {
-    Ok(get_mock_statuses())
+pub async fn get_all_statuses(
+    state: State<'_, AppState>,
+) -> Result<ServiceMap, String> {
+    let mut manager = state.process_manager.lock()
+        .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
+
+    // Update health before returning statuses
+    manager.update_health();
+    Ok(manager.get_all_statuses())
 }
 
 /// Get app settings
@@ -146,24 +191,13 @@ pub async fn download_runtime(app: tauri::AppHandle) -> Result<String, String> {
     Ok("Runtime binaries installed successfully".to_string())
 }
 
-// Helper function for mock data
-fn get_mock_statuses() -> ServiceMap {
-    use crate::process::{ServiceInfo, ServiceState};
-    use std::collections::HashMap;
+/// Stop all running services (for cleanup on app exit)
+#[tauri::command]
+pub async fn cleanup_all_services(state: State<'_, AppState>) -> Result<String, String> {
+    let mut manager = state.process_manager.lock()
+        .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
 
-    let mut statuses = HashMap::new();
+    manager.stop_all()?;
 
-    for service_type in [ServiceType::Caddy, ServiceType::PhpFpm, ServiceType::MariaDB] {
-        statuses.insert(
-            service_type,
-            ServiceInfo {
-                service_type,
-                state: ServiceState::Stopped,
-                port: service_type.default_port(),
-                error_message: None,
-            },
-        );
-    }
-
-    statuses
+    Ok("All services stopped".to_string())
 }

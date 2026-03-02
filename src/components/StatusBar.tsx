@@ -2,14 +2,15 @@ import { ServiceMap } from "../types/services";
 
 interface StatusBarProps {
   services: Partial<ServiceMap>;
+  [key: string]: any; // Allow additional props like data-testid
 }
 
-export function StatusBar({ services }: StatusBarProps) {
+export function StatusBar({ services, ...props }: StatusBarProps) {
   const runningCount = Object.values(services).filter((s) => s?.state === "running").length;
   const totalCount = Object.keys(services).length;
 
   return (
-    <div className="status-bar">
+    <div className="status-bar" {...props}>
       <div className="status-bar-left">
         <span className="status-item">
           Services: {runningCount}/{totalCount} running
