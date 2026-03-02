@@ -297,6 +297,22 @@ body {
   align-items: center;
 }
 
+.status-hint {
+  color: var(--color-neutral);
+  font-size: 0.7rem;
+}
+
+.status-hint kbd {
+  display: inline-block;
+  padding: 0.1rem 0.3rem;
+  margin: 0 0.1rem;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  font-family: monospace;
+  font-size: 0.65rem;
+}
+
 /* Dark mode */
 @media (prefers-color-scheme: dark) {
   :root {
@@ -720,10 +736,11 @@ body {
   padding: 0.5rem 1rem;
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  background-color: var(--color-bg);
+  background-color: var(--color-bg-secondary);
   cursor: pointer;
   text-align: left;
   font-size: 0.875rem;
+  color: #0f0f0f;
 }
 
 .debug-items button:hover {
@@ -863,6 +880,31 @@ body {
   border-color: var(--color-primary);
 }
 
+.settings-input-with-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.settings-input-with-button input {
+  flex: 1;
+  min-width: 150px;
+}
+
+.btn-open-folder {
+  padding: 0.5rem 0.75rem;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-open-folder:hover {
+  background-color: var(--color-border);
+}
+
 .checkbox-row {
   justify-content: flex-start;
   gap: 0.5rem;
@@ -987,5 +1029,30 @@ body {
 
   .btn-cancel:hover {
     background-color: #374151;
+  }
+
+  .debug-items button {
+    background-color: var(--color-bg-secondary);
+    border-color: var(--color-border);
+    color: #f6f6f6;
+  }
+
+  .debug-items button:hover {
+    background-color: #374151;
+  }
+
+  .btn-open-folder {
+    background-color: var(--color-bg-secondary);
+    border-color: var(--color-border);
+    color: #f6f6f6;
+  }
+
+  .btn-open-folder:hover {
+    background-color: #374151;
+  }
+
+  .status-hint kbd {
+    background-color: var(--color-bg);
+    border-color: var(--color-border);
   }
 }

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useState, useEffect, useCallback } from "react";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { AppSettings } from "../types/services";
 
 interface SettingsPanelProps {
@@ -38,6 +39,14 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
     const numValue = parseInt(value, 10);
     if (isNaN(numValue) || numValue < 1 || numValue > 65535) return;
     setSettings({ ...settings, [field]: numValue });
+  };
+
+  const handleOpenProjectFolder = async () => {
+    try {
+      await revealItemInDir(settings.project_root);
+    } catch (e) {
+      setError(`Failed to open folder: ${e}`);
+    }
   };
 
   const handleSave = async () => {
@@ -128,15 +137,24 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
 
             <div className="settings-row">
               <label htmlFor="project-root">Project Root Directory</label>
-              <input
-                id="project-root"
-                type="text"
-                value={settings.project_root}
-                onChange={(e) =>
-                  setSettings({ ...settings, project_root: e.target.value })
-                }
-                placeholder="~/.campp/projects"
-              />
+              <div className="settings-input-with-button">
+                <input
+                  id="project-root"
+                  type="text"
+                  value={settings.project_root}
+                  onChange={(e) =>
+                    setSettings({ ...settings, project_root: e.target.value })
+                  }
+                  placeholder="C:\Users\...\AppData\Local\campp\projects"
+                />
+                <button
+                  className="btn-open-folder"
+                  onClick={handleOpenProjectFolder}
+                  title="Open folder in Explorer"
+                >
+                  Open
+                </button>
+              </div>
             </div>
           </div>
         </div>

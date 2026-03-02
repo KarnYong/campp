@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(cargo build:*)",
+      "Bash(npm run tauri build:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)",
+      "Bash(git checkout:*)",
+      "Bash(git pull:*)",
+      "Bash(git add:*)",
+      "Bash(git merge:*)",
+      "Bash(npm run tauri:*)",
+      "Bash(powershell:*)",
+      "Bash(powershell.exe:*)",
+      "Bash(taskkill:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(dir:*)",
+      "Bash(cmd:*)",
+      "Bash(ls:*)",
+      "Bash(/c/Users/Admin/AppData/Local/campp/projects/localhost/index.html << 'EOF'\n<!DOCTYPE html>\n<html>\n<head>\n    <title>CAMPP - It Works!</title>\n    <style>\n        body {\n            font-family: Arial, sans-serif;\n            max-width: 800px;\n            margin: 50px auto;\n            padding: 20px;\n            background: linear-gradient\\(135deg, #667eea 0%, #764ba2 100%\\);\n            color: white;\n        }\n        .container {\n            background: rgba\\(255, 255, 255, 0.1\\);\n            border-radius: 10px;\n            padding: 30px;\n            backdrop-filter: blur\\(10px\\);\n        }\n        h1 { font-size: 2.5em; margin-bottom: 20px; }\n        p { font-size: 1.2em; line-height: 1.6; }\n        .success { color: #4ade80; font-weight: bold; }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <h1>🚀 CAMPP is Running!</h1>\n        <p class=\"success\">Your local web development stack is working.</p>\n        <p>You can now:</p>\n        <ul>\n            <li>Serve PHP files from this directory</li>\n            <li>Access phpMyAdmin at <a href=\"/phpmyadmin/\" style=\"color: #4ade80;\">/phpmyadmin/</a></li>\n            <li>Manage MariaDB databases</li>\n        </ul>\n        <p>File location: <code><?php echo __DIR__; ?></code></p>\n    </div>\n</body>\n</html>\nEOF)",
+      "Bash(cargo test:*)",
+      "Bash('C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\campp\\\\runtime\\\\php-cgi.exe' -v)",
+      "Bash('C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\campp\\\\runtime\\\\mariadb-12.2.2-winx64\\\\bin\\\\mysqld.exe' --initialize-insecure --datadir='C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\campp\\\\mysql\\\\data')",
+      "Bash('C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\campp\\\\runtime\\\\mariadb-12.2.2-winx64\\\\bin\\\\mysqld.exe' --initialize-insecure --datadir='C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\campp\\\\mysql\\\\data' --console)",
+      "Bash('C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\campp\\\\runtime\\\\mariadb-12.2.2-winx64\\\\bin\\\\mysqld.exe':*)",
+      "Bash(cargo check:*)",
+      "Bash(npm run test:run:*)",
+      "Bash(timeout:*)",
+      "Bash(tasklist:*)",
+      "Bash(npm test)",
+      "Bash(gh release create v0.1.0 src-tauri/target/release/bundle/nsis/CAMPP_0.1.0_x64-setup.exe src-tauri/target/release/bundle/msi/CAMPP_0.1.0_x64_en-US.msi --title \"v0.1.0 - First Release\" --notes \"## CAMPP v0.1.0 - First Release\n\nA cross-platform local web development stack \\(XAMPP alternative\\).\n\n### Features\n- **Caddy** web server \\(port 8080\\)\n- **PHP-FPM 8.3** runtime \\(port 9000\\)\n- **MariaDB** database \\(port 3307\\)\n- **phpMyAdmin** at http://localhost:8080/phpmyadmin\n- First-run wizard to download runtime binaries\n- Service management dashboard with start/stop/restart\n- Settings panel for port configuration\n\n### Installation\n1. Download \\\\`CAMPP_0.1.0_x64-setup.exe\\\\` \\(recommended\\) or \\\\`.msi\\\\`\n2. Run the installer\n3. Launch CAMPP and follow the first-run wizard to download binaries\n\n### Requirements\n- Windows 10/11\n- WebView2 runtime \\(usually pre-installed\\)\n\n### Default Credentials\n- **MariaDB**: root user, no password\n- **phpMyAdmin**: Uses config auth \\(no login needed\\)\")",
+      "Bash(gh --version)",
+      "Bash(gh auth status)",
+      "Bash(gh release list)",
+      "Bash(gh release create v0.1.0 --title \"v0.1.0 - Initial Release\" --notes \"## CAMPP v0.1.0\n\nFirst release of CAMPP - a cross-platform local web development stack.\n\n### Included Components\n- Caddy \\(Web Server\\)\n- PHP-FPM 8.3\n- MariaDB\n- phpMyAdmin\n\n### Downloads\n- **CAMPP_0.1.0_x64-setup.exe** - NSIS installer \\(recommended\\)\n- **CAMPP_0.1.0_x64_en-US.msi** - MSI installer\n\n### System Requirements\n- Windows 10/11 x64\n- WebView2 runtime \\(usually pre-installed\\)\" \"src-tauri/target/release/bundle/nsis/CAMPP_0.1.0_x64-setup.exe\" \"src-tauri/target/release/bundle/msi/CAMPP_0.1.0_x64_en-US.msi\")"
+    ]
+  }
+}

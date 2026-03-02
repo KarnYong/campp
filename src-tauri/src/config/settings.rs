@@ -31,9 +31,9 @@ impl Default for AppSettings {
             web_port: DEFAULT_PORTS.web,
             php_port: DEFAULT_PORTS.php,
             mysql_port: DEFAULT_PORTS.mysql,
-            project_root: dirs::home_dir()
-                .unwrap_or_default()
-                .join(".campp")
+            project_root: dirs::data_local_dir()
+                .unwrap_or_else(|| dirs::home_dir().unwrap_or_default())
+                .join("campp")
                 .join("projects")
                 .to_string_lossy()
                 .to_string(),

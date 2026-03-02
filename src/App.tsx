@@ -13,9 +13,9 @@ function App() {
   useEffect(() => {
     checkRuntimeInstalled();
 
-    // Debug mode: press Shift+D to toggle debug menu
+    // Debug mode: press Ctrl+Shift+D to toggle debug menu
     const handleKeyPress = (e: KeyboardEvent) => {
-      if (e.shiftKey && e.key === "D") {
+      if (e.ctrlKey && e.shiftKey && e.key === "D") {
         setShowDebugMenu((prev) => !prev);
       }
     };
