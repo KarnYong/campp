@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useState, useEffect, useCallback } from "react";
 import { ServiceMap, ServiceType, ServiceState } from "../types/services";
 import { ServiceCard } from "./ServiceCard";
@@ -9,6 +9,7 @@ import { SettingsPanel } from "./SettingsPanel";
 export function Dashboard() {
   const [services, setServices] = useState<Partial<ServiceMap>>({});
   const [showSettings, setShowSettings] = useState(false);
+  const [projectRoot, setProjectRoot] = useState<string>("");
 
   // Get Caddy port from services
   const caddyPort = services[ServiceType.Caddy]?.port || 8080;
@@ -32,6 +33,18 @@ export function Dashboard() {
     const interval = setInterval(refreshStatuses, 2000);
     return () => clearInterval(interval);
   }, [refreshStatuses]);
+
+  useEffect(() => {
+    const loadProjectRoot = async () => {
+      try {
+        const settings = await invoke<{ project_root: string }>("get_settings");
+        setProjectRoot(settings.project_root);
+      } catch (error) {
+        console.error("Failed to load project root:", error);
+      }
+    };
+    loadProjectRoot();
+  }, []);
 
   const startService = async (serviceType: ServiceType) => {
     try {
@@ -76,16 +89,26 @@ export function Dashboard() {
     }
   };
 
+  const openProjectRoot = async () => {
+    try {
+      await revealItemInDir(projectRoot);
+    } catch (error) {
+      console.error("Failed to open project root directory:", error);
+    }
+  };
+
   return (
     <div className="dashboard" data-testid="dashboard">
       <header className="dashboard-header">
         <div className="header-content">
           <div className="header-title">
-            <h1>CAMPP - Local Web Development Stack</h1>
+            <h1>CAMPP = Caddy + MariaDB + PHP</h1>
             <p className="dashboard-subtitle">
-              Control panel for Caddy, PHP-FPM, and MariaDB
+              Development environment for apps using MySQL (PHP included)
             </p>
           </div>
+        </div>
+        <div className="header-actions">
           <div className="quick-actions">
             <button
               className="btn-quick-action"
@@ -95,6 +118,15 @@ export function Dashboard() {
             >
               <span className="btn-icon">🌐</span>
               Open Site
+            </button>
+            <button
+              className="btn-quick-action"
+              onClick={openProjectRoot}
+              disabled={!projectRoot}
+              title={projectRoot ? `Open ${projectRoot}` : "Project root not set"}
+            >
+              <span className="btn-icon">📁</span>
+              Projects
             </button>
             <button
               className="btn-quick-action"

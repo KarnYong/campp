@@ -219,17 +219,17 @@ impl RuntimeDownloader {
                 // MariaDB official downloads using CDN
                 match self.platform {
                     Platform::WindowsX64 | Platform::WindowsArm64 => {
-                        "https://dlm.mariadb.com/4582476/MariaDB/mariadb-12.2.2/winx64-packages/mariadb-12.2.2-winx64.zip".to_string()
+                        "https://archive.mariadb.org/mariadb-12.2.2/winx64-packages/mariadb-12.2.2-winx64.zip".to_string()
                     }
                     Platform::MacOSX64 | Platform::MacOSArm64 => {
-                        // macOS - use x64 package
-                        "https://dlm.mariadb.com/4685492/MariaDB/mariadb-12.2.2/macos-arm64-macos-14-arm64-mariadb-12.2.2_tar.gz".to_string()
+                        // macOS - use archive.mariadb.org for stable URLs
+                        "https://archive.mariadb.org/mariadb-12.2.2/bintar-macos-arm64/mariadb-12.2.2-macos-arm64.tar.gz".to_string()
                     }
                     Platform::LinuxX64 => {
-                        "https://dlm.mariadb.com/4685431/MariaDB/mariadb-12.2.2/bintar-linux-systemd-x86_64/mariadb-12.2.2_linux_systemd_x86_64.tar.gz".to_string()
+                        "https://archive.mariadb.org/mariadb-12.2.2/bintar-linux-systemd-x86_64/mariadb-12.2.2-linux-systemd-x86_64.tar.gz".to_string()
                     }
                     Platform::LinuxArm64 => {
-                        "https://dlm.mariadb.com/4685433/MariaDB/mariadb-12.2.2/bintar-linux-systemd-aarch64/mariadb-12.2.2_linux_systemd_aarch64.tar.gz".to_string()
+                        "https://archive.mariadb.org/mariadb-12.2.2/bintar-linux-systemd-aarch64/mariadb-12.2.2-linux-systemd-aarch64.tar.gz".to_string()
                     }
                 }
             }

@@ -47,11 +47,15 @@ body {
 }
 
 .header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   max-width: 1200px;
   margin: 0 auto;
+  padding-bottom: 0.5rem;
+}
+
+.header-actions {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-top: 0.5rem;
 }
 
 .header-title {
@@ -781,19 +785,15 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .header-content {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-  }
-
   .quick-actions {
     width: 100%;
+    flex-wrap: wrap;
   }
 
   .btn-quick-action {
     flex: 1;
     justify-content: center;
+    min-width: 120px;
   }
 }
 
