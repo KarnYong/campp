@@ -334,7 +334,8 @@ fn start_caddy(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> Re
 
 /// Start PHP-FPM (using PHP-CGI for simplicity in MVP)
 fn start_php_fpm(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> Result<(), String> {
-    // Kill any existing PHP-CGI processes to avoid port conflicts
+    // Kill any existing PHP processes to avoid port conflicts
+    kill_existing_processes("php-fpm");
     kill_existing_processes("php-cgi");
 
     // Generate php.ini if it doesn't exist
@@ -346,31 +347,57 @@ fn start_php_fpm(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> 
     let log_path = paths.logs_dir.join("php-fpm.log");
     let log_file = open_log_file_with_retry(&log_path, "PHP-FPM")?;
 
-    // For MVP, we'll use PHP-CGI in a simple mode
-    // In production, you'd want to use php-fpm with a proper configuration
-    let mut child = configure_no_window(Command::new(&paths.php_cgi))
-        .arg("-b")
-        .arg("127.0.0.1:9000")
-        .arg("-c")
-        .arg(&paths.php_ini)
-        .current_dir(&paths.config_dir)
-        .stdout(Stdio::from(log_file.try_clone().unwrap()))
-        .stderr(Stdio::from(log_file))
-        .spawn()
-        .map_err(|e| format!("Failed to start PHP-CGI: {}", e))?;
+    // Check if we have php-fpm (static-php on Linux/macOS) or php-cgi (Windows)
+    let is_fpm = paths.php_cgi.file_name()
+        .and_then(|n| n.to_str())
+        .map(|n| n == "php-fpm")
+        .unwrap_or(false);
+
+    let mut child = if is_fpm {
+        // Generate php-fpm.conf if it doesn't exist
+        let fpm_conf_path = paths.config_dir.join("php-fpm.conf");
+        if !fpm_conf_path.exists() {
+            generate_php_fpm_conf(&fpm_conf_path, paths)?;
+        }
+
+        // PHP-FPM requires -F to run in foreground and -y for config
+        configure_no_window(Command::new(&paths.php_cgi))
+            .arg("-F")  // Don't daemonize
+            .arg("-y")
+            .arg(&fpm_conf_path)
+            .arg("-c")
+            .arg(&paths.php_ini)
+            .current_dir(&paths.config_dir)
+            .stdout(Stdio::from(log_file.try_clone().unwrap()))
+            .stderr(Stdio::from(log_file))
+            .spawn()
+            .map_err(|e| format!("Failed to start PHP-FPM: {}", e))?
+    } else {
+        // PHP-CGI (Windows) uses -b for FastCGI mode
+        configure_no_window(Command::new(&paths.php_cgi))
+            .arg("-b")
+            .arg("127.0.0.1:9000")
+            .arg("-c")
+            .arg(&paths.php_ini)
+            .current_dir(&paths.config_dir)
+            .stdout(Stdio::from(log_file.try_clone().unwrap()))
+            .stderr(Stdio::from(log_file))
+            .spawn()
+            .map_err(|e| format!("Failed to start PHP-CGI: {}", e))?
+    };
 
     // Give it a moment to start
     std::thread::sleep(std::time::Duration::from_millis(500));
 
     // Check if process is still running
     match child.try_wait() {
-        Ok(Some(status)) => Err(format!("PHP-CGI exited immediately with status: {:?}", status)),
+        Ok(Some(status)) => Err(format!("PHP exited immediately with status: {:?}", status)),
         Ok(None) => {
             service_process.child = Some(child);
             service_process.log_file = Some(log_path);
             Ok(())
         }
-        Err(e) => Err(format!("Failed to check PHP-CGI process: {}", e)),
+        Err(e) => Err(format!("Failed to check PHP process: {}", e)),
     }
 }
 
@@ -583,6 +610,8 @@ fn generate_caddyfile(path: &PathBuf, paths: &RuntimePaths, port: u16) -> Result
 
 /// Generate a basic php.ini
 fn generate_php_ini(path: &PathBuf) -> Result<(), String> {
+    // Note: static-php builds have extensions compiled in, so we don't need extension= lines
+    // Windows PHP needs extension_dir and extension= lines
     let php_ini_content = r#"; CAMPP PHP Configuration
 ; Basic PHP settings for development
 
@@ -607,15 +636,6 @@ upload_max_filesize = 100M
 ; Date timezone
 date.timezone = UTC
 
-; Extensions
-extension_dir = "ext"
-extension=curl
-extension=mbstring
-extension=mysqli
-extension=openssl
-extension=pdo_mysql
-extension=zlib
-
 ; Session settings
 session.save_path = "/tmp"
 
@@ -628,6 +648,50 @@ cgi.fix_pathinfo = 1
         .map_err(|e| format!("Failed to create php.ini: {}", e))?;
     file.write_all(php_ini_content.as_bytes())
         .map_err(|e| format!("Failed to write php.ini: {}", e))?;
+
+    Ok(())
+}
+
+/// Generate php-fpm.conf for static-php builds
+fn generate_php_fpm_conf(path: &PathBuf, paths: &RuntimePaths) -> Result<(), String> {
+    // Get current username from environment
+    let user = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "nobody".to_string());
+
+    let fpm_conf_content = format!(
+        r#"; CAMPP PHP-FPM Configuration
+; Minimal config for static-php builds
+
+[global]
+error_log = {logs_dir}/php-fpm.log
+log_level = warning
+
+[www]
+user = {user}
+group = {user}
+listen = 127.0.0.1:9000
+listen.owner = {user}
+listen.group = {user}
+listen.mode = 0660
+pm = dynamic
+pm.max_children = 5
+pm.start_servers = 2
+pm.min_spare_servers = 1
+pm.max_spare_servers = 3
+pm.max_requests = 500
+php_admin_value[error_log] = {logs_dir}/php-fpm.log
+php_admin_flag[log_errors] = on
+php_value[session.save_path] = /tmp
+"#,
+        logs_dir = paths.logs_dir.display(),
+        user = user,
+    );
+
+    let mut file = File::create(path)
+        .map_err(|e| format!("Failed to create php-fpm.conf: {}", e))?;
+    file.write_all(fpm_conf_content.as_bytes())
+        .map_err(|e| format!("Failed to write php-fpm.conf: {}", e))?;
 
     Ok(())
 }

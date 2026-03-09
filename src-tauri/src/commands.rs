@@ -22,15 +22,20 @@ pub async fn start_service(
     let mut manager = state.process_manager.lock()
         .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
 
-    // Initialize if needed
-    let _ = manager.initialize();
+    // Initialize if needed - propagate error if this fails
+    manager.initialize()?;
 
     // Start the service
-    manager.start(service)?;
+    let result = manager.start(service);
 
-    // Update health and return statuses
+    // Update health and return statuses regardless of start result
+    // This ensures the frontend sees the error state
     manager.update_health();
-    Ok(manager.get_all_statuses())
+    let statuses = manager.get_all_statuses();
+
+    // Return error after getting statuses so frontend can see the error state
+    result?;
+    Ok(statuses)
 }
 
 /// Stop a service
@@ -59,15 +64,19 @@ pub async fn restart_service(
     let mut manager = state.process_manager.lock()
         .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
 
-    // Initialize if needed
-    let _ = manager.initialize();
+    // Initialize if needed - propagate error if this fails
+    manager.initialize()?;
 
     // Restart the service
-    manager.restart(service)?;
+    let result = manager.restart(service);
 
-    // Update health and return statuses
+    // Update health and return statuses regardless of restart result
     manager.update_health();
-    Ok(manager.get_all_statuses())
+    let statuses = manager.get_all_statuses();
+
+    // Return error after getting statuses so frontend can see the error state
+    result?;
+    Ok(statuses)
 }
 
 /// Get the status of all services

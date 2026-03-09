@@ -52,6 +52,10 @@ export function Dashboard() {
       await refreshStatuses();
     } catch (error) {
       console.error(`Failed to start ${serviceType}:`, error);
+      // Show error to user
+      alert(`Failed to start ${serviceType}:\n${error}`);
+      // Refresh to show error state in UI
+      await refreshStatuses();
     }
   };
 
@@ -61,6 +65,8 @@ export function Dashboard() {
       await refreshStatuses();
     } catch (error) {
       console.error(`Failed to stop ${serviceType}:`, error);
+      alert(`Failed to stop ${serviceType}:\n${error}`);
+      await refreshStatuses();
     }
   };
 
@@ -70,6 +76,8 @@ export function Dashboard() {
       await refreshStatuses();
     } catch (error) {
       console.error(`Failed to restart ${serviceType}:`, error);
+      alert(`Failed to restart ${serviceType}:\n${error}`);
+      await refreshStatuses();
     }
   };
 

@@ -157,9 +157,13 @@ fn detect_php_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
 
     #[cfg(target_os = "macos")]
     {
-        // macOS: PHP might be in runtime/php/bin/php or similar
+        // macOS: static-php extracts to buildroot/bin/
         let paths_to_check = vec![
+            runtime_dir.join("buildroot").join("bin").join("php-fpm"),  // static-php FPM
+            runtime_dir.join("buildroot").join("bin").join("php"),      // static-php CLI
+            runtime_dir.join("php").join("bin").join("php-fpm"),
             runtime_dir.join("php").join("bin").join("php-cgi"),
+            runtime_dir.join("php-fpm"),              // Direct in runtime dir
             runtime_dir.join("php-cgi"),              // Direct in runtime dir
             runtime_dir.join("usr").join("local").join("bin").join("php"),
             runtime_dir.join("php").join("bin").join("php"),
@@ -175,8 +179,12 @@ fn detect_php_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
 
     #[cfg(target_os = "linux")]
     {
-        // Linux: PHP structure varies by distribution
+        // Linux: static-php extracts to buildroot/bin/ or directly as php-fpm
         let paths_to_check = vec![
+            runtime_dir.join("php-fpm"),              // Direct in runtime dir (static-php bulk)
+            runtime_dir.join("buildroot").join("bin").join("php-fpm"),  // static-php FPM
+            runtime_dir.join("buildroot").join("bin").join("php"),      // static-php CLI
+            runtime_dir.join("php").join("bin").join("php-fpm"),
             runtime_dir.join("php").join("bin").join("php-cgi"),
             runtime_dir.join("php-cgi"),              // Direct in runtime dir
             runtime_dir.join("php").join("bin").join("php"),
@@ -188,6 +196,17 @@ fn detect_php_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
             if path.exists() {
                 return Ok(path);
             }
+        }
+
+        // Check for wrong-platform binaries (Windows .exe files on Linux)
+        let windows_php = runtime_dir.join("php-cgi.exe");
+        if windows_php.exists() {
+            return Err(format!(
+                "Wrong platform: Windows PHP binaries found in {} but this is Linux. \
+                 Please delete the runtime directory and re-download: {}",
+                runtime_dir.display(),
+                runtime_dir.display()
+            ));
         }
     }
 
