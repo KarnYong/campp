@@ -6,7 +6,11 @@ A cross-platform local web development stack desktop application. CAMPP bundles 
 
 Download the latest release from [GitHub Releases](https://github.com/KarnYong/campp/releases):
 
-- **Windows**: Download `CAMPP_0.1.0_x64-setup.exe` (NSIS installer) or `CAMPP_0.1.0_x64_en-US.msi`
+- **Windows**: Download `CAMPP_x64-setup.exe` (NSIS installer) or `CAMPP_x64_en-US.msi`
+- **Linux**: Download `CAMPP_amd64.AppImage` and make it executable: `chmod +x CAMPP_amd64.AppImage`
+- **macOS**: Download `CAMPP_aarch64.dmg` (Apple Silicon) or `CAMPP_x64.dmg` (Intel)
+
+> **Note**: macOS builds are available but need more testing volunteers. If you encounter any issues on macOS, please report them!
 
 ## Features
 
@@ -15,6 +19,7 @@ Download the latest release from [GitHub Releases](https://github.com/KarnYong/c
 - **Self-Contained**: All binaries bundled, no separate installations needed
 - **Modern UI**: Clean desktop interface built with Tauri + React + TypeScript
 - **Service Management**: Start, stop, and restart services individually or all at once
+- **Port Configuration**: Customize ports for each service via Settings panel
 - **Quick Actions**: Open project folder, phpMyAdmin, or logs with one click
 
 ## Included Components
@@ -35,7 +40,9 @@ Download the latest release from [GitHub Releases](https://github.com/KarnYong/c
 | MariaDB | 3307 | localhost:3307 |
 | phpMyAdmin | 8080 | http://localhost:8080/phpmyadmin |
 
-**Default Database Credentials**: `root` / `root`
+**Default Database Credentials**: `root` / (empty password)
+
+**Port Customization**: You can change ports in Settings (⚙️). Running services will automatically restart when you save.
 
 ## Getting Started
 
@@ -91,23 +98,27 @@ See [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) for the full implementation roa
 
 ### Implemented Features
 
-- Phase 1: Project Foundation - Tauri + React setup
-- Phase 2: Runtime Download System - First-run binary download wizard
-- Phase 3: Process Manager - Service start/stop/restart
-- Phase 4: Configuration Generation - Dynamic config files
-
-### Coming Soon
-
-- Phase 5: MariaDB Initialization
-- Phase 6: Enhanced Dashboard UI
-- Phase 7: Settings Panel
-- Phase 8: macOS/Linux Support
+- ✅ Phase 1: Project Foundation - Tauri + React setup
+- ✅ Phase 2: Runtime Download System - First-run binary download wizard
+- ✅ Phase 3: Process Manager - Service start/stop/restart
+- ✅ Phase 4: Configuration Generation - Dynamic config files
+- ✅ Phase 5: MariaDB Initialization - Database setup and credential management
+- ✅ Phase 6: Enhanced Dashboard UI - Service control interface
+- ✅ Phase 7: Settings Panel - Port configuration and project folder selection
+- ✅ Phase 8: Cross-platform Support - Windows, Linux, macOS installers
 
 ## System Requirements
 
 - **Windows**: Windows 10/11 x64, WebView2 runtime (usually pre-installed)
-- **macOS**: Coming soon
-- **Linux**: Coming soon
+- **Linux**: Ubuntu 22.04+ or similar distributions with webkit2gtk dependencies
+- **macOS**: macOS 11+ (Big Sur or later), Apple Silicon or Intel
+
+### Linux Dependencies
+
+On Ubuntu/Debian, install required dependencies:
+```bash
+sudo apt-get install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+```
 
 ## License
 
@@ -116,3 +127,5 @@ MIT
 ## Contributing
 
 Contributions are welcome! Please read [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) for project architecture details.
+
+**macOS testers needed!** If you have a Mac and want to help test CAMPP, please download the latest release and report any issues you encounter.
