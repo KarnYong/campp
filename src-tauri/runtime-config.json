@@ -26,7 +26,7 @@
       "version": "12.2.2",
       "windowsX64": "https://archive.mariadb.org/mariadb-12.2.2/winx64-packages/mariadb-12.2.2-winx64.zip",
       "windowsArm64": "https://archive.mariadb.org/mariadb-12.2.2/winx64-packages/mariadb-12.2.2-winx64.zip",
-      "macOSX64": "https://archive.mariadb.org/mariadb-12.2.2/bintar-macos-arm64/mariadb-12.2.2-macos-arm64.tar.gz",
+      "macOSX64": "https://archive.mariadb.org/mariadb-12.2.2/bintar-macos-x86_64/mariadb-12.2.2-macos-x86_64.tar.gz",
       "macOSArm64": "https://archive.mariadb.org/mariadb-12.2.2/bintar-macos-arm64/mariadb-12.2.2-macos-arm64.tar.gz",
       "linuxX64": "https://archive.mariadb.org/mariadb-12.2.2/bintar-linux-systemd-x86_64/mariadb-12.2.2-linux-systemd-x86_64.tar.gz",
       "linuxArm64": "https://archive.mariadb.org/mariadb-12.2.2/bintar-linux-systemd-aarch64/mariadb-12.2.2-linux-systemd-aarch64.tar.gz",

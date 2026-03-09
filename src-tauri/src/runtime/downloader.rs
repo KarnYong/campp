@@ -147,7 +147,7 @@ fn get_default_config() -> RuntimeConfig {
                 windows_arm64: "https://archive.mariadb.org/mariadb-12.2.2/winx64-packages/mariadb-12.2.2-winx64.zip".to_string(),
                 linux_x64: "https://archive.mariadb.org/mariadb-12.2.2/bintar-linux-systemd-x86_64/mariadb-12.2.2-linux-systemd-x86_64.tar.gz".to_string(),
                 linux_arm64: "https://archive.mariadb.org/mariadb-12.2.2/bintar-linux-systemd-aarch64/mariadb-12.2.2-linux-systemd-aarch64.tar.gz".to_string(),
-                macos_x64: "https://archive.mariadb.org/mariadb-12.2.2/bintar-macos-arm64/mariadb-12.2.2-macos-arm64.tar.gz".to_string(),
+                macos_x64: "https://archive.mariadb.org/mariadb-12.2.2/bintar-macos-x86_64/mariadb-12.2.2-macos-x86_64.tar.gz".to_string(),
                 macos_arm64: "https://archive.mariadb.org/mariadb-12.2.2/bintar-macos-arm64/mariadb-12.2.2-macos-arm64.tar.gz".to_string(),
             },
             phpmyadmin: PhpMyAdminConfig {
