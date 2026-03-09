@@ -53,18 +53,40 @@ impl AppDataPaths {
 
 /// Get the application data directory paths
 pub fn get_app_data_paths() -> Result<AppDataPaths, String> {
-    let data_dir = dirs::data_local_dir()
-        .ok_or_else(|| "Cannot find data directory".to_string())?
-        .join("campp");
+    #[cfg(target_os = "windows")]
+    {
+        // On Windows, use the installation folder (where the exe is located)
+        let exe_path = std::env::current_exe()
+            .map_err(|e| format!("Cannot get exe path: {}", e))?;
+        let install_dir = exe_path.parent()
+            .ok_or_else(|| "Cannot get installation directory".to_string())?
+            .to_path_buf();
 
-    Ok(AppDataPaths {
-        base_dir: data_dir.clone(),
-        runtime_dir: data_dir.join("runtime"),
-        config_dir: data_dir.join("config"),
-        mysql_data_dir: data_dir.join("mysql").join("data"),
-        logs_dir: data_dir.join("logs"),
-        projects_dir: data_dir.join("projects"),
-    })
+        Ok(AppDataPaths {
+            base_dir: install_dir.clone(),
+            runtime_dir: install_dir.join("runtime"),
+            config_dir: install_dir.join("config"),
+            mysql_data_dir: install_dir.join("mysql").join("data"),
+            logs_dir: install_dir.join("logs"),
+            projects_dir: install_dir.join("projects"),
+        })
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let data_dir = dirs::data_local_dir()
+            .ok_or_else(|| "Cannot find data directory".to_string())?
+            .join("campp");
+
+        Ok(AppDataPaths {
+            base_dir: data_dir.clone(),
+            runtime_dir: data_dir.join("runtime"),
+            config_dir: data_dir.join("config"),
+            mysql_data_dir: data_dir.join("mysql").join("data"),
+            logs_dir: data_dir.join("logs"),
+            projects_dir: data_dir.join("projects"),
+        })
+    }
 }
 
 /// Locate runtime binaries after download
