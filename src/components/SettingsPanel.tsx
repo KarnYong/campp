@@ -47,7 +47,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
 
     try {
       await invoke("save_settings", { settings });
-      setSuccess("Settings saved! Services have been restarted with new configuration.");
+      setSuccess("Settings saved successfully!");
       onSettingsChanged?.();
       setTimeout(() => onClose(), 2000);
     } catch (e) {
@@ -84,7 +84,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
           <div className="settings-section">
             <h3>Port Configuration</h3>
             <p className="settings-hint">
-              Configure the ports used by each service. Services will automatically restart when you save.
+              Configure the ports used by each service. Changes will be applied when services restart.
             </p>
 
             <div className="settings-row">
@@ -134,7 +134,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
             onClick={handleSave}
             disabled={saving}
           >
-            {saving ? "Saving..." : "Save & Restart Services"}
+            {saving ? "Saving..." : "Save"}
           </button>
         </div>
       </div>
