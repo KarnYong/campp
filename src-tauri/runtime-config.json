@@ -14,8 +14,8 @@
     },
     "php": {
       "version": "8.4.18",
-      "windowsX64": "https://windows.php.net/downloads/releases/php-8.4.18-Win32-vs17-x64.zip",
-      "windowsArm64": "https://windows.php.net/downloads/releases/php-8.4.18-Win32-vs17-x64.zip",
+      "windowsX64": "https://windows.php.net/downloads/releases/php-8.4.16-Win32-vs17-x64.zip",
+      "windowsArm64": "https://windows.php.net/downloads/releases/php-8.4.16-Win32-vs17-x64.zip",
       "linuxX64": "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-linux-x86_64.tar.gz",
       "linuxArm64": "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-linux-aarch64.tar.gz",
       "macOSX64": "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-macos-x86_64.tar.gz",

@@ -206,11 +206,11 @@ impl RuntimeDownloader {
                 match self.platform {
                     Platform::WindowsX64 => {
                         // Windows: Use official PHP builds (includes FPM)
-                        "https://windows.php.net/downloads/releases/php-8.4.18-Win32-vs17-x64.zip".to_string()
+                        "https://windows.php.net/downloads/releases/php-8.4.16-Win32-vs17-x64.zip".to_string()
                     }
                     Platform::WindowsArm64 => {
                         // Windows ARM64: Use x64 build via emulation
-                        "https://windows.php.net/downloads/releases/php-8.4.18-Win32-vs17-x64.zip".to_string()
+                        "https://windows.php.net/downloads/releases/php-8.4.16-Win32-vs17-x64.zip".to_string()
                     }
                     Platform::LinuxX64 => {
                         // Linux x86_64: Use static-php (self-contained, 50+ extensions, includes FPM)

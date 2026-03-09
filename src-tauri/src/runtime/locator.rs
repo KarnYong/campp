@@ -9,6 +9,8 @@ pub struct RuntimePaths {
     pub php_ini: PathBuf,
     pub mariadb: PathBuf,
     pub phpmyadmin: PathBuf,
+    /// Directory where PHP extensions are located (same as php_cgi)
+    pub php_ext_dir: PathBuf,
     /// Data directory for MariaDB
     pub mysql_data_dir: PathBuf,
     /// Logs directory
@@ -85,6 +87,7 @@ pub fn locate_runtime_binaries() -> Result<RuntimePaths, String> {
         caddy: detect_caddy_binary(runtime_dir)?,
         php_cgi: detect_php_binary(runtime_dir)?,
         php_ini: detect_php_ini(runtime_dir)?,
+        php_ext_dir: detect_php_ext_dir(runtime_dir)?,
         mariadb: detect_mariadb_binary(runtime_dir)?,
         phpmyadmin: phpmyadmin_path,
         mysql_data_dir: app_paths.mysql_data_dir.clone(),
@@ -223,6 +226,46 @@ fn detect_php_ini(runtime_dir: &Path) -> Result<PathBuf, String> {
     let php_ini_path = app_paths.config_dir.join("php.ini");
 
     Ok(php_ini_path)
+}
+
+/// Detect PHP extension directory
+fn detect_php_ext_dir(runtime_dir: &Path) -> Result<PathBuf, String> {
+    #[cfg(target_os = "windows")]
+    {
+        // Windows PHP extensions are in the ext subdirectory
+        let paths_to_check = vec![
+            runtime_dir.join("php").join("ext"),
+            runtime_dir.join("ext"),
+        ];
+
+        for path in paths_to_check {
+            if path.exists() {
+                return Ok(path);
+            }
+        }
+
+        // Fallback: return the expected path even if it doesn't exist yet
+        Ok(runtime_dir.join("php").join("ext"))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        // On Unix, static-php bundles extensions differently
+        // Extensions are typically built-in, but check common locations
+        let paths_to_check = vec![
+            runtime_dir.join("php").join("lib").join("php").join("extensions"),
+            runtime_dir.join("buildroot").join("lib").join("php").join("extensions"),
+        ];
+
+        for path in paths_to_check {
+            if path.exists() {
+                return Ok(path);
+            }
+        }
+
+        // Fallback: return a reasonable default
+        Ok(runtime_dir.join("php").join("lib").join("php").join("extensions"))
+    }
 }
 
 /// Detect MariaDB server binary based on platform
@@ -479,6 +522,7 @@ mod tests {
             caddy: temp_dir.path().join("caddy.exe"),
             php_cgi: temp_dir.path().join("php").join("php.exe"),
             php_ini: temp_dir.path().join("config").join("php.ini"),
+            php_ext_dir: temp_dir.path().join("php").join("ext"),
             mariadb: temp_dir.path().join("mariadb").join("bin").join("mysqld.exe"),
             phpmyadmin: temp_dir.path().join("phpmyadmin"),
             mysql_data_dir: temp_dir.path().join("mysql").join("data"),
@@ -502,6 +546,7 @@ mod tests {
             caddy: temp_dir.path().join("caddy.exe"),
             php_cgi: temp_dir.path().join("php").join("php.exe"),
             php_ini: temp_dir.path().join("config").join("php.ini"),
+            php_ext_dir: temp_dir.path().join("php").join("ext"),
             mariadb: temp_dir.path().join("mariadb").join("bin").join("mysqld.exe"),
             phpmyadmin: temp_dir.path().join("phpmyadmin"),
             mysql_data_dir: temp_dir.path().join("mysql").join("data"),
