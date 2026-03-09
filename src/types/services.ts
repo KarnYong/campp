@@ -51,7 +51,7 @@ export const DEFAULT_PORTS = {
 
 export const SERVICE_DISPLAY_NAMES = {
   [ServiceType.Caddy]: "Caddy",
-  [ServiceType.PhpFpm]: "PHP-FPM 8.3",
+  [ServiceType.PhpFpm]: "PHP-FPM 8.4",
   [ServiceType.MariaDB]: "MariaDB",
 } as const;
 

@@ -248,7 +248,7 @@ body {
 
 .btn-start {
   background-color: var(--color-success);
-  color: white;
+  color: #065f46;
   border-color: var(--color-success);
 }
 
@@ -259,7 +259,7 @@ body {
 
 .btn-stop {
   background-color: var(--color-error);
-  color: white;
+  color: #991b1b;
   border-color: var(--color-error);
 }
 
@@ -270,7 +270,7 @@ body {
 
 .btn-restart {
   background-color: var(--color-warning);
-  color: white;
+  color: #92400e;
   border-color: var(--color-warning);
 }
 
@@ -345,6 +345,18 @@ body {
 
   .service-actions button:hover:not(:disabled) {
     background-color: var(--color-bg-secondary);
+  }
+
+  .btn-start,
+  .btn-stop,
+  .btn-restart {
+    color: white;
+  }
+
+  .btn-start:hover:not(:disabled),
+  .btn-stop:hover:not(:disabled),
+  .btn-restart:hover:not(:disabled) {
+    color: white;
   }
 
   .btn-quick-action {

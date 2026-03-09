@@ -195,7 +195,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
                     </div>
                     <div className="installed-component">
                       <span className="installed-name">PHP</span>
-                      <span className="installed-version">8.5.1</span>
+                      <span className="installed-version">8.4.18</span>
                     </div>
                     <div className="installed-component">
                       <span className="installed-name">MariaDB</span>

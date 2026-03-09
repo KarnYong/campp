@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use reqwest::Client;
+
+use crate::runtime::locator::get_app_data_paths;
 use sha2::{Digest, Sha256};
 use tokio::time::sleep;
 
@@ -30,7 +32,7 @@ impl BinaryComponent {
     pub fn version(&self) -> &str {
         match self {
             BinaryComponent::Caddy => "2.8.4",
-            BinaryComponent::Php => "8.5.1",
+            BinaryComponent::Php => "8.4.18",
             BinaryComponent::MariaDB => "12.2.2",
             BinaryComponent::PhpMyAdmin => "5.2.2",
         }
@@ -39,7 +41,7 @@ impl BinaryComponent {
     pub fn display_name(&self) -> String {
         match self {
             BinaryComponent::Caddy => "Caddy 2.8.4".to_string(),
-            BinaryComponent::Php => "PHP 8.5.1".to_string(),
+            BinaryComponent::Php => "PHP 8.4.18".to_string(),
             BinaryComponent::MariaDB => "MariaDB 12.2.2".to_string(),
             BinaryComponent::PhpMyAdmin => "phpMyAdmin 5.2.2".to_string(),
         }
@@ -200,18 +202,31 @@ impl RuntimeDownloader {
                 }
             }
             BinaryComponent::Php => {
-                // For PHP, use the official Windows binaries
+                // Hybrid approach: static-php for Linux/macOS, official PHP for Windows
                 match self.platform {
                     Platform::WindowsX64 => {
-                        "https://windows.php.net/downloads/releases/php-8.5.1-Win32-vs17-x64.zip".to_string()
+                        // Windows: Use official PHP builds (includes FPM)
+                        "https://windows.php.net/downloads/releases/php-8.4.18-Win32-vs17-x64.zip".to_string()
                     }
                     Platform::WindowsArm64 => {
-                        // Use x64 build for ARM64 Windows (works via emulation)
-                        "https://windows.php.net/downloads/releases/php-8.5.1-Win32-vs17-x64.zip".to_string()
+                        // Windows ARM64: Use x64 build via emulation
+                        "https://windows.php.net/downloads/releases/php-8.4.18-Win32-vs17-x64.zip".to_string()
                     }
-                    _ => {
-                        // For Unix systems, use x64 build
-                        "https://windows.php.net/downloads/releases/php-8.5.1-Win32-vs17-x64.zip".to_string()
+                    Platform::LinuxX64 => {
+                        // Linux x86_64: Use static-php (self-contained, 50+ extensions, includes FPM)
+                        "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-linux-x86_64.tar.gz".to_string()
+                    }
+                    Platform::LinuxArm64 => {
+                        // Linux aarch64: Use static-php
+                        "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-linux-aarch64.tar.gz".to_string()
+                    }
+                    Platform::MacOSX64 => {
+                        // macOS Intel: Use static-php
+                        "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-macos-x86_64.tar.gz".to_string()
+                    }
+                    Platform::MacOSArm64 => {
+                        // macOS Apple Silicon: Use static-php
+                        "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-macos-aarch64.tar.gz".to_string()
                     }
                 }
             }
@@ -529,6 +544,13 @@ impl RuntimeDownloader {
             downloaded_files.push(downloaded_path);
         }
 
+        // Create all application directories (config, logs, mysql/data, projects)
+        if let Ok(app_paths) = get_app_data_paths() {
+            if let Err(e) = app_paths.ensure_directories() {
+                eprintln!("Warning: Failed to create app directories: {}", e);
+            }
+        }
+
         progress_cb(DownloadProgress {
             step: DownloadStep::Complete,
             percent: 100,
@@ -594,7 +616,10 @@ fn is_executable(name: &str) -> bool {
     name.ends_with("caddy")
         || name.ends_with("php")
         || name.ends_with("php-cgi")
+        || name.ends_with("php-fpm")
         || name.ends_with("mysqld")
+        || name.ends_with("mysql")
+        || name.ends_with("mariadbd")
         || name.contains("bin/")
 }
 

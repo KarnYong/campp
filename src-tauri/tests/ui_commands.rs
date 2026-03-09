@@ -35,7 +35,7 @@ mod ui_command_tests {
     #[test]
     fn test_service_type_display_names() {
         assert_eq!(ServiceType::Caddy.display_name(), "Caddy");
-        assert_eq!(ServiceType::PhpFpm.display_name(), "PHP-FPM 8.3");
+        assert_eq!(ServiceType::PhpFpm.display_name(), "PHP-FPM 8.4");
         assert_eq!(ServiceType::MariaDB.display_name(), "MariaDB");
     }
 
