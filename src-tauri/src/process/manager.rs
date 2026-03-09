@@ -340,7 +340,7 @@ fn start_php_fpm(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> 
 
     // Generate php.ini if it doesn't exist
     if !paths.php_ini.exists() {
-        generate_php_ini(&paths.php_ini)?;
+        generate_php_ini(&paths.php_ini, paths)?;
     }
 
     // Open log file with retry logic
@@ -609,10 +609,22 @@ fn generate_caddyfile(path: &PathBuf, paths: &RuntimePaths, port: u16) -> Result
 }
 
 /// Generate a basic php.ini
-fn generate_php_ini(path: &PathBuf) -> Result<(), String> {
-    // Note: static-php builds have extensions compiled in, so we don't need extension= lines
-    // Windows PHP needs extension_dir and extension= lines
-    let php_ini_content = r#"; CAMPP PHP Configuration
+fn generate_php_ini(path: &PathBuf, paths: &RuntimePaths) -> Result<(), String> {
+    // Get the PHP directory (parent of php_cgi binary) to find the ext folder
+    let php_dir = paths.php_cgi.parent()
+        .ok_or("Cannot determine PHP directory")?;
+
+    // On Windows, extensions are in the ext/ subdirectory relative to PHP binary
+    // Use absolute path with forward slashes (PHP accepts forward slashes on Windows)
+    let ext_dir = php_dir.join("ext");
+    let ext_dir_str = ext_dir.to_string_lossy().replace('\\', "/");
+
+    // Get error log path
+    let error_log = paths.logs_dir.join("php-errors.log")
+        .to_string_lossy()
+        .replace('\\', "/");
+
+    let php_ini_content = format!(r#"; CAMPP PHP Configuration
 ; Basic PHP settings for development
 
 [PHP]
@@ -621,7 +633,7 @@ error_reporting = E_ALL & ~E_DEPRECATED
 display_errors = On
 display_startup_errors = On
 log_errors = On
-error_log = ""
+error_log = "{}"
 
 ; Maximum execution time
 max_execution_time = 300
@@ -636,13 +648,27 @@ upload_max_filesize = 100M
 ; Date timezone
 date.timezone = UTC
 
+; Extensions - use absolute path for reliability
+extension_dir = "{}"
+extension=curl
+extension=mbstring
+extension=mysqli
+extension=openssl
+extension=pdo_mysql
+extension=zlib
+
 ; Session settings
 session.save_path = "/tmp"
+session.cookie_httponly = 1
+session.use_strict_mode = 1
 
 ; CGI settings
 cgi.force_redirect = 0
 cgi.fix_pathinfo = 1
-"#;
+
+; Security settings
+expose_php = Off
+"#, error_log, ext_dir_str);
 
     let mut file = File::create(path)
         .map_err(|e| format!("Failed to create php.ini: {}", e))?;
