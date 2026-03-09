@@ -1026,37 +1026,6 @@ body {
   color: var(--color-neutral);
 }
 
-/* Port status indicator */
-.port-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  margin-left: 0.5rem;
-}
-
-.port-status-available {
-  color: var(--color-success);
-}
-
-.port-status-unavailable {
-  color: var(--color-error);
-}
-
-.port-status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.port-status-available .port-status-dot {
-  background-color: var(--color-success);
-}
-
-.port-status-unavailable .port-status-dot {
-  background-color: var(--color-error);
-}
-
 /* Improved settings panel */
 .settings-panel {
   animation: slideIn 0.2s ease-out;

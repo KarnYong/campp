@@ -7,11 +7,6 @@ interface SettingsPanelProps {
   onSettingsChanged?: () => void;
 }
 
-interface PortStatus {
-  available: boolean;
-  checking: boolean;
-}
-
 export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps) {
   const [settings, setSettings] = useState<AppSettings>({
     web_port: 8080,
@@ -23,15 +18,6 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [portStatus, setPortStatus] = useState<{
-    web: PortStatus;
-    php: PortStatus;
-    mysql: PortStatus;
-  }>({
-    web: { available: true, checking: false },
-    php: { available: true, checking: false },
-    mysql: { available: true, checking: false },
-  });
 
   const loadSettings = useCallback(async () => {
     try {
@@ -47,40 +33,6 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
-
-  const checkPort = async (type: 'web' | 'php' | 'mysql') => {
-    setPortStatus(prev => ({
-      ...prev,
-      [type]: { available: false, checking: true }
-    }));
-
-    try {
-      const result = await invoke<any>("check_ports", {
-        webPort: settings.web_port,
-        phpPort: settings.php_port,
-        mysqlPort: settings.mysql_port
-      });
-
-      setPortStatus(prev => ({
-        ...prev,
-        [type]: { available: result[type].available, checking: false }
-      }));
-    } catch {
-      setPortStatus(prev => ({
-        ...prev,
-        [type]: { available: true, checking: false }
-      }));
-    }
-  };
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      checkPort('web');
-      checkPort('php');
-      checkPort('mysql');
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [settings.web_port, settings.php_port, settings.mysql_port]);
 
   const handlePortChange = (field: keyof AppSettings, value: string) => {
     const numValue = parseInt(value, 10);
@@ -103,24 +55,6 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
     } finally {
       setSaving(false);
     }
-  };
-
-  const renderPortStatus = (type: 'web' | 'php' | 'mysql') => {
-    const status = portStatus[type];
-    if (status.checking) {
-      return (
-        <span className="port-status">
-          <span className="port-status-dot" style={{ background: 'var(--color-warning)' }}></span>
-          Checking...
-        </span>
-      );
-    }
-    return (
-      <span className={`port-status ${status.available ? 'port-status-available' : 'port-status-unavailable'}`}>
-        <span className="port-status-dot"></span>
-        {status.available ? 'Available' : 'In use'}
-      </span>
-    );
   };
 
   if (loading) {
@@ -154,10 +88,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
             </p>
 
             <div className="settings-row">
-              <div>
-                <label htmlFor="web-port">Web Server Port</label>
-                {renderPortStatus('web')}
-              </div>
+              <label htmlFor="web-port">Web Server Port</label>
               <input
                 id="web-port"
                 type="number"
@@ -169,10 +100,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
             </div>
 
             <div className="settings-row">
-              <div>
-                <label htmlFor="php-port">PHP-FPM Port</label>
-                {renderPortStatus('php')}
-              </div>
+              <label htmlFor="php-port">PHP-FPM Port</label>
               <input
                 id="php-port"
                 type="number"
@@ -184,10 +112,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
             </div>
 
             <div className="settings-row">
-              <div>
-                <label htmlFor="mysql-port">MariaDB Port</label>
-                {renderPortStatus('mysql')}
-              </div>
+              <label htmlFor="mysql-port">MariaDB Port</label>
               <input
                 id="mysql-port"
                 type="number"
@@ -207,7 +132,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
           <button
             className="btn-save"
             onClick={handleSave}
-            disabled={saving || !portStatus.web.available || !portStatus.php.available || !portStatus.mysql.available}
+            disabled={saving}
           >
             {saving ? "Saving..." : "Save & Restart Services"}
           </button>
