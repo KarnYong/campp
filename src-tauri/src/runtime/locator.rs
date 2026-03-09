@@ -164,8 +164,30 @@ fn detect_php_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
     #[cfg(target_os = "windows")]
     {
         // Windows PHP distribution structure:
-        // runtime/php/php-cgi.exe or runtime/php-cgi.exe (CGI binary)
-        // runtime/php/php.exe or runtime/php.exe (CLI binary)
+        // - runtime/php-8.4.16-Win32-vs17-x64/php-cgi.exe (versioned directory from zip)
+        // - runtime/php/php-cgi.exe (renamed/extracted)
+        // - runtime/php-cgi.exe (direct in runtime dir)
+
+        // First, look for versioned PHP directories (like php-8.4.16-Win32-vs17-x64)
+        if let Ok(entries) = fs::read_dir(runtime_dir) {
+            for entry in entries.flatten() {
+                if let Ok(name) = entry.file_name().into_string() {
+                    if name.starts_with("php-") && name.contains("Win32") && entry.path().is_dir() {
+                        let php_cgi_path = entry.path().join("php-cgi.exe");
+                        if php_cgi_path.exists() {
+                            return Ok(php_cgi_path);
+                        }
+                        // Also check for php.exe as fallback
+                        let php_exe_path = entry.path().join("php.exe");
+                        if php_exe_path.exists() {
+                            return Ok(php_exe_path);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fallback paths
         let paths_to_check = vec![
             runtime_dir.join("php-cgi.exe"),         // Direct in runtime dir
             runtime_dir.join("php").join("php-cgi.exe"),
@@ -254,7 +276,21 @@ fn detect_php_ini(runtime_dir: &Path) -> Result<PathBuf, String> {
 fn detect_php_ext_dir(runtime_dir: &Path) -> Result<PathBuf, String> {
     #[cfg(target_os = "windows")]
     {
-        // Windows PHP extensions are in the ext subdirectory
+        // First, look for versioned PHP directories (like php-8.4.16-Win32-vs17-x64)
+        if let Ok(entries) = fs::read_dir(runtime_dir) {
+            for entry in entries.flatten() {
+                if let Ok(name) = entry.file_name().into_string() {
+                    if name.starts_with("php-") && name.contains("Win32") && entry.path().is_dir() {
+                        let ext_path = entry.path().join("ext");
+                        if ext_path.exists() {
+                            return Ok(ext_path);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fallback paths
         let paths_to_check = vec![
             runtime_dir.join("php").join("ext"),
             runtime_dir.join("ext"),
