@@ -10,6 +10,7 @@ export function Dashboard() {
   const [services, setServices] = useState<Partial<ServiceMap>>({});
   const [showSettings, setShowSettings] = useState(false);
   const [projectRoot, setProjectRoot] = useState<string>("");
+  const [installDir, setInstallDir] = useState<string>("");
 
   // Get Caddy port from services
   const caddyPort = services[ServiceType.Caddy]?.port || 8080;
@@ -44,6 +45,18 @@ export function Dashboard() {
       }
     };
     loadProjectRoot();
+
+    // Load install directory (on Windows, this is where the exe is located)
+    const loadInstallDir = async () => {
+      try {
+        const dir = await invoke<string>("get_install_dir");
+        console.log("get_install_dir returned:", dir);
+        setInstallDir(dir);
+      } catch (error) {
+        console.error("Failed to load install directory:", error);
+      }
+    };
+    loadInstallDir();
   }, []);
 
   const startService = async (serviceType: ServiceType) => {
@@ -99,9 +112,15 @@ export function Dashboard() {
 
   const openProjectRoot = async () => {
     try {
-      await revealItemInDir(projectRoot);
+      // On Windows, open the installation directory; on other platforms, open project root
+      console.log("installDir:", installDir, "projectRoot:", projectRoot);
+      const pathToOpen = installDir || projectRoot;
+      console.log("Opening path:", pathToOpen);
+      if (pathToOpen) {
+        await revealItemInDir(pathToOpen);
+      }
     } catch (error) {
-      console.error("Failed to open project root directory:", error);
+      console.error("Failed to open directory:", error);
     }
   };
 
@@ -130,8 +149,8 @@ export function Dashboard() {
             <button
               className="btn-quick-action"
               onClick={openProjectRoot}
-              disabled={!projectRoot}
-              title={projectRoot ? `Open ${projectRoot}` : "Project root not set"}
+              disabled={!installDir && !projectRoot}
+              title={installDir || projectRoot ? `Open ${installDir || projectRoot}` : "Directory not set"}
             >
               <span className="btn-icon">📁</span>
               Projects

@@ -2,7 +2,7 @@
 //!
 //! This module contains all Tauri commands that are exposed to the frontend.
 
-use crate::process::{ServiceMap, ServiceType};
+use crate::process::{ServiceMap, ServiceState, ServiceType};
 use crate::runtime::downloader::{DownloadProgress, RuntimeDownloader};
 use crate::AppState;
 use std::fs;
@@ -100,8 +100,33 @@ pub async fn get_settings() -> Result<crate::config::AppSettings, String> {
 
 /// Save app settings
 #[tauri::command]
-pub async fn save_settings(settings: crate::config::AppSettings) -> Result<(), String> {
-    settings.save()
+pub async fn save_settings(settings: crate::config::AppSettings, state: State<'_, AppState>) -> Result<(), String> {
+    // Save the settings first
+    settings.save()?;
+
+    // Update the ProcessManager with new settings
+    let mut manager = state.process_manager.lock()
+        .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
+
+    // Get the current running services before updating ports
+    let running_services: Vec<ServiceType> = manager.get_all_statuses()
+        .iter()
+        .filter(|(_, s)| s.state == ServiceState::Running)
+        .map(|(ty, _)| *ty)
+        .collect();
+
+    // Update ports in the process manager
+    manager.update_ports(&settings);
+
+    // Restart any running services with new configuration
+    for service in running_services {
+        // Stop the service
+        let _ = manager.stop(service);
+        // Start it again with new port settings
+        let _ = manager.start(service);
+    }
+
+    Ok(())
 }
 
 /// Validate settings (check port conflicts, valid paths)
@@ -159,6 +184,26 @@ pub async fn get_runtime_dir() -> Result<String, String> {
     downloader
         .get_runtime_dir()
         .map(|p| p.to_string_lossy().to_string())
+}
+
+/// Get the installation directory (where the exe is located)
+#[tauri::command]
+pub async fn get_install_dir() -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let exe_path = std::env::current_exe()
+            .map_err(|e| format!("Failed to get exe path: {}", e))?;
+        let install_dir = exe_path.parent()
+            .ok_or("Failed to get installation directory")?;
+        Ok(install_dir.to_string_lossy().to_string())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        // On non-Windows, return the project root as the install dir concept doesn't apply
+        let settings = crate::config::AppSettings::load();
+        Ok(settings.project_root)
+    }
 }
 
 /// Get the download directory path (where ZIP files are stored)

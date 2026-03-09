@@ -79,10 +79,15 @@ pub struct ServiceProcess {
 pub struct ProcessManager {
     services: HashMap<ServiceType, ServiceProcess>,
     runtime_paths: Option<RuntimePaths>,
+    settings: crate::config::AppSettings,
 }
 
 impl ProcessManager {
     pub fn new() -> Self {
+        Self::with_settings(crate::config::AppSettings::load())
+    }
+
+    pub fn with_settings(settings: crate::config::AppSettings) -> Self {
         let mut services = HashMap::new();
 
         for service_type in [ServiceType::Caddy, ServiceType::PhpFpm, ServiceType::MariaDB] {
@@ -92,7 +97,7 @@ impl ProcessManager {
                     name: service_type,
                     child: None,
                     state: ServiceState::Stopped,
-                    port: service_type.default_port(),
+                    port: Self::port_for_service(service_type, &settings),
                     log_file: None,
                     error_message: None,
                 },
@@ -102,6 +107,22 @@ impl ProcessManager {
         Self {
             services,
             runtime_paths: None,
+            settings,
+        }
+    }
+
+    fn port_for_service(service_type: ServiceType, settings: &crate::config::AppSettings) -> u16 {
+        match service_type {
+            ServiceType::Caddy => settings.web_port,
+            ServiceType::PhpFpm => settings.php_port,
+            ServiceType::MariaDB => settings.mysql_port,
+        }
+    }
+
+    pub fn update_ports(&mut self, settings: &crate::config::AppSettings) {
+        self.settings = settings.clone();
+        for (service_type, service_process) in self.services.iter_mut() {
+            service_process.port = Self::port_for_service(*service_type, settings);
         }
     }
 
@@ -149,7 +170,7 @@ impl ProcessManager {
  
         // Spawn the appropriate service
         let result = match service {
-            ServiceType::Caddy => start_caddy(service_process, &paths),
+            ServiceType::Caddy => start_caddy(service_process, &paths, self.settings.php_port, self.settings.mysql_port),
             ServiceType::PhpFpm => start_php_fpm(service_process, &paths),
             ServiceType::MariaDB => start_mariadb(service_process, &paths),
         };
@@ -289,18 +310,16 @@ impl ProcessManager {
 }
 
 /// Start Caddy web server
-fn start_caddy(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> Result<(), String> {
+fn start_caddy(service_process: &mut ServiceProcess, paths: &RuntimePaths, php_port: u16, mysql_port: u16) -> Result<(), String> {
     // Kill any existing Caddy processes to avoid port conflicts
     kill_existing_processes("caddy");
 
     // Generate phpMyAdmin config if needed
-    generate_phpmyadmin_config(paths)?;
+    generate_phpmyadmin_config(paths, mysql_port)?;
 
-    // Generate Caddyfile if it doesn't exist
+    // Always regenerate Caddyfile with current port settings
     let caddyfile_path = paths.config_dir.join("Caddyfile");
-    if !caddyfile_path.exists() {
-        generate_caddyfile(&caddyfile_path, paths, service_process.port)?;
-    }
+    generate_caddyfile(&caddyfile_path, paths, service_process.port, php_port)?;
 
     // Open log file with retry logic for Windows file locking
     let log_path = paths.logs_dir.join("caddy.log");
@@ -357,7 +376,10 @@ fn start_php_fpm(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> 
         // Generate php-fpm.conf if it doesn't exist
         let fpm_conf_path = paths.config_dir.join("php-fpm.conf");
         if !fpm_conf_path.exists() {
-            generate_php_fpm_conf(&fpm_conf_path, paths)?;
+            generate_php_fpm_conf(&fpm_conf_path, paths, service_process.port)?;
+        } else {
+            // Regenerate with current port
+            generate_php_fpm_conf(&fpm_conf_path, paths, service_process.port)?;
         }
 
         // PHP-FPM requires -F to run in foreground and -y for config
@@ -376,7 +398,7 @@ fn start_php_fpm(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> 
         // PHP-CGI (Windows) uses -b for FastCGI mode
         configure_no_window(Command::new(&paths.php_cgi))
             .arg("-b")
-            .arg("127.0.0.1:9000")
+            .arg(format!("127.0.0.1:{}", service_process.port))
             .arg("-c")
             .arg(&paths.php_ini)
             .current_dir(&paths.config_dir)
@@ -545,7 +567,7 @@ fn kill_existing_processes(process_name: &str) {
 }
 
 /// Generate a basic Caddyfile
-fn generate_caddyfile(path: &PathBuf, paths: &RuntimePaths, port: u16) -> Result<(), String> {
+fn generate_caddyfile(path: &PathBuf, paths: &RuntimePaths, port: u16, php_port: u16) -> Result<(), String> {
     // Convert paths to use forward slashes for Caddyfile (cross-platform compatibility)
     let projects = paths.projects_dir
         .to_str()
@@ -570,7 +592,7 @@ fn generate_caddyfile(path: &PathBuf, paths: &RuntimePaths, port: u16) -> Result
     content.push_str("    # Handle phpMyAdmin requests - handle_path strips the /phpmyadmin prefix\n");
     content.push_str("    handle_path /phpmyadmin/* {\n");
     content.push_str(&format!("        root * \"{}\"\n", phpmyadmin));
-    content.push_str("        php_fastcgi 127.0.0.1:9000\n");
+    content.push_str(&format!("        php_fastcgi 127.0.0.1:{}\n", php_port));
     content.push_str("        file_server browse\n");
     content.push_str("    }\n");
     content.push_str("\n");
@@ -578,7 +600,7 @@ fn generate_caddyfile(path: &PathBuf, paths: &RuntimePaths, port: u16) -> Result
     content.push_str(&format!("    root * \"{}\"\n", projects));
     content.push_str("\n");
     content.push_str("    # Enable PHP for all other requests\n");
-    content.push_str("    php_fastcgi 127.0.0.1:9000\n");
+    content.push_str(&format!("    php_fastcgi 127.0.0.1:{}\n", php_port));
     content.push_str("\n");
     content.push_str("    # File server for project files\n");
     content.push_str("    file_server browse\n");
@@ -679,7 +701,7 @@ expose_php = Off
 }
 
 /// Generate php-fpm.conf for static-php builds
-fn generate_php_fpm_conf(path: &PathBuf, paths: &RuntimePaths) -> Result<(), String> {
+fn generate_php_fpm_conf(path: &PathBuf, paths: &RuntimePaths, php_port: u16) -> Result<(), String> {
     // Get current username from environment
     let user = std::env::var("USER")
         .or_else(|_| std::env::var("USERNAME"))
@@ -696,7 +718,7 @@ log_level = warning
 [www]
 user = {user}
 group = {user}
-listen = 127.0.0.1:9000
+listen = 127.0.0.1:{php_port}
 listen.owner = {user}
 listen.group = {user}
 listen.mode = 0660
@@ -712,6 +734,7 @@ php_value[session.save_path] = /tmp
 "#,
         logs_dir = paths.logs_dir.display(),
         user = user,
+        php_port = php_port,
     );
 
     let mut file = File::create(path)
@@ -723,13 +746,11 @@ php_value[session.save_path] = /tmp
 }
 
 /// Generate phpMyAdmin config.inc.php
-fn generate_phpmyadmin_config(paths: &RuntimePaths) -> Result<(), String> {
+fn generate_phpmyadmin_config(paths: &RuntimePaths, mysql_port: u16) -> Result<(), String> {
     let config_path = paths.phpmyadmin.join("config.inc.php");
 
-    // Only generate if it doesn't exist (don't overwrite user customizations)
-    if config_path.exists() {
-        return Ok(());
-    }
+    // Generate or regenerate config with current port settings
+    // We always regenerate to ensure port changes take effect
 
     // Generate a 32-byte blowfish secret for cookie encryption
     let blowfish_secret: String = (0..32)
@@ -759,7 +780,7 @@ $cfg['Servers'][$i]['auth_type'] = 'config';
 $cfg['Servers'][$i]['user'] = 'root';
 $cfg['Servers'][$i]['password'] = '';
 $cfg['Servers'][$i]['host'] = '127.0.0.1';
-$cfg['Servers'][$i]['port'] = '3307';
+$cfg['Servers'][$i]['port'] = '{}';
 $cfg['Servers'][$i]['compress'] = false;
 $cfg['Servers'][$i]['AllowNoPassword'] = true;
 
@@ -778,7 +799,7 @@ $cfg['DefaultLang'] = 'en';
 
 // Theme
 $cfg['ThemeDefault'] = 'pmahomme';
-"#, blowfish_secret);
+"#, blowfish_secret, mysql_port);
 
     let mut file = File::create(&config_path)
         .map_err(|e| format!("Failed to create phpMyAdmin config: {}", e))?;
