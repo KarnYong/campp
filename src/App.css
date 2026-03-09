@@ -1026,6 +1026,92 @@ body {
   color: var(--color-neutral);
 }
 
+/* Port status indicator */
+.port-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  margin-left: 0.5rem;
+}
+
+.port-status-available {
+  color: var(--color-success);
+}
+
+.port-status-unavailable {
+  color: var(--color-error);
+}
+
+.port-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.port-status-available .port-status-dot {
+  background-color: var(--color-success);
+}
+
+.port-status-unavailable .port-status-dot {
+  background-color: var(--color-error);
+}
+
+/* Improved settings panel */
+.settings-panel {
+  animation: slideIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.settings-row {
+  transition: background-color 0.15s;
+  padding: 0.5rem;
+  border-radius: 6px;
+}
+
+.settings-row:hover {
+  background-color: var(--color-bg-secondary);
+}
+
+.settings-row input[type="number"],
+.settings-row input[type="text"] {
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.settings-row input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(36, 200, 219, 0.1);
+}
+
+/* Improved buttons */
+.btn-save {
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-save:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btn-cancel {
+  transition: all 0.2s;
+}
+
+.btn-cancel:active {
+  transform: scale(0.98);
+}
+
 /* Dark mode for settings */
 @media (prefers-color-scheme: dark) {
   .settings-panel {
@@ -1041,6 +1127,14 @@ body {
     background-color: var(--color-bg-secondary);
     border-color: var(--color-border);
     color: #f6f6f6;
+  }
+
+  .settings-row input:focus {
+    box-shadow: 0 0 0 3px rgba(36, 200, 219, 0.2);
+  }
+
+  .settings-row:hover {
+    background-color: var(--color-bg);
   }
 
   .settings-error {
