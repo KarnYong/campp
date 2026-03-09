@@ -48,7 +48,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
     loadSettings();
   }, [loadSettings]);
 
-  const checkPort = async (port: number, type: 'web' | 'php' | 'mysql') => {
+  const checkPort = async (type: 'web' | 'php' | 'mysql') => {
     setPortStatus(prev => ({
       ...prev,
       [type]: { available: false, checking: true }
@@ -75,9 +75,9 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      checkPort(settings.web_port, 'web');
-      checkPort(settings.php_port, 'php');
-      checkPort(settings.mysql_port, 'mysql');
+      checkPort('web');
+      checkPort('php');
+      checkPort('mysql');
     }, 500);
     return () => clearTimeout(timer);
   }, [settings.web_port, settings.php_port, settings.mysql_port]);
