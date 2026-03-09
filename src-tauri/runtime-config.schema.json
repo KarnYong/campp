@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CAMPP Runtime Configuration",
+  "description": "Configuration file for runtime binary downloads. Allows users to customize versions and download URLs.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "binaries": {
+      "type": "object",
+      "additionalProperties": {
+        "caddy": {
+          "type": "object",
+          "additionalProperties": false
+        },
+        "php": {
+          "type": "object",
+          "additionalProperties": false
+        },
+        "mariadb": {
+          "type": "object",
+          "additionalProperties": false
+        },
+        "phpmyadmin": {
+          "type": "object",
+          "additionalProperties": false
+        }
+      },
+      "required": ["version"]
+    },
+  }
+}
+}
