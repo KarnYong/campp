@@ -33,6 +33,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["MANUAL.html"]
+    "resources": ["MANUAL.html", "runtime-config.json", "runtime-config.schema.json"]
   }
 }

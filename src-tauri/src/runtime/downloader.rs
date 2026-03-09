@@ -1,14 +1,162 @@
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::sync::OnceLock;
 
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 
 use crate::runtime::locator::get_app_data_paths;
 use sha2::{Digest, Sha256};
-use tokio::time::sleep;
+
+/// Runtime configuration loaded from runtime-config.json
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuntimeConfig {
+    pub binaries: BinariesConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BinariesConfig {
+    pub caddy: BinaryConfig,
+    pub php: BinaryConfig,
+    #[serde(rename = "mariadb")]
+    pub mariadb: BinaryConfig,
+    #[serde(rename = "phpmyadmin")]
+    pub phpmyadmin: PhpMyAdminConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BinaryConfig {
+    pub version: String,
+    #[serde(rename = "windowsX64")]
+    pub windows_x64: String,
+    #[serde(rename = "windowsArm64")]
+    pub windows_arm64: String,
+    #[serde(rename = "linuxX64")]
+    pub linux_x64: String,
+    #[serde(rename = "linuxArm64")]
+    pub linux_arm64: String,
+    #[serde(rename = "macOSX64")]
+    pub macos_x64: String,
+    #[serde(rename = "macOSArm64")]
+    pub macos_arm64: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PhpMyAdminConfig {
+    pub version: String,
+    pub url: String,
+}
+
+/// Global runtime config (loaded once)
+static RUNTIME_CONFIG: OnceLock<RuntimeConfig> = OnceLock::new();
+
+/// Load runtime configuration from bundled resource or file
+pub fn load_runtime_config() -> RuntimeConfig {
+    // Try to load from various locations
+    let config_content = load_config_content();
+
+    match config_content {
+        Some(content) => {
+            match serde_json::from_str(&content) {
+                Ok(config) => {
+                    eprintln!("Loaded runtime configuration from file");
+                    config
+                }
+                Err(e) => {
+                    eprintln!("Failed to parse runtime-config.json: {}. Using defaults.", e);
+                    get_default_config()
+                }
+            }
+        }
+        None => {
+            eprintln!("runtime-config.json not found. Using default configuration.");
+            get_default_config()
+        }
+    }
+}
+
+/// Try to load config content from various locations
+fn load_config_content() -> Option<String> {
+    // 1. Try current directory (for development)
+    if let Ok(content) = fs::read_to_string("runtime-config.json") {
+        return Some(content);
+    }
+
+    // 2. Try src-tauri directory (for development)
+    if let Ok(content) = fs::read_to_string("src-tauri/runtime-config.json") {
+        return Some(content);
+    }
+
+    // 3. Try alongside the executable (for production)
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let config_path = exe_dir.join("runtime-config.json");
+            if let Ok(content) = fs::read_to_string(&config_path) {
+                return Some(content);
+            }
+        }
+    }
+
+    // 4. Try AppData/resources (Windows)
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(local_app_data) = dirs::data_local_dir() {
+            // Check in the app installation directory
+            let config_path = local_app_data.join("campp").join("runtime-config.json");
+            if let Ok(content) = fs::read_to_string(&config_path) {
+                return Some(content);
+            }
+        }
+    }
+
+    None
+}
+
+/// Get the global runtime config (loads once, then caches)
+fn get_config() -> &'static RuntimeConfig {
+    RUNTIME_CONFIG.get_or_init(load_runtime_config)
+}
+
+/// Default hardcoded configuration (fallback when config file is not available)
+fn get_default_config() -> RuntimeConfig {
+    RuntimeConfig {
+        binaries: BinariesConfig {
+            caddy: BinaryConfig {
+                version: "2.8.4".to_string(),
+                windows_x64: "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_windows_amd64.zip".to_string(),
+                windows_arm64: "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_windows_amd64.zip".to_string(),
+                linux_x64: "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_linux_amd64.tar.gz".to_string(),
+                linux_arm64: "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_linux_arm64.tar.gz".to_string(),
+                macos_x64: "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_darwin_amd64.tar.gz".to_string(),
+                macos_arm64: "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_darwin_arm64.tar.gz".to_string(),
+            },
+            php: BinaryConfig {
+                version: "8.4.16".to_string(),
+                windows_x64: "https://windows.php.net/downloads/releases/php-8.4.16-Win32-vs17-x64.zip".to_string(),
+                windows_arm64: "https://windows.php.net/downloads/releases/php-8.4.16-Win32-vs17-x64.zip".to_string(),
+                linux_x64: "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-linux-x86_64.tar.gz".to_string(),
+                linux_arm64: "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-linux-aarch64.tar.gz".to_string(),
+                macos_x64: "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-macos-x86_64.tar.gz".to_string(),
+                macos_arm64: "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-macos-aarch64.tar.gz".to_string(),
+            },
+            mariadb: BinaryConfig {
+                version: "12.2.2".to_string(),
+                windows_x64: "https://archive.mariadb.org/mariadb-12.2.2/winx64-packages/mariadb-12.2.2-winx64.zip".to_string(),
+                windows_arm64: "https://archive.mariadb.org/mariadb-12.2.2/winx64-packages/mariadb-12.2.2-winx64.zip".to_string(),
+                linux_x64: "https://archive.mariadb.org/mariadb-12.2.2/bintar-linux-systemd-x86_64/mariadb-12.2.2-linux-systemd-x86_64.tar.gz".to_string(),
+                linux_arm64: "https://archive.mariadb.org/mariadb-12.2.2/bintar-linux-systemd-aarch64/mariadb-12.2.2-linux-systemd-aarch64.tar.gz".to_string(),
+                macos_x64: "https://archive.mariadb.org/mariadb-12.2.2/bintar-macos-arm64/mariadb-12.2.2-macos-arm64.tar.gz".to_string(),
+                macos_arm64: "https://archive.mariadb.org/mariadb-12.2.2/bintar-macos-arm64/mariadb-12.2.2-macos-arm64.tar.gz".to_string(),
+            },
+            phpmyadmin: PhpMyAdminConfig {
+                version: "5.2.2".to_string(),
+                url: "https://files.phpmyadmin.net/phpMyAdmin/5.2.2/phpMyAdmin-5.2.2-all-languages.zip".to_string(),
+            },
+        },
+    }
+}
 
 /// Binary component types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -29,22 +177,18 @@ impl BinaryComponent {
         }
     }
 
-    pub fn version(&self) -> &str {
+    pub fn version(&self) -> String {
+        let config = get_config();
         match self {
-            BinaryComponent::Caddy => "2.8.4",
-            BinaryComponent::Php => "8.4.18",
-            BinaryComponent::MariaDB => "12.2.2",
-            BinaryComponent::PhpMyAdmin => "5.2.2",
+            BinaryComponent::Caddy => config.binaries.caddy.version.clone(),
+            BinaryComponent::Php => config.binaries.php.version.clone(),
+            BinaryComponent::MariaDB => config.binaries.mariadb.version.clone(),
+            BinaryComponent::PhpMyAdmin => config.binaries.phpmyadmin.version.clone(),
         }
     }
 
     pub fn display_name(&self) -> String {
-        match self {
-            BinaryComponent::Caddy => "Caddy 2.8.4".to_string(),
-            BinaryComponent::Php => "PHP 8.4.18".to_string(),
-            BinaryComponent::MariaDB => "MariaDB 12.2.2".to_string(),
-            BinaryComponent::PhpMyAdmin => "phpMyAdmin 5.2.2".to_string(),
-        }
+        format!("{} {}", self.name(), self.version())
     }
 
     pub fn binary_name(&self) -> &str {
@@ -174,83 +318,46 @@ impl RuntimeDownloader {
         }
     }
 
-    /// Get the URL for a binary component
+    /// Get the URL for a binary component from config
     fn get_binary_url(&self, component: BinaryComponent) -> String {
+        let config = get_config();
+
         match component {
             BinaryComponent::Caddy => {
-                // Caddy official GitHub releases - these are reliable
+                let binary_config = &config.binaries.caddy;
                 match self.platform {
-                    Platform::WindowsX64 => {
-                        "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_windows_amd64.zip".to_string()
-                    }
-                    Platform::WindowsArm64 => {
-                        // Same x64 build works on ARM64 Windows via emulation
-                        "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_windows_amd64.zip".to_string()
-                    }
-                    Platform::MacOSX64 => {
-                        "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_darwin_amd64.tar.gz".to_string()
-                    }
-                    Platform::MacOSArm64 => {
-                        "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_darwin_arm64.tar.gz".to_string()
-                    }
-                    Platform::LinuxX64 => {
-                        "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_linux_amd64.tar.gz".to_string()
-                    }
-                    Platform::LinuxArm64 => {
-                        "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_linux_arm64.tar.gz".to_string()
-                    }
+                    Platform::WindowsX64 => binary_config.windows_x64.clone(),
+                    Platform::WindowsArm64 => binary_config.windows_arm64.clone(),
+                    Platform::MacOSX64 => binary_config.macos_x64.clone(),
+                    Platform::MacOSArm64 => binary_config.macos_arm64.clone(),
+                    Platform::LinuxX64 => binary_config.linux_x64.clone(),
+                    Platform::LinuxArm64 => binary_config.linux_arm64.clone(),
                 }
             }
             BinaryComponent::Php => {
-                // Hybrid approach: static-php for Linux/macOS, official PHP for Windows
+                let binary_config = &config.binaries.php;
                 match self.platform {
-                    Platform::WindowsX64 => {
-                        // Windows: Use official PHP builds (includes FPM)
-                        "https://windows.php.net/downloads/releases/php-8.4.16-Win32-vs17-x64.zip".to_string()
-                    }
-                    Platform::WindowsArm64 => {
-                        // Windows ARM64: Use x64 build via emulation
-                        "https://windows.php.net/downloads/releases/php-8.4.16-Win32-vs17-x64.zip".to_string()
-                    }
-                    Platform::LinuxX64 => {
-                        // Linux x86_64: Use static-php (self-contained, 50+ extensions, includes FPM)
-                        "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-linux-x86_64.tar.gz".to_string()
-                    }
-                    Platform::LinuxArm64 => {
-                        // Linux aarch64: Use static-php
-                        "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-linux-aarch64.tar.gz".to_string()
-                    }
-                    Platform::MacOSX64 => {
-                        // macOS Intel: Use static-php
-                        "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-macos-x86_64.tar.gz".to_string()
-                    }
-                    Platform::MacOSArm64 => {
-                        // macOS Apple Silicon: Use static-php
-                        "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-macos-aarch64.tar.gz".to_string()
-                    }
+                    Platform::WindowsX64 => binary_config.windows_x64.clone(),
+                    Platform::WindowsArm64 => binary_config.windows_arm64.clone(),
+                    Platform::MacOSX64 => binary_config.macos_x64.clone(),
+                    Platform::MacOSArm64 => binary_config.macos_arm64.clone(),
+                    Platform::LinuxX64 => binary_config.linux_x64.clone(),
+                    Platform::LinuxArm64 => binary_config.linux_arm64.clone(),
                 }
             }
             BinaryComponent::MariaDB => {
-                // MariaDB official downloads using CDN
+                let binary_config = &config.binaries.mariadb;
                 match self.platform {
-                    Platform::WindowsX64 | Platform::WindowsArm64 => {
-                        "https://archive.mariadb.org/mariadb-12.2.2/winx64-packages/mariadb-12.2.2-winx64.zip".to_string()
-                    }
-                    Platform::MacOSX64 | Platform::MacOSArm64 => {
-                        // macOS - use archive.mariadb.org for stable URLs
-                        "https://archive.mariadb.org/mariadb-12.2.2/bintar-macos-arm64/mariadb-12.2.2-macos-arm64.tar.gz".to_string()
-                    }
-                    Platform::LinuxX64 => {
-                        "https://archive.mariadb.org/mariadb-12.2.2/bintar-linux-systemd-x86_64/mariadb-12.2.2-linux-systemd-x86_64.tar.gz".to_string()
-                    }
-                    Platform::LinuxArm64 => {
-                        "https://archive.mariadb.org/mariadb-12.2.2/bintar-linux-systemd-aarch64/mariadb-12.2.2-linux-systemd-aarch64.tar.gz".to_string()
-                    }
+                    Platform::WindowsX64 => binary_config.windows_x64.clone(),
+                    Platform::WindowsArm64 => binary_config.windows_arm64.clone(),
+                    Platform::MacOSX64 => binary_config.macos_x64.clone(),
+                    Platform::MacOSArm64 => binary_config.macos_arm64.clone(),
+                    Platform::LinuxX64 => binary_config.linux_x64.clone(),
+                    Platform::LinuxArm64 => binary_config.linux_arm64.clone(),
                 }
             }
             BinaryComponent::PhpMyAdmin => {
-                // phpMyAdmin - platform independent PHP files
-                "https://files.phpmyadmin.net/phpMyAdmin/5.2.2/phpMyAdmin-5.2.2-all-languages.zip".to_string()
+                config.binaries.phpmyadmin.url.clone()
             }
         }
     }
@@ -383,7 +490,7 @@ impl RuntimeDownloader {
             percent,
             current_component: component.name().to_string(),
             component_display: component.display_name(),
-            version: component.version().to_string(),
+            version: component.version(),
             total_components: total,
             downloaded_bytes,
             total_bytes,
@@ -506,7 +613,7 @@ impl RuntimeDownloader {
                 percent: 0,
                 current_component: component.name().to_string(),
                 component_display: component.display_name(),
-                version: component.version().to_string(),
+                version: component.version(),
                 total_components: total,
                 downloaded_bytes: 0,
                 total_bytes: 0,
@@ -622,5 +729,3 @@ fn is_executable(name: &str) -> bool {
         || name.ends_with("mariadbd")
         || name.contains("bin/")
 }
-
-use std::io::Read;
