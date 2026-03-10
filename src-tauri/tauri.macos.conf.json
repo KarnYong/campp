@@ -1,9 +1,9 @@
 {
   "bundle": {
     "macOS": {
-      "signingIdentity": "Developer ID Application: YOUR NAME (TEAM_ID)",
-      "entitlements": "entitlements.plist",
-      "hardenedRuntime": true
+      "signingIdentity": null,
+      "entitlements": null,
+      "hardenedRuntime": false
     }
   }
 }
