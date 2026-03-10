@@ -56,6 +56,18 @@ jobs:
           prerelease: false
           args: --target ${{ matrix.target }}
 
+      - name: Ad-hoc sign macOS app
+        run: |
+          APP_PATH=$(find src-tauri/target/*/release/bundle/macos -name "*.app" -type d | head -n 1)
+          if [ -d "$APP_PATH" ]; then
+            echo "Signing $APP_PATH with ad-hoc certificate..."
+            codesign --force --deep --sign - "$APP_PATH"
+            xattr -cr "$APP_PATH"
+            echo "Ad-hoc signing complete"
+          else
+            echo "No .app bundle found"
+          fi
+
   build-windows:
     runs-on: windows-latest
 
