@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Claude Code and agents
+.claude/
+.agents/
+skills-lock.json
