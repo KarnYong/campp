@@ -16,57 +16,52 @@ permissions:
   contents: write
 
 jobs:
-  build-macos:
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        include:
-          - target: aarch64-apple-darwin
-            arch: arm64
-          - target: x86_64-apple-darwin
-            arch: x64
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Install frontend dependencies
-        run: npm install
-
-      - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'CAMPP ${{ github.ref_name }}'
-          releaseBody: 'See CHANGELOG.md for details.'
-          releaseDraft: true
-          prerelease: false
-          args: --target ${{ matrix.target }}
-
-      - name: Ad-hoc sign macOS app
-        run: |
-          APP_PATH=$(find src-tauri/target/*/release/bundle/macos -name "*.app" -type d | head -n 1)
-          if [ -d "$APP_PATH" ]; then
-            echo "Signing $APP_PATH with ad-hoc certificate..."
-            codesign --force --deep --sign - "$APP_PATH"
-            xattr -cr "$APP_PATH"
-            echo "Ad-hoc signing complete"
-          else
-            echo "No .app bundle found"
-          fi
+  # macOS builds now use build-macos-signed.yml for proper code signing and notarization
+  # build-macos:
+  #   runs-on: macos-latest
+  #   strategy:
+  #     matrix:
+  #       include:
+  #         - target: aarch64-apple-darwin
+  #           arch: arm64
+  #         - target: x86_64-apple-darwin
+  #           arch: x64
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
+  #     - name: Setup Node.js
+  #       uses: actions/setup-node@v4
+  #       with:
+  #         node-version: '20'
+  #         cache: 'npm'
+  #     - name: Setup Rust
+  #       uses: dtolnay/rust-toolchain@stable
+  #       with:
+  #         targets: ${{ matrix.target }}
+  #     - name: Install frontend dependencies
+  #       run: npm install
+  #     - name: Build Tauri app
+  #       uses: tauri-apps/tauri-action@v0
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #       with:
+  #         tagName: ${{ github.ref_name }}
+  #         releaseName: 'CAMPP ${{ github.ref_name }}'
+  #         releaseBody: 'See CHANGELOG.md for details.'
+  #         releaseDraft: true
+  #         prerelease: false
+  #         args: --target ${{ matrix.target }}
+  #     - name: Ad-hoc sign macOS app
+  #       run: |
+  #         APP_PATH=$(find src-tauri/target/*/release/bundle/macos -name "*.app" -type d | head -n 1)
+  #         if [ -d "$APP_PATH" ]; then
+  #           echo "Signing $APP_PATH with ad-hoc certificate..."
+  #           codesign --force --deep --sign - "$APP_PATH"
+  #           xattr -cr "$APP_PATH"
+  #           echo "Ad-hoc signing complete"
+  #         else
+  #           echo "No .app bundle found"
+  #         fi
 
   build-windows:
     runs-on: windows-latest
