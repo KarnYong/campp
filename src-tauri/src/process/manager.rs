@@ -137,6 +137,12 @@ impl ProcessManager {
                 .map_err(|e| format!("Failed to create config dir: {}", e))?;
             fs::create_dir_all(&paths.logs_dir)
                 .map_err(|e| format!("Failed to create logs dir: {}", e))?;
+
+            // Create PHP sessions directory for session storage
+            let php_sessions_dir = paths.logs_dir.join("php-sessions");
+            fs::create_dir_all(&php_sessions_dir)
+                .map_err(|e| format!("Failed to create PHP sessions dir: {}", e))?;
+
             fs::create_dir_all(&paths.mysql_data_dir)
                 .map_err(|e| format!("Failed to create MySQL data dir: {}", e))?;
             fs::create_dir_all(&paths.projects_dir)
@@ -428,6 +434,9 @@ fn start_mariadb(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> 
     // Kill any existing MariaDB processes to avoid port conflicts
     kill_existing_processes("mysqld");
 
+    // Initialize MariaDB data directory if needed
+    initialize_mariadb_data_dir(paths)?;
+
     // Convert path to forward slashes for Windows compatibility
     let data_dir_str = paths.mysql_data_dir.to_string_lossy()
         .replace('\\', "/");
@@ -436,7 +445,10 @@ fn start_mariadb(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> 
     let log_path = paths.logs_dir.join("mariadb.log");
     let log_file = open_log_file_with_retry(&log_path, "MariaDB")?;
 
-    // Start MariaDB with minimal options for testing
+    // Start MariaDB with minimal options
+    // NOTE: MariaDB is initialized with --initialize-insecure which creates
+    // a root user with no password. Grant tables are loaded normally so
+    // phpMyAdmin can properly detect user privileges (e.g., DROP DATABASE).
     let mut child = configure_no_window(Command::new(&paths.mariadb))
         .arg("--no-defaults")
         .arg("--datadir")
@@ -444,19 +456,28 @@ fn start_mariadb(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> 
         .arg("--port")
         .arg(service_process.port.to_string())
         .arg("--bind-address=127.0.0.1")
-        .arg("--skip-grant-tables")  // Allow without password for initial setup
         .arg("--console")
         .stdout(Stdio::from(log_file.try_clone().unwrap()))
         .stderr(Stdio::from(log_file))
         .spawn()
-        .map_err(|e| format!("Failed to start MariaDB: {}", e))?;
+        .map_err(|e| {
+            // Provide helpful error message
+            let log_content = fs::read_to_string(&log_path).unwrap_or_else(|_| String::from("Could not read log"));
+            format!(
+                "Failed to start MariaDB: {}\n\nMariaDB log:\n{}",
+                e, log_content
+            )
+        })?;
 
     // Give MariaDB more time to start (it's slower than other services)
     std::thread::sleep(std::time::Duration::from_secs(3));
 
     // Check if process is still running
     match child.try_wait() {
-        Ok(Some(status)) => Err(format!("MariaDB exited immediately with status: {:?}", status)),
+        Ok(Some(status)) => Err(format!(
+            "MariaDB exited immediately with status: {:?}\n\nCheck logs at: {:?}",
+            status, log_path
+        )),
         Ok(None) => {
             service_process.child = Some(child);
             service_process.log_file = Some(log_path);
@@ -471,13 +492,13 @@ fn initialize_mariadb_data_dir(paths: &RuntimePaths) -> Result<(), String> {
     // Check if already initialized by looking for mysql system tables
     let mysql_dir = paths.mysql_data_dir.join("mysql");
     if mysql_dir.exists() {
-        // Check if system tables exist
-        let user_mrj_file = mysql_dir.join("user.MRJ");
-        let db_file = mysql_dir.join("db.MYI");  // MyISAM index
-        let db_innodb = mysql_dir.join("db.ibd");  // InnoDB table
+        // Check if system tables exist (MAD is MariaDB's Aria engine format)
+        let db_mad = mysql_dir.join("db.MAD");
+        let db_frm = mysql_dir.join("db.frm");
 
-        if user_mrj_file.exists() || db_file.exists() || db_innodb.exists() {
+        if db_mad.exists() || db_frm.exists() {
             // Already initialized
+            eprintln!("MariaDB data directory already initialized");
             return Ok(());
         }
     }
@@ -487,54 +508,94 @@ fn initialize_mariadb_data_dir(paths: &RuntimePaths) -> Result<(), String> {
         .map_err(|e| format!("Failed to create MySQL data directory: {}", e))?;
 
     // Get clean path with forward slashes (Windows fix)
-    // MariaDB on Windows has issues with backslashes, convert to forward slashes
     let data_dir_str = paths.mysql_data_dir.to_string_lossy()
         .replace('\\', "/");
 
-    // For some MariaDB versions, we use --bootstrap instead of --initialize-insecure
-    // Note: This may take 30+ seconds on first run
-    let mut child = Command::new(&paths.mariadb)
-        .arg("--bootstrap")
+    eprintln!("Initializing MariaDB data directory at: {}", data_dir_str);
+
+    // Use mysql_install_db.exe (Windows) or mariadb-install-db (Unix)
+    // This is more reliable than --initialize-insecure for this build
+    let bin_dir = paths.mariadb.parent()
+        .ok_or_else(|| "MariaDB binary path has no parent".to_string())?;
+
+    let install_db = if cfg!(windows) {
+        bin_dir.join("mysql_install_db.exe")
+    } else {
+        // On Unix, try mariadb-install-db
+        bin_dir.join("mariadb-install-db")
+    };
+
+    if !install_db.exists() {
+        return Err(format!(
+            "MariaDB installation tool not found at: {:?}\n\
+             Please ensure MariaDB is properly installed.",
+            install_db
+        ));
+    }
+
+    let init_log_path = paths.logs_dir.join("mariadb_init.log");
+    let init_log_file = fs::File::create(&init_log_path)
+        .map_err(|e| format!("Failed to create init log file: {}", e))?;
+
+    let mut child = configure_no_window(Command::new(&install_db))
         .arg("--datadir")
         .arg(&data_dir_str)
-        .arg("--lc-messages-dir")
-        .arg(paths.mariadb.parent().unwrap().join("share"))  // Messages directory
-        .current_dir(&paths.config_dir)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .arg("--password=")  // Empty password for root
+        .stdout(Stdio::from(init_log_file.try_clone().unwrap()))
+        .stderr(Stdio::from(init_log_file))
         .spawn()
-        .map_err(|e| format!("Failed to run MariaDB initialization: {}", e))?;
+        .map_err(|e| format!("Failed to start MariaDB initialization: {}", e))?;
 
-    // Wait for initialization to complete (can take up to 60 seconds)
-    let timeout = std::time::Duration::from_secs(60);
+    // Wait for initialization with longer timeout (120 seconds)
+    let timeout = std::time::Duration::from_secs(120);
     let start = std::time::Instant::now();
 
-    loop {
+    let mut output = String::new();
+    let success = loop {
         match child.try_wait() {
             Ok(Some(status)) => {
-                if status.success() {
-                    return Ok(());
-                } else {
-                    // Bootstrap failure is OK - try without bootstrap
-                    // The data directory might be ready to use
-                    return Ok(());
-                }
+                // Read any remaining output
+                let _ = fs::read_to_string(&init_log_path).map(|s| output = s);
+                break status.success();
             }
             Ok(None) => {
-                // Still running
                 if start.elapsed() > timeout {
+                    eprintln!("MariaDB initialization timeout, killing process");
                     let _ = child.kill();
-                    // Timeout might mean it's stuck, but try to continue anyway
-                    return Ok(());
+                    // Force wait to get final status
+                    let _ = child.wait();
+                    let _ = fs::read_to_string(&init_log_path).map(|s| output = s);
+                    break false;
                 }
                 std::thread::sleep(std::time::Duration::from_millis(500));
             }
-            Err(e) => {
-                // Error waiting, but try to continue
-                return Ok(());
+            Err(_) => {
+                let _ = fs::read_to_string(&init_log_path).map(|s| output = s);
+                break false;
             }
         }
+    };
+
+    if !success {
+        eprintln!("MariaDB initialization failed. Output:\n{}", output);
+        return Err(format!(
+            "MariaDB initialization failed. Check the log file at: {:?}",
+            init_log_path
+        ));
     }
+
+    eprintln!("MariaDB initialization completed successfully");
+
+    // Verify that mysql directory was created
+    if !mysql_dir.exists() {
+        return Err(format!(
+            "MariaDB initialization failed - mysql directory not created at {:?}. \
+             Check the log file at: {:?}",
+            mysql_dir, init_log_path
+        ));
+    }
+
+    Ok(())
 }
 
 /// Kill any existing processes with the given name to avoid port conflicts
@@ -641,8 +702,11 @@ fn generate_php_ini(path: &PathBuf, paths: &RuntimePaths) -> Result<(), String> 
     let ext_dir = php_dir.join("ext");
     let ext_dir_str = ext_dir.to_string_lossy().replace('\\', "/");
 
-    // Get error log path
+    // Get error log and session paths
     let error_log = paths.logs_dir.join("php-errors.log")
+        .to_string_lossy()
+        .replace('\\', "/");
+    let session_path = paths.logs_dir.join("php-sessions")
         .to_string_lossy()
         .replace('\\', "/");
 
@@ -650,15 +714,16 @@ fn generate_php_ini(path: &PathBuf, paths: &RuntimePaths) -> Result<(), String> 
 ; Basic PHP settings for development
 
 [PHP]
-; Error reporting - suppress deprecation warnings for phpMyAdmin compatibility with PHP 8.3
-error_reporting = E_ALL & ~E_DEPRECATED
+; Error reporting - suppress deprecation warnings for phpMyAdmin compatibility
+error_reporting = E_ALL & ~E_DEPRECATED & ~E_WARNING
 display_errors = On
-display_startup_errors = On
+display_startup_errors = Off
 log_errors = On
 error_log = "{}"
 
 ; Maximum execution time
 max_execution_time = 300
+max_input_time = 300
 
 ; Memory limit
 memory_limit = 256M
@@ -666,23 +731,30 @@ memory_limit = 256M
 ; POST data limit
 post_max_size = 100M
 upload_max_filesize = 100M
+max_input_vars = 5000
 
 ; Date timezone
 date.timezone = UTC
 
 ; Extensions - use absolute path for reliability
+; Note: zlib and session are built-in to PHP 8.3 and cannot be loaded as extensions
 extension_dir = "{}"
 extension=curl
 extension=mbstring
 extension=mysqli
 extension=openssl
+extension=pdo
 extension=pdo_mysql
-extension=zlib
 
-; Session settings
-session.save_path = "/tmp"
+; Session settings - use absolute path for Windows compatibility
+session.save_path = "{}"
 session.cookie_httponly = 1
 session.use_strict_mode = 1
+session.use_cookies = 1
+session.use_trans_sid = 0
+
+; File uploads
+upload_tmp_dir = "{}"
 
 ; CGI settings
 cgi.force_redirect = 0
@@ -690,7 +762,7 @@ cgi.fix_pathinfo = 1
 
 ; Security settings
 expose_php = Off
-"#, error_log, ext_dir_str);
+"#, error_log, ext_dir_str, session_path, session_path);
 
     let mut file = File::create(path)
         .map_err(|e| format!("Failed to create php.ini: {}", e))?;
@@ -730,9 +802,9 @@ pm.max_spare_servers = 3
 pm.max_requests = 500
 php_admin_value[error_log] = {logs_dir}/php-fpm.log
 php_admin_flag[log_errors] = on
-php_value[session.save_path] = /tmp
+php_value[session.save_path] = {logs_dir}/php-sessions
 "#,
-        logs_dir = paths.logs_dir.display(),
+        logs_dir = paths.logs_dir.display().to_string().replace('\\', "/"),
         user = user,
         php_port = php_port,
     );
@@ -749,6 +821,15 @@ php_value[session.save_path] = /tmp
 fn generate_phpmyadmin_config(paths: &RuntimePaths, mysql_port: u16) -> Result<(), String> {
     let config_path = paths.phpmyadmin.join("config.inc.php");
 
+    // Create necessary directories
+    let tmp_dir = paths.phpmyadmin.join("tmp");
+    fs::create_dir_all(&tmp_dir)
+        .map_err(|e| format!("Failed to create phpMyAdmin tmp directory: {}", e))?;
+
+    let upload_dir = paths.logs_dir.join("phpmyadmin_uploads");
+    fs::create_dir_all(&upload_dir)
+        .map_err(|e| format!("Failed to create phpMyAdmin upload directory: {}", e))?;
+
     // Generate or regenerate config with current port settings
     // We always regenerate to ensure port changes take effect
 
@@ -763,6 +844,10 @@ fn generate_phpmyadmin_config(paths: &RuntimePaths, mysql_port: u16) -> Result<(
             CHARSET[idx] as char
         })
         .collect();
+
+    // Convert paths to forward slashes for Windows compatibility
+    let tmp_dir_str = tmp_dir.to_string_lossy().replace('\\', "/");
+    let upload_dir_str = upload_dir.to_string_lossy().replace('\\', "/");
 
     let config_content = format!(r#"<?php
 /**
@@ -783,13 +868,14 @@ $cfg['Servers'][$i]['host'] = '127.0.0.1';
 $cfg['Servers'][$i]['port'] = '{}';
 $cfg['Servers'][$i]['compress'] = false;
 $cfg['Servers'][$i]['AllowNoPassword'] = true;
+$cfg['Servers'][$i]['hide_db'] = '^(information_schema|mysql|performance_schema)$';
 
-// Upload directory
-$cfg['UploadDir'] = '';
-$cfg['SaveDir'] = '';
+// Upload and save directories
+$cfg['UploadDir'] = '{}';
+$cfg['SaveDir'] = '{}';
 
-// Temp directory
-$cfg['TempDir'] = './tmp/';
+// Temp directory (absolute path for reliability)
+$cfg['TempDir'] = '{}';
 
 // Disable configuration storage warning (optional advanced features)
 $cfg['PmaNoRelation_DisableWarning'] = true;
@@ -799,19 +885,15 @@ $cfg['DefaultLang'] = 'en';
 
 // Theme
 $cfg['ThemeDefault'] = 'pmahomme';
-"#, blowfish_secret, mysql_port);
+
+// Execution time (for large database operations)
+$cfg['ExecTimeLimit'] = 0;
+"#, blowfish_secret, mysql_port, upload_dir_str, upload_dir_str, tmp_dir_str);
 
     let mut file = File::create(&config_path)
         .map_err(|e| format!("Failed to create phpMyAdmin config: {}", e))?;
     file.write_all(config_content.as_bytes())
         .map_err(|e| format!("Failed to write phpMyAdmin config: {}", e))?;
-
-    // Create temp directory for phpMyAdmin if it doesn't exist
-    let tmp_dir = paths.phpmyadmin.join("tmp");
-    if !tmp_dir.exists() {
-        std::fs::create_dir_all(&tmp_dir)
-            .map_err(|e| format!("Failed to create phpMyAdmin tmp directory: {}", e))?;
-    }
 
     Ok(())
 }

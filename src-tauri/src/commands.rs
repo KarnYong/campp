@@ -4,6 +4,8 @@
 
 use crate::process::{ServiceMap, ServiceState, ServiceType};
 use crate::runtime::downloader::{DownloadProgress, RuntimeDownloader};
+use crate::runtime::packages::{PackageSelection, PackagesConfig};
+use crate::config::AppSettings;
 use crate::AppState;
 use std::fs;
 use std::sync::Mutex;
@@ -320,4 +322,130 @@ pub async fn cleanup_all_services(state: State<'_, AppState>) -> Result<String, 
     manager.stop_all()?;
 
     Ok("All services stopped".to_string())
+}
+
+/// Get all available runtime packages
+#[tauri::command]
+pub async fn get_available_packages_cmd() -> Result<PackagesConfig, String> {
+    Ok(crate::runtime::packages::get_available_packages())
+}
+
+/// Download and install runtime binaries with custom package selection
+#[tauri::command]
+pub async fn download_runtime_with_packages(
+    package_selection: PackageSelection,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    let downloader = RuntimeDownloader::with_packages(package_selection);
+    let app_clone = app.clone();
+
+    // Emit progress updates via Tauri events
+    downloader
+        .download_all(Box::new(move |progress| {
+            let _ = app_clone.emit("download-progress", &progress);
+
+            // Store latest progress
+            if let Ok(mut p) = DOWNLOAD_PROGRESS.lock() {
+                *p = Some(progress);
+            }
+        }))
+        .await?;
+
+    Ok("Runtime binaries installed successfully".to_string())
+}
+
+/// Get the current package selection from settings
+#[tauri::command]
+pub async fn get_package_selection() -> Result<PackageSelection, String> {
+    let settings = AppSettings::load();
+    Ok(settings.package_selection)
+}
+
+/// Update package selection in settings (without downloading)
+#[tauri::command]
+pub async fn update_package_selection(
+    package_selection: PackageSelection,
+) -> Result<(), String> {
+    let mut settings = AppSettings::load();
+    settings.package_selection = package_selection;
+    settings.save()?;
+    Ok(())
+}
+
+/// Get the selected package IDs from runtime-config.json
+#[tauri::command]
+pub async fn get_selected_package_ids() -> Result<PackageSelection, String> {
+    Ok(crate::runtime::packages::get_selected_package_ids())
+}
+
+/// Reload the runtime configuration from runtime-config.json
+#[tauri::command]
+pub async fn reload_runtime_config() -> Result<String, String> {
+    crate::runtime::packages::reload_runtime_config();
+    Ok("Runtime configuration reloaded successfully".to_string())
+}
+
+/// Get the installed runtime versions
+#[tauri::command]
+pub async fn get_installed_versions() -> Result<std::collections::HashMap<String, String>, String> {
+    let downloader = RuntimeDownloader::new();
+    let runtime_dir = downloader.get_runtime_dir()?;
+
+    let mut versions = std::collections::HashMap::new();
+
+    // Read version from marker files
+    for component in ["caddy", "php", "mariadb", "phpmyadmin"] {
+        let marker_file = runtime_dir.join(format!("{}_installed.txt", component));
+        if let Ok(content) = fs::read_to_string(&marker_file) {
+            // Parse version from format: "version=1.2.3\ninstalled_at=..."
+            for line in content.lines() {
+                if let Some(version) = line.strip_prefix("version=") {
+                    versions.insert(component.to_string(), version.to_string());
+                    break;
+                }
+            }
+        }
+    }
+
+    // Add Caddy version from default config (not in packages)
+    if !versions.contains_key("caddy") {
+        versions.insert("caddy".to_string(), "2.8.4".to_string());
+    }
+
+    Ok(versions)
+}
+
+/// Check for existing components before download
+#[tauri::command]
+pub async fn check_existing_components() -> Result<std::collections::HashMap<String, String>, String> {
+    let downloader = RuntimeDownloader::new();
+    Ok(downloader.get_installed_components())
+}
+
+/// Download and install runtime binaries with option to skip existing components
+#[tauri::command]
+pub async fn download_runtime_with_skip(
+    package_selection: PackageSelection,
+    skip_list: Vec<String>,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    let downloader = RuntimeDownloader::with_packages(package_selection);
+    let app_clone = app.clone();
+
+    // Convert Vec<String> to Vec<&str> for the skip_list
+    let skip_refs: Vec<&str> = skip_list.iter().map(|s| s.as_str()).collect();
+
+    // Emit progress updates via Tauri events
+    downloader
+        .download_all_with_skip(Box::new(move |progress| {
+            let _ = app_clone.emit("download-progress", &progress);
+
+            // Store latest progress
+            if let Ok(mut p) = DOWNLOAD_PROGRESS.lock() {
+                *p = Some(progress);
+            }
+        }), &skip_refs)
+        .await?;
+
+    Ok("Runtime binaries installed successfully".to_string())
 }

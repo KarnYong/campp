@@ -90,21 +90,23 @@ impl ConfigGenerator {
     /// Generate php.ini content
     pub fn generate_php_ini(&self) -> String {
         let error_log = format!("{}/php-errors.log", self.logs_dir.replace('\\', "/"));
+        let session_path = format!("{}/php-sessions", self.logs_dir.replace('\\', "/"));
 
         format!(
             r#"; CAMPP PHP Configuration
-; Generated for PHP 8.3 with development settings
+; Generated for PHP with development settings
 
 [PHP]
 ; Error reporting - suppress deprecation warnings for phpMyAdmin compatibility
-error_reporting = E_ALL & ~E_DEPRECATED
+error_reporting = E_ALL & ~E_DEPRECATED & ~E_WARNING
 display_errors = On
-display_startup_errors = On
+display_startup_errors = Off
 log_errors = On
 error_log = "{error_log}"
 
 ; Maximum execution time
 max_execution_time = 300
+max_input_time = 300
 
 ; Memory limit
 memory_limit = 256M
@@ -116,19 +118,25 @@ upload_max_filesize = 100M
 ; Date timezone
 date.timezone = UTC
 
-; Extensions
+; Extensions (ensure these are available)
+; Note: zlib and session are built-in to PHP 8.3 and cannot be loaded as extensions
 extension_dir = "ext"
 extension=curl
 extension=mbstring
 extension=mysqli
 extension=openssl
 extension=pdo_mysql
-extension=zlib
+extension=pdo
 
-; Session settings
-session.save_path = "/tmp"
+; Session settings - use absolute path for Windows compatibility
+session.save_path = "{session_path}"
 session.cookie_httponly = 1
 session.use_strict_mode = 1
+session.use_cookies = 1
+session.use_trans_sid = 0
+
+; File uploads
+upload_tmp_dir = "{session_path}"
 
 ; CGI settings
 cgi.force_redirect = 0
@@ -136,8 +144,12 @@ cgi.fix_pathinfo = 1
 
 ; Security settings
 expose_php = Off
+
+; Allow larger POST data for phpMyAdmin operations
+max_input_vars = 5000
 "#,
-            error_log = error_log
+            error_log = error_log,
+            session_path = session_path,
         )
     }
 
