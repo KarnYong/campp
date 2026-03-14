@@ -9,59 +9,146 @@ on:
       create_release:
         description: 'Create a GitHub release'
         required: false
-        default: 'false'
+        default: 'true'
         type: boolean
 
 permissions:
   contents: write
 
 jobs:
-  # macOS builds now use build-macos-signed.yml for proper code signing and notarization
-  # build-macos:
-  #   runs-on: macos-latest
-  #   strategy:
-  #     matrix:
-  #       include:
-  #         - target: aarch64-apple-darwin
-  #           arch: arm64
-  #         - target: x86_64-apple-darwin
-  #           arch: x64
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
-  #     - name: Setup Node.js
-  #       uses: actions/setup-node@v4
-  #       with:
-  #         node-version: '20'
-  #         cache: 'npm'
-  #     - name: Setup Rust
-  #       uses: dtolnay/rust-toolchain@stable
-  #       with:
-  #         targets: ${{ matrix.target }}
-  #     - name: Install frontend dependencies
-  #       run: npm install
-  #     - name: Build Tauri app
-  #       uses: tauri-apps/tauri-action@v0
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #       with:
-  #         tagName: ${{ github.ref_name }}
-  #         releaseName: 'CAMPP ${{ github.ref_name }}'
-  #         releaseBody: 'See CHANGELOG.md for details.'
-  #         releaseDraft: true
-  #         prerelease: false
-  #         args: --target ${{ matrix.target }}
-  #     - name: Ad-hoc sign macOS app
-  #       run: |
-  #         APP_PATH=$(find src-tauri/target/*/release/bundle/macos -name "*.app" -type d | head -n 1)
-  #         if [ -d "$APP_PATH" ]; then
-  #           echo "Signing $APP_PATH with ad-hoc certificate..."
-  #           codesign --force --deep --sign - "$APP_PATH"
-  #           xattr -cr "$APP_PATH"
-  #           echo "Ad-hoc signing complete"
-  #         else
-  #           echo "No .app bundle found"
-  #         fi
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: universal-apple-darwin,aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      # Import Code Signing Certificate
+      - name: Import Certificate
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$CERTIFICATE_BASE64" | base64 --decode > certificate.p12
+          security create-keychain -p actions build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p actions build.keychain
+          security import certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productsign
+          security set-key-partition-list -S apple-tool:,apple: -s -k actions build.keychain
+          security list-keychains -s build.keychain
+          security find-identity -v build.keychain
+
+      # Get signing identity from certificate
+      - name: Get Signing Identity
+        id: signing_identity
+        run: |
+          IDENTITY=$(security find-identity -v build.keychain | grep -oE '"Developer ID Application[^"]*" | head -1 | tr -d '"')
+          if [ -z "$IDENTITY" ]; then
+            echo "No Developer ID Application certificate found!"
+            exit 1
+          fi
+          echo "identity=$IDENTITY" >> $GITHUB_OUTPUT
+          echo "Found identity: $IDENTITY"
+
+      # Update tauri.conf.json with the signing identity
+      - name: Update Signing Identity in Config
+        env:
+          IDENTITY: ${{ steps.signing_identity.outputs.identity }}
+        run: |
+          python3 << EOF
+import json
+with open('src-tauri/tauri.conf.json', 'r') as f:
+    config = json.load(f)
+config['bundle']['macOS']['signingIdentity'] = '$IDENTITY'
+with open('src-tauri/tauri.conf.json', 'w') as f:
+    json.dump(config, f, indent='  ')
+EOF
+
+      # Build for ARM64
+      - name: Build ARM64
+        run: npm run tauri build -- --target aarch64-apple-darwin
+
+      # Build for x64
+      - name: Build x64
+        run: npm run tauri build -- --target x86_64-apple-darwin
+
+      # Create universal binary
+      - name: Create Universal Binary
+        run: |
+          ARM_APP="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/CAMPP.app"
+          X64_APP="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/CAMPP.app"
+          UNIVERSAL_APP="src-tauri/target/universal-apple-darwin/release/bundle/macos/CAMPP.app"
+
+          mkdir -p "$(dirname "$UNIVERSAL_APP")"
+          cp -R "$ARM_APP" "$UNIVERSAL_APP"
+
+          # Create universal binary using lipo
+          lipo \
+            "$ARM_APP/Contents/MacOS/campp" \
+            "$X64_APP/Contents/MacOS/campp" \
+            -create -output "$UNIVERSAL_APP/Contents/MacOS/campp"
+
+          # Re-sign the universal app
+          IDENTITY="${{ steps.signing_identity.outputs.identity }}"
+          /usr/bin/codesign --force --deep --options runtime --entitlements src-tauri/entitlements.plist --sign "$IDENTITY" "$UNIVERSAL_APP"
+
+      # Notarize the app
+      - name: Notarize App
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/CAMPP.app"
+
+          # Create ZIP for notarization
+          zip -r CAMPP.zip "$APP_PATH"
+
+          # Submit for notarization
+          xcrun notarytool submit CAMPP.zip \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait \
+            --output-format json
+
+          # Staple the ticket
+          xcrun stapler staple "$APP_PATH"
+
+      # Create DMG installer
+      - name: Create DMG
+        run: |
+          APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/CAMPP.app"
+          DMG_PATH="src-tauri/target/universal-apple-darwin/release/bundle/dmg/CAMPP-universal.dmg"
+
+          mkdir -p "$(dirname "$DMG_PATH")"
+          hdiutil create -volname "CAMPP" \
+            -srcfolder "$APP_PATH" \
+            -ov -format UDZO \
+            "$DMG_PATH"
+
+      # Upload artifacts
+      - name: Upload macOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAMPP-macOS
+          path: |
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/CAMPP.app
+            src-tauri/target/universal-apple-darwin/release/bundle/dmg/CAMPP-universal.dmg
 
   build-windows:
     runs-on: windows-latest
@@ -93,7 +180,12 @@ jobs:
           releaseDraft: true
           prerelease: false
 
-  # Optional: Build for Linux
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAMPP-Windows
+          path: src-tauri/target/*/release/bundle/msi/*.msi
+
   build-linux:
     runs-on: ubuntu-22.04
 
@@ -128,3 +220,33 @@ jobs:
           releaseBody: 'See CHANGELOG.md for details.'
           releaseDraft: true
           prerelease: false
+
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAMPP-Linux
+          path: src-tauri/target/*/release/bundle/deb/*.deb
+
+  # Create release with all artifacts
+  create-release:
+    needs: [build-macos, build-windows, build-linux]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') || inputs.create_release == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/CAMPP-macOS/CAMPP.app
+            artifacts/CAMPP-macOS/CAMPP-universal.dmg
+            artifacts/CAMPP-Windows/*.msi
+            artifacts/CAMPP-Linux/*.deb
+          draft: true
+          prerelease: false
+          generate_release_notes: true
