@@ -2,6 +2,10 @@
 
 This guide explains how to set up GitHub Actions for building, signing, and notarizing the CAMPP macOS app.
 
+## Workflow
+
+The main **"Build and Release"** workflow builds for all platforms (macOS, Windows, Linux) in a single run. macOS builds are signed and notarized automatically.
+
 ## Required GitHub Secrets
 
 You need to add the following secrets to your GitHub repository (Settings → Secrets and variables → Actions → New repository secret):
