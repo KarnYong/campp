@@ -1,0 +1,174 @@
+name: Build Signed macOS
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a GitHub release'
+        required: false
+        default: 'true'
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-notarize:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: universal-apple-darwin,aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      # Import Code Signing Certificate
+      - name: Import Certificate
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$CERTIFICATE_BASE64" | base64 --decode > certificate.p12
+          security create-keychain -p actions build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p actions build.keychain
+          security import certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productsign
+          security set-key-partition-list -S apple-tool:,apple: -s -k actions build.keychain
+          security list-keychains -s build.keychain
+          security find-identity -v build.keychain
+
+      # Get signing identity from certificate
+      - name: Get Signing Identity
+        id: signing_identity
+        run: |
+          IDENTITY=$(security find-identity -v build.keychain | grep -oE '"Developer ID Application[^"]*" | head -1 | tr -d '"')
+          if [ -z "$IDENTITY" ]; then
+            echo "No Developer ID Application certificate found!"
+            exit 1
+          fi
+          echo "identity=$IDENTITY" >> $GITHUB_OUTPUT
+          echo "Found identity: $IDENTITY"
+
+      # Update tauri.conf.json with the signing identity
+      - name: Update Signing Identity in Config
+        env:
+          IDENTITY: ${{ steps.signing_identity.outputs.identity }}
+        run: |
+          # Use jq to update the config
+          if command -v jq &> /dev/null; then
+            jq --arg sig "$IDENTITY" '.bundle.macOS.signingIdentity = $sig' src-tauri/tauri.conf.json > tmp.json && mv tmp.json src-tauri/tauri.conf.json
+          else
+            # Fallback using Python
+            python3 << EOF
+import json
+import sys
+with open('src-tauri/tauri.conf.json', 'r') as f:
+    config = json.load(f)
+config['bundle']['macOS']['signingIdentity'] = '$IDENTITY'
+with open('src-tauri/tauri.conf.json', 'w') as f:
+    json.dump(config, f, indent='  ')
+EOF
+          fi
+
+      # Build for ARM64
+      - name: Build ARM64
+        run: npm run tauri build -- --target aarch64-apple-darwin
+
+      # Build for x64
+      - name: Build x64
+        run: npm run tauri build -- --target x86_64-apple-darwin
+
+      # Create universal binary
+      - name: Create Universal Binary
+        run: |
+          ARM_APP="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/CAMPP.app"
+          X64_APP="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/CAMPP.app"
+          UNIVERSAL_APP="src-tauri/target/universal-apple-darwin/release/bundle/macos/CAMPP.app"
+
+          mkdir -p "$(dirname "$UNIVERSAL_APP")"
+          cp -R "$ARM_APP" "$UNIVERSAL_APP"
+
+          # Create universal binary using lipo
+          lipo \
+            "$ARM_APP/Contents/MacOS/campp" \
+            "$X64_APP/Contents/MacOS/campp" \
+            -create -output "$UNIVERSAL_APP/Contents/MacOS/campp"
+
+          # Re-sign the universal app
+          IDENTITY="${{ steps.signing_identity.outputs.identity }}"
+          /usr/bin/codesign --force --deep --options runtime --entitlements src-tauri/entitlements.plist --sign "$IDENTITY" "$UNIVERSAL_APP"
+
+      # Notarize the app
+      - name: Notarize App
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/CAMPP.app"
+
+          # Create ZIP for notarization
+          zip -r CAMPP.zip "$APP_PATH"
+
+          # Submit for notarization
+          xcrun notarytool submit CAMPP.zip \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait \
+            --output-format json
+
+          # Staple the ticket
+          xcrun stapler staple "$APP_PATH"
+
+      # Create DMG installer
+      - name: Create DMG
+        run: |
+          APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/CAMPP.app"
+          DMG_PATH="src-tauri/target/universal-apple-darwin/release/bundle/dmg/CAMPP-universal.dmg"
+
+          mkdir -p "$(dirname "$DMG_PATH")"
+          hdiutil create -volname "CAMPP" \
+            -srcfolder "$APP_PATH" \
+            -ov -format UDZO \
+            "$DMG_PATH"
+
+      # Upload artifacts
+      - name: Upload Universal App
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAMPP-macOS-universal
+          path: src-tauri/target/universal-apple-darwin/release/bundle/macos/CAMPP.app
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAMPP-macOS-DMG
+          path: src-tauri/target/universal-apple-darwin/release/bundle/dmg/CAMPP-universal.dmg
+
+      # Create GitHub Release
+      - name: Create Release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') || inputs.create_release == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/CAMPP.app
+            src-tauri/target/universal-apple-darwin/release/bundle/dmg/CAMPP-universal.dmg
+          draft: true
+          prerelease: false
+          generate_release_notes: true

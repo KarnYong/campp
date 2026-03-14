@@ -19,7 +19,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' http://localhost:* ws://localhost:* https://tauri.localhost;"
     },
     "withGlobalTauri": true
   },
@@ -33,6 +33,12 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["MANUAL.html", "runtime-config.json", "runtime-config.schema.json"]
+    "resources": ["MANUAL.html", "runtime-config.json", "runtime-config.schema.json"],
+    "macOS": {
+      "signingIdentity": "Developer ID Application: YOUR_NAME",
+      "entitlements": "entitlements.plist",
+      "hardenedRuntime": true,
+      "minimumSystemVersion": "10.15"
+    }
   }
 }

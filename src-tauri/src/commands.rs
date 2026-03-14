@@ -12,6 +12,58 @@ use std::sync::Mutex;
 use tauri::Emitter;
 use tauri::State;
 
+/// Open a folder in the system's file explorer using tauri-plugin-opener
+///
+/// This is a wrapper function that forwards to the plugin for cross-platform compatibility.
+/// The plugin handles platform-specific operations internally.
+#[tauri::command]
+pub async fn open_folder(path: String) -> Result<(), String> {
+    use tauri_plugin_opener::reveal_item_in_dir;
+
+    // Ensure folder exists before opening
+    let path_obj = std::path::Path::new(&path);
+    if !path_obj.exists() {
+        fs::create_dir_all(path_obj)
+            .map_err(|e| format!("Failed to create folder: {}", e))?;
+    }
+
+    // Use tauri-plugin-opener for cross-platform folder opening
+    reveal_item_in_dir(&path)
+        .map_err(|e| format!("Failed to open folder: {}", e))?;
+
+    Ok(())
+}
+
+/// Open the user manual in the system's default application using tauri-plugin-opener
+///
+/// This command locates the MANUAL.html resource file and reveals it in the
+/// file manager using tauri-plugin-opener for cross-platform compatibility.
+/// Users can then open it with their preferred browser or HTML viewer.
+#[tauri::command]
+pub async fn open_manual(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    use tauri_plugin_opener::reveal_item_in_dir;
+
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|e| format!("Failed to get resource dir: {}", e))?;
+
+    let manual_path = resource_dir.join("MANUAL.html");
+
+    // Ensure the manual exists
+    if !manual_path.exists() {
+        return Err(format!("Manual not found at: {}", manual_path.display()));
+    }
+
+    // Use tauri-plugin-opener to reveal the file in the file manager
+    // This is cross-platform and lets the user choose how to open it
+    reveal_item_in_dir(&manual_path)
+        .map_err(|e| format!("Failed to open manual: {}", e))?;
+
+    Ok(())
+}
+
 // Global state for download progress
 static DOWNLOAD_PROGRESS: Mutex<Option<DownloadProgress>> = Mutex::new(None);
 
@@ -213,83 +265,6 @@ pub async fn get_install_dir() -> Result<String, String> {
 pub async fn get_download_dir() -> Result<String, String> {
     let temp_dir = std::env::temp_dir().join("campp-download");
     Ok(temp_dir.to_string_lossy().to_string())
-}
-
-/// Open a folder in the system's file explorer
-#[tauri::command]
-pub async fn open_folder(path: String) -> Result<(), String> {
-    // Ensure folder exists before opening
-    let path_obj = std::path::Path::new(&path);
-    if !path_obj.exists() {
-        fs::create_dir_all(path_obj)
-            .map_err(|e| format!("Failed to create folder: {}", e))?;
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        std::process::Command::new("explorer")
-            .arg(&path)
-            .spawn()
-            .map_err(|e| format!("Failed to open folder: {}", e))?;
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg(&path)
-            .spawn()
-            .map_err(|e| format!("Failed to open folder: {}", e))?;
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        std::process::Command::new("xdg-open")
-            .arg(&path)
-            .spawn()
-            .map_err(|e| format!("Failed to open folder: {}", e))?;
-    }
-
-    Ok(())
-}
-
-/// Open the user manual in the browser
-#[tauri::command]
-pub async fn open_manual(app: tauri::AppHandle) -> Result<(), String> {
-    use tauri::Manager;
-
-    let resource_dir = app
-        .path()
-        .resource_dir()
-        .map_err(|e| format!("Failed to get resource dir: {}", e))?;
-
-    let manual_path = resource_dir.join("MANUAL.html");
-
-    // Open in default browser
-    #[cfg(target_os = "windows")]
-    {
-        std::process::Command::new("cmd")
-            .args(["/C", "start", &manual_path.to_string_lossy()])
-            .spawn()
-            .map_err(|e| format!("Failed to open manual: {}", e))?;
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg(&manual_path)
-            .spawn()
-            .map_err(|e| format!("Failed to open manual: {}", e))?;
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        std::process::Command::new("xdg-open")
-            .arg(&manual_path)
-            .spawn()
-            .map_err(|e| format!("Failed to open manual: {}", e))?;
-    }
-
-    Ok(())
 }
 
 /// Download and install runtime binaries

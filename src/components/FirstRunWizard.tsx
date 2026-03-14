@@ -35,6 +35,25 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
     phpmyadmin: "phpmyadmin-5.2",
   });
   const [existingComponents, setExistingComponents] = useState<ExistingComponent[]>([]);
+  const [hasExistingOnWelcome, setHasExistingOnWelcome] = useState(false);
+
+  // Check for existing components when welcome step loads
+  useEffect(() => {
+    const checkExisting = async () => {
+      try {
+        const existing = await invoke<Record<string, string>>("check_existing_components");
+        const hasExisting = Object.keys(existing).length > 0;
+        setHasExistingOnWelcome(hasExisting);
+      } catch (err) {
+        console.error("Failed to check existing components:", err);
+        setHasExistingOnWelcome(false);
+      }
+    };
+
+    if (step === "welcome") {
+      checkExisting();
+    }
+  }, [step]);
 
   // Listen for download progress events
   useEffect(() => {
@@ -140,6 +159,30 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
     setExistingComponents([]);
   };
 
+  const handleSkipToDashboard = () => {
+    // User wants to use existing installation without downloading
+    // Mark as complete and go to dashboard
+    onComplete();
+  };
+
+  const handleSkipFromWelcome = async () => {
+    // Check if there are existing components and skip to dashboard if so
+    try {
+      const existing = await invoke<Record<string, string>>("check_existing_components");
+      const existingList = Object.keys(existing);
+
+      if (existingList.length > 0) {
+        // There are existing components, skip to dashboard
+        onComplete();
+      } else {
+        // No existing components, show a message
+        alert("No existing installation found. Please download the runtime components to continue.");
+      }
+    } catch (err) {
+      console.error("Failed to check existing components:", err);
+    }
+  };
+
   const handleNext = () => {
     if (step === "welcome") {
       setStep("packages");
@@ -226,12 +269,23 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
                 to be installed on your system. These will be downloaded and extracted to
                 your local data directory.
               </p>
-              <p className="wizard-info">
-                <strong>Estimated download size:</strong> ~150 MB
-              </p>
+              {hasExistingOnWelcome ? (
+                <p className="wizard-info wizard-info-existing">
+                  <strong>Existing installation detected!</strong> You can use your current installation or download fresh components.
+                </p>
+              ) : (
+                <p className="wizard-info">
+                  <strong>Estimated download size:</strong> ~150 MB
+                </p>
+              )}
               <div className="wizard-actions">
+                {hasExistingOnWelcome && (
+                  <button onClick={handleSkipFromWelcome} className="btn-secondary btn-use-existing">
+                    Use Existing Installation
+                  </button>
+                )}
                 <button onClick={handleNext} className="btn-primary">
-                  Get Started
+                  {hasExistingOnWelcome ? "Download Fresh" : "Get Started"}
                 </button>
                 <button
                   onClick={async () => {
@@ -314,10 +368,13 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
               )}
               <div className="wizard-actions">
                 <button onClick={handleCancel} className="btn-secondary">
-                  Cancel
+                  Back to Selection
+                </button>
+                <button onClick={handleSkipToDashboard} className="btn-secondary btn-skip">
+                  Use Existing & Continue
                 </button>
                 <button onClick={handleSkipExisting} className="btn-secondary">
-                  Skip Existing
+                  Skip & Update
                 </button>
                 <button onClick={handleOverwriteAll} className="btn-primary">
                   Overwrite All
@@ -605,6 +662,26 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
         }
         .btn-dismiss:hover {
           background: rgba(239, 68, 68, 0.2);
+        }
+        .btn-skip {
+          border-color: #10b981;
+          color: #10b981;
+        }
+        .btn-skip:hover {
+          background: rgba(16, 185, 129, 0.1);
+        }
+        .btn-use-existing {
+          border-color: #3b82f6;
+          color: #3b82f6;
+        }
+        .btn-use-existing:hover {
+          background: rgba(59, 130, 246, 0.1);
+        }
+        .wizard-info-existing {
+          background: rgba(16, 185, 129, 0.1);
+          border: 1px solid #10b981;
+          border-radius: 0.5rem;
+          padding: 0.75rem;
         }
       `}</style>
     </div>
