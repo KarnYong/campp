@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use crate::runtime::packages::PackageSelection;
 
 pub const DEFAULT_PORTS: Ports = Ports {
     web: 8080,
@@ -23,6 +24,8 @@ pub struct AppSettings {
     pub project_root: String,
     #[serde(default)]
     pub auto_start_services: bool,
+    #[serde(default)]
+    pub package_selection: PackageSelection,
 }
 
 impl Default for AppSettings {
@@ -38,6 +41,7 @@ impl Default for AppSettings {
                 .to_string_lossy()
                 .to_string(),
             auto_start_services: false,
+            package_selection: PackageSelection::default(),
         }
     }
 }

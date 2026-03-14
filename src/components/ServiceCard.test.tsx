@@ -344,7 +344,7 @@ describe('ServiceCard Component', () => {
         />
       );
 
-      expect(screen.getByText('PHP-FPM 8.4')).toBeInTheDocument();
+      expect(screen.getByText('PHP-FPM')).toBeInTheDocument();
       expect(screen.getByText('Port: 9000')).toBeInTheDocument();
       expect(screen.getByText('PHP Runtime')).toBeInTheDocument();
     });

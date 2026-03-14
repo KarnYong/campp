@@ -30,6 +30,7 @@ export interface AppSettings {
   mysql_port: number;
   php_port: number;
   project_root: string;
+  package_selection?: PackageSelection;
 }
 
 export interface DownloadProgress {
@@ -43,6 +44,59 @@ export interface DownloadProgress {
   totalBytes: number;
 }
 
+// Package selection types
+export interface PhpPackage {
+  id: string;
+  version: string;
+  display_name: string;
+  windowsX64: string;
+  windowsArm64: string;
+  linuxX64: string;
+  linuxArm64: string;
+  macOSX64: string;
+  macOSArm64: string;
+  eol: boolean;
+  lts: boolean;
+  recommended: boolean;
+}
+
+export interface MariaDBPackage {
+  id: string;
+  version: string;
+  display_name: string;
+  windowsX64: string;
+  windowsArm64: string;
+  linuxX64: string;
+  linuxArm64: string;
+  macOSX64: string;
+  macOSArm64: string;
+  eol: boolean;
+  lts: boolean;
+  recommended: boolean;
+}
+
+export interface PhpMyAdminPackage {
+  id: string;
+  version: string;
+  display_name: string;
+  url: string;
+  eol: boolean;
+  lts: boolean;
+  recommended: boolean;
+}
+
+export interface PackagesConfig {
+  php: PhpPackage[];
+  mariadb: MariaDBPackage[];
+  phpmyadmin: PhpMyAdminPackage[];
+}
+
+export interface PackageSelection {
+  php: string;
+  mariadb: string;
+  phpmyadmin: string;
+}
+
 export const DEFAULT_PORTS = {
   [ServiceType.Caddy]: 8080,
   [ServiceType.PhpFpm]: 9000,
@@ -51,7 +105,7 @@ export const DEFAULT_PORTS = {
 
 export const SERVICE_DISPLAY_NAMES = {
   [ServiceType.Caddy]: "Caddy",
-  [ServiceType.PhpFpm]: "PHP-FPM 8.4",
+  [ServiceType.PhpFpm]: "PHP-FPM",
   [ServiceType.MariaDB]: "MariaDB",
 } as const;
 

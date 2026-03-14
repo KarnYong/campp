@@ -8,6 +8,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use crate::runtime::locator::get_app_data_paths;
+use crate::runtime::packages::{PackageSelection, get_php_package, get_mariadb_package, get_phpmyadmin_package};
 use sha2::{Digest, Sha256};
 
 /// Runtime configuration loaded from runtime-config.json
@@ -201,6 +202,37 @@ impl BinaryComponent {
     }
 }
 
+impl RuntimeDownloader {
+    /// Get version for a component based on current package selection
+    pub fn get_component_version(&self, component: &BinaryComponent) -> String {
+        if let Some(selection) = &self.package_selection {
+            match component {
+                BinaryComponent::Php => {
+                    if let Some(pkg) = get_php_package(&selection.php) {
+                        return pkg.version;
+                    }
+                }
+                BinaryComponent::MariaDB => {
+                    if let Some(pkg) = get_mariadb_package(&selection.mariadb) {
+                        return pkg.version;
+                    }
+                }
+                BinaryComponent::PhpMyAdmin => {
+                    if let Some(pkg) = get_phpmyadmin_package(&selection.phpmyadmin) {
+                        return pkg.version;
+                    }
+                }
+                BinaryComponent::Caddy => {
+                    // Caddy uses default version
+                }
+            }
+        }
+
+        // Fall back to default config
+        component.version()
+    }
+}
+
 /// Platform information
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Platform {
@@ -306,6 +338,7 @@ pub struct RuntimeDownloader {
     base_url: String,
     platform: Platform,
     client: Client,
+    package_selection: Option<PackageSelection>,
 }
 
 impl RuntimeDownloader {
@@ -315,11 +348,61 @@ impl RuntimeDownloader {
             base_url: "https://github.com".to_string(),
             platform: Platform::current(),
             client: Client::new(),
+            package_selection: None,
+        }
+    }
+
+    /// Create a new runtime downloader with custom package selection
+    pub fn with_packages(package_selection: PackageSelection) -> Self {
+        Self {
+            base_url: "https://github.com".to_string(),
+            platform: Platform::current(),
+            client: Client::new(),
+            package_selection: Some(package_selection),
         }
     }
 
     /// Get the URL for a binary component from config
     fn get_binary_url(&self, component: BinaryComponent) -> String {
+        // Use selected packages if available, otherwise fall back to default config
+        if let Some(selection) = &self.package_selection {
+            match component {
+                BinaryComponent::Php => {
+                    if let Some(pkg) = get_php_package(&selection.php) {
+                        return match self.platform {
+                            Platform::WindowsX64 => pkg.windows_x64,
+                            Platform::WindowsArm64 => pkg.windows_arm64,
+                            Platform::MacOSX64 => pkg.macos_x64,
+                            Platform::MacOSArm64 => pkg.macos_arm64,
+                            Platform::LinuxX64 => pkg.linux_x64,
+                            Platform::LinuxArm64 => pkg.linux_arm64,
+                        };
+                    }
+                }
+                BinaryComponent::MariaDB => {
+                    if let Some(pkg) = get_mariadb_package(&selection.mariadb) {
+                        return match self.platform {
+                            Platform::WindowsX64 => pkg.windows_x64,
+                            Platform::WindowsArm64 => pkg.windows_arm64,
+                            Platform::MacOSX64 => pkg.macos_x64,
+                            Platform::MacOSArm64 => pkg.macos_arm64,
+                            Platform::LinuxX64 => pkg.linux_x64,
+                            Platform::LinuxArm64 => pkg.linux_arm64,
+                        };
+                    }
+                }
+                BinaryComponent::PhpMyAdmin => {
+                    if let Some(pkg) = get_phpmyadmin_package(&selection.phpmyadmin) {
+                        return pkg.url;
+                    }
+                }
+                BinaryComponent::Caddy => {
+                    // Caddy doesn't have package selection, use default
+                }
+            }
+        }
+
+        // Fall back to default config
         let config = get_config();
 
         match component {
@@ -430,9 +513,11 @@ impl RuntimeDownloader {
         }
 
         let total_bytes = response.content_length().unwrap_or(0);
+        let version = self.get_component_version(&component);
         let file_path = dest_dir.join(format!(
-            "{}.{}",
+            "{}-{}.{}",
             component.binary_name(),
+            version,
             extension
         ));
 
@@ -490,7 +575,7 @@ impl RuntimeDownloader {
             percent,
             current_component: component.name().to_string(),
             component_display: component.display_name(),
-            version: component.version(),
+            version: self.get_component_version(&component),
             total_components: total,
             downloaded_bytes,
             total_bytes,
@@ -613,7 +698,7 @@ impl RuntimeDownloader {
                 percent: 0,
                 current_component: component.name().to_string(),
                 component_display: component.display_name(),
-                version: component.version(),
+                version: self.get_component_version(&component),
                 total_components: total,
                 downloaded_bytes: 0,
                 total_bytes: 0,
@@ -643,9 +728,118 @@ impl RuntimeDownloader {
                 return Err(format!("Unsupported archive format: {}", extension));
             }
 
-            // Create marker file to indicate component was installed
+            // Create marker file to indicate component was installed with version
+            let version = self.get_component_version(&component);
             let marker_file = runtime_dir.join(format!("{}_installed.txt", component.binary_name()));
-            fs::write(&marker_file, format!("Installed at {:?}", std::time::SystemTime::now()))
+            fs::write(&marker_file, format!("version={}\ninstalled_at={:?}", version, std::time::SystemTime::now()))
+                .map_err(|e| format!("Failed to create marker file: {}", e))?;
+
+            downloaded_files.push(downloaded_path);
+        }
+
+        // Create all application directories (config, logs, mysql/data, projects)
+        if let Ok(app_paths) = get_app_data_paths() {
+            if let Err(e) = app_paths.ensure_directories() {
+                eprintln!("Warning: Failed to create app directories: {}", e);
+            }
+        }
+
+        progress_cb(DownloadProgress {
+            step: DownloadStep::Complete,
+            percent: 100,
+            current_component: "All".to_string(),
+            component_display: "All Components".to_string(),
+            version: String::new(),
+            total_components: total,
+            downloaded_bytes: 0,
+            total_bytes: 0,
+        });
+
+        // Keep temp files for user to access if needed
+        // Uncomment to cleanup: let _ = fs::remove_dir_all(temp_dir);
+
+        Ok(downloaded_files)
+    }
+
+    /// Download and install runtime binaries with option to skip existing components
+    pub async fn download_all_with_skip(
+        &self,
+        progress_cb: ProgressCallback,
+        skip_list: &[&str], // Component names to skip (e.g., ["php", "mariadb"])
+    ) -> Result<Vec<PathBuf>, String> {
+        let components = [
+            BinaryComponent::Caddy,
+            BinaryComponent::Php,
+            BinaryComponent::MariaDB,
+            BinaryComponent::PhpMyAdmin,
+        ];
+        let total = components.len() as u8;
+
+        // Create temp directory for downloads
+        let temp_dir = std::env::temp_dir().join("campp-download");
+        fs::create_dir_all(&temp_dir)
+            .map_err(|e| format!("Failed to create temp directory: {}", e))?;
+
+        let mut downloaded_files = Vec::new();
+
+        for (i, component) in components.iter().enumerate() {
+            let component_name = component.binary_name();
+
+            // Skip if component is in skip list
+            if skip_list.contains(&component_name) {
+                eprintln!("Skipping {} (already installed)", component.name());
+                continue;
+            }
+
+            let current = (i + 1) as u8;
+
+            // Download
+            let downloaded_path = self
+                .download_component(*component, &temp_dir, &progress_cb, current, total)
+                .await?;
+
+            // Verify checksum (TODO: add expected checksums)
+            // For now, skip checksum verification since we'd need to pre-calculate them
+            // In production, download from a trusted source with known checksums
+            progress_cb(DownloadProgress {
+                step: DownloadStep::Extracting,
+                percent: 0,
+                current_component: component.name().to_string(),
+                component_display: component.display_name(),
+                version: self.get_component_version(&component),
+                total_components: total,
+                downloaded_bytes: 0,
+                total_bytes: 0,
+            });
+
+            let runtime_dir = self.get_runtime_dir()?;
+            fs::create_dir_all(&runtime_dir)
+                .map_err(|e| format!("Failed to create runtime directory: {}", e))?;
+
+            // Determine extraction method based on file extension
+            let extension = downloaded_path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("");
+
+            let is_tar_gz = downloaded_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.ends_with(".tar.gz"))
+                .unwrap_or(false);
+
+            if is_tar_gz || extension == "gz" {
+                self.extract_tar_gz(&downloaded_path, &runtime_dir)?;
+            } else if extension == "zip" {
+                self.extract_zip(&downloaded_path, &runtime_dir)?;
+            } else {
+                return Err(format!("Unsupported archive format: {}", extension));
+            }
+
+            // Create marker file to indicate component was installed with version
+            let version = self.get_component_version(&component);
+            let marker_file = runtime_dir.join(format!("{}_installed.txt", component.binary_name()));
+            fs::write(&marker_file, format!("version={}\ninstalled_at={:?}", version, std::time::SystemTime::now()))
                 .map_err(|e| format!("Failed to create marker file: {}", e))?;
 
             downloaded_files.push(downloaded_path);
@@ -721,6 +915,35 @@ impl RuntimeDownloader {
         caddy_marker.exists() || php_marker.exists() || mariadb_marker.exists()
             || phpmyadmin_marker.exists() || caddy_exe.exists() || php_exe.exists()
             || mariadb_exe.exists()
+    }
+
+    /// Check which components are already installed with their versions
+    pub fn get_installed_components(&self) -> std::collections::HashMap<String, String> {
+        let mut installed = std::collections::HashMap::new();
+        let runtime_dir = match self.get_runtime_dir() {
+            Ok(dir) => dir,
+            Err(_) => return installed,
+        };
+
+        for component in ["caddy", "php", "mariadb", "phpmyadmin"] {
+            let marker_file = runtime_dir.join(format!("{}_installed.txt", component));
+            if let Ok(content) = fs::read_to_string(&marker_file) {
+                // Parse version from format: "version=1.2.3\ninstalled_at=..."
+                for line in content.lines() {
+                    if let Some(version) = line.strip_prefix("version=") {
+                        installed.insert(component.to_string(), version.to_string());
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Add Caddy version from default config (not in packages)
+        if !installed.contains_key("caddy") {
+            installed.insert("caddy".to_string(), "2.8.4".to_string());
+        }
+
+        installed
     }
 }
 

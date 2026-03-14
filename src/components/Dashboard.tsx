@@ -11,6 +11,7 @@ export function Dashboard() {
   const [showSettings, setShowSettings] = useState(false);
   const [projectRoot, setProjectRoot] = useState<string>("");
   const [installDir, setInstallDir] = useState<string>("");
+  const [installedVersions, setInstalledVersions] = useState<Record<string, string>>({});
 
   // Get Caddy port from services
   const caddyPort = services[ServiceType.Caddy]?.port || 8080;
@@ -57,6 +58,17 @@ export function Dashboard() {
       }
     };
     loadInstallDir();
+
+    // Load installed versions
+    const loadInstalledVersions = async () => {
+      try {
+        const versions = await invoke<Record<string, string>>("get_installed_versions");
+        setInstalledVersions(versions);
+      } catch (error) {
+        console.error("Failed to load installed versions:", error);
+      }
+    };
+    loadInstalledVersions();
   }, []);
 
   const startService = async (serviceType: ServiceType) => {
@@ -125,6 +137,7 @@ export function Dashboard() {
   };
 
   return (
+    <>
     <div className="dashboard" data-testid="dashboard">
       <header className="dashboard-header">
         <div className="header-content">
@@ -190,6 +203,27 @@ export function Dashboard() {
         </div>
       </header>
 
+      {/* Installed Versions Display */}
+      {Object.keys(installedVersions).length > 0 && (
+        <div className="versions-bar">
+          <div className="versions-container">
+            <span className="versions-label">Installed:</span>
+            {installedVersions.caddy && (
+              <span className="version-badge">Caddy {installedVersions.caddy}</span>
+            )}
+            {installedVersions.php && (
+              <span className="version-badge">PHP {installedVersions.php}</span>
+            )}
+            {installedVersions.mariadb && (
+              <span className="version-badge">MariaDB {installedVersions.mariadb}</span>
+            )}
+            {installedVersions.phpmyadmin && (
+              <span className="version-badge">phpMyAdmin {installedVersions.phpmyadmin}</span>
+            )}
+          </div>
+        </div>
+      )}
+
       <main className="dashboard-main">
         <div className="service-grid">
           {[ServiceType.Caddy, ServiceType.PhpFpm, ServiceType.MariaDB].map((serviceType) => {
@@ -220,5 +254,39 @@ export function Dashboard() {
         />
       )}
     </div>
+
+    <style>{`
+      .versions-bar {
+        background: #1f2937;
+        border-bottom: 1px solid #374151;
+        padding: 0.5rem 1rem;
+      }
+      .versions-container {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+      .versions-label {
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .version-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.625rem;
+        background: #374151;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        color: #e5e7eb;
+        font-weight: 500;
+      }
+    `}</style>
+    </>
   );
 }
