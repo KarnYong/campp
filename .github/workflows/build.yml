@@ -56,7 +56,9 @@ jobs:
       - name: Get Signing Identity
         id: signing_identity
         run: |
-          IDENTITY=$(security find-identity -v build.keychain | grep -oE '"Developer ID Application[^"]*" | head -1 | tr -d '"')
+          # List all identities and find Developer ID Application
+          security find-identity -v build.keychain
+          IDENTITY=$(security find-identity -v build.keychain | grep "Developer ID Application" | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
           if [ -z "$IDENTITY" ]; then
             echo "No Developer ID Application certificate found!"
             exit 1
