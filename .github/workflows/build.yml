@@ -72,10 +72,10 @@ jobs:
         env:
           IDENTITY: ${{ steps.signing_identity.outputs.identity }}
         run: |
-          import json
+          import json, os
           with open('src-tauri/tauri.conf.json', 'r') as f:
               config = json.load(f)
-          config['bundle']['macOS']['signingIdentity'] = '$IDENTITY'
+          config['bundle']['macOS']['signingIdentity'] = os.environ['IDENTITY']
           with open('src-tauri/tauri.conf.json', 'w') as f:
               json.dump(config, f, indent='  ')
         shell: python3 {0}
