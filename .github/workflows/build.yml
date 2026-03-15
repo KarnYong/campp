@@ -49,7 +49,10 @@ jobs:
           security default-keychain -s build.keychain
           security unlock-keychain -p actions build.keychain
           security import certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productsign
-          security set-key-partition-list -S apple-tool:,apple: -s -k actions build.keychain
+          # Set keychain settings to prevent UI prompts
+          security set-keychain-settings -lut 21600 build.keychain
+          # Add codesign to ACL with all necessary flags
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions build.keychain
           security list-keychains -s build.keychain
           security find-identity -v build.keychain
 
@@ -94,10 +97,13 @@ jobs:
           IDENTITY: ${{ steps.signing_identity.outputs.identity }}
         run: |
           APP_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/CAMPP.app"
+          ENTITLEMENTS="$PWD/src-tauri/entitlements.plist"
+          # Unlock keychain before signing
+          security unlock-keychain -p actions build.keychain
           # Verify current signature
           codesign -dv "$APP_PATH" 2>&1 || true
-          # Re-sign with hardened runtime
-          codesign --force --deep --options runtime --entitlements src-tauri/entitlements.plist --sign "$IDENTITY" "$APP_PATH"
+          # Re-sign with hardened runtime (removed deprecated --deep flag)
+          codesign --force --options runtime --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$APP_PATH"
           # Verify signature again
           codesign -vvv "$APP_PATH"
 
@@ -138,10 +144,13 @@ jobs:
           IDENTITY: ${{ steps.signing_identity.outputs.identity }}
         run: |
           APP_PATH="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/CAMPP.app"
+          ENTITLEMENTS="$PWD/src-tauri/entitlements.plist"
+          # Unlock keychain before signing
+          security unlock-keychain -p actions build.keychain
           # Verify current signature
           codesign -dv "$APP_PATH" 2>&1 || true
-          # Re-sign with hardened runtime
-          codesign --force --deep --options runtime --entitlements src-tauri/entitlements.plist --sign "$IDENTITY" "$APP_PATH"
+          # Re-sign with hardened runtime (removed deprecated --deep flag)
+          codesign --force --options runtime --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$APP_PATH"
           # Verify signature again
           codesign -vvv "$APP_PATH"
 
