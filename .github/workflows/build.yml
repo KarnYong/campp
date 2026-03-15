@@ -88,6 +88,19 @@ jobs:
       - name: Build x64
         run: npm run tauri build -- --target x86_64-apple-darwin
 
+      # Verify and re-sign ARM64 app
+      - name: Verify and Re-sign ARM64
+        env:
+          IDENTITY: ${{ steps.signing_identity.outputs.identity }}
+        run: |
+          APP_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/CAMPP.app"
+          # Verify current signature
+          codesign -dv "$APP_PATH" 2>&1 || true
+          # Re-sign with hardened runtime
+          codesign --force --deep --options runtime --entitlements src-tauri/entitlements.plist --sign "$IDENTITY" "$APP_PATH"
+          # Verify signature again
+          codesign -vvv "$APP_PATH"
+
       # Notarize and create DMG for ARM64
       - name: Notarize and Create DMG for ARM64
         env:
@@ -118,6 +131,19 @@ jobs:
             -srcfolder "$APP_PATH" \
             -ov -format UDZO \
             "$DMG_PATH"
+
+      # Verify and re-sign x64 app
+      - name: Verify and Re-sign x64
+        env:
+          IDENTITY: ${{ steps.signing_identity.outputs.identity }}
+        run: |
+          APP_PATH="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/CAMPP.app"
+          # Verify current signature
+          codesign -dv "$APP_PATH" 2>&1 || true
+          # Re-sign with hardened runtime
+          codesign --force --deep --options runtime --entitlements src-tauri/entitlements.plist --sign "$IDENTITY" "$APP_PATH"
+          # Verify signature again
+          codesign -vvv "$APP_PATH"
 
       # Notarize and create DMG for x64
       - name: Notarize and Create DMG for x64
