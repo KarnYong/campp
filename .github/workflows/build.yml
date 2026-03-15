@@ -18,6 +18,7 @@ permissions:
 jobs:
   build-macos:
     runs-on: macos-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repository
@@ -87,40 +88,20 @@ jobs:
       - name: Build x64
         run: npm run tauri build -- --target x86_64-apple-darwin
 
-      # Create universal binary
-      - name: Create Universal Binary
-        run: |
-          ARM_APP="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/CAMPP.app"
-          X64_APP="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/CAMPP.app"
-          UNIVERSAL_APP="src-tauri/target/universal-apple-darwin/release/bundle/macos/CAMPP.app"
-
-          mkdir -p "$(dirname "$UNIVERSAL_APP")"
-          cp -R "$ARM_APP" "$UNIVERSAL_APP"
-
-          # Create universal binary using lipo
-          lipo \
-            "$ARM_APP/Contents/MacOS/campp" \
-            "$X64_APP/Contents/MacOS/campp" \
-            -create -output "$UNIVERSAL_APP/Contents/MacOS/campp"
-
-          # Re-sign the universal app
-          IDENTITY="${{ steps.signing_identity.outputs.identity }}"
-          /usr/bin/codesign --force --deep --options runtime --entitlements src-tauri/entitlements.plist --sign "$IDENTITY" "$UNIVERSAL_APP"
-
-      # Notarize the app
-      - name: Notarize App
+      # Notarize and create DMG for ARM64
+      - name: Notarize and Create DMG for ARM64
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/CAMPP.app"
+          APP_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/CAMPP.app"
 
           # Create ZIP for notarization
-          zip -r CAMPP.zip "$APP_PATH"
+          zip -r CAMPP-arm64.zip "$APP_PATH"
 
           # Submit for notarization
-          xcrun notarytool submit CAMPP.zip \
+          xcrun notarytool submit CAMPP-arm64.zip \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
@@ -130,12 +111,39 @@ jobs:
           # Staple the ticket
           xcrun stapler staple "$APP_PATH"
 
-      # Create DMG installer
-      - name: Create DMG
-        run: |
-          APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/CAMPP.app"
-          DMG_PATH="src-tauri/target/universal-apple-darwin/release/bundle/dmg/CAMPP-universal.dmg"
+          # Create DMG
+          DMG_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/CAMPP-arm64.dmg"
+          mkdir -p "$(dirname "$DMG_PATH")"
+          hdiutil create -volname "CAMPP" \
+            -srcfolder "$APP_PATH" \
+            -ov -format UDZO \
+            "$DMG_PATH"
 
+      # Notarize and create DMG for x64
+      - name: Notarize and Create DMG for x64
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          APP_PATH="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/CAMPP.app"
+
+          # Create ZIP for notarization
+          zip -r CAMPP-x64.zip "$APP_PATH"
+
+          # Submit for notarization
+          xcrun notarytool submit CAMPP-x64.zip \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait \
+            --output-format json
+
+          # Staple the ticket
+          xcrun stapler staple "$APP_PATH"
+
+          # Create DMG
+          DMG_PATH="src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/CAMPP-x64.dmg"
           mkdir -p "$(dirname "$DMG_PATH")"
           hdiutil create -volname "CAMPP" \
             -srcfolder "$APP_PATH" \
@@ -148,8 +156,8 @@ jobs:
         with:
           name: CAMPP-macOS
           path: |
-            src-tauri/target/universal-apple-darwin/release/bundle/macos/CAMPP.app
-            src-tauri/target/universal-apple-darwin/release/bundle/dmg/CAMPP-universal.dmg
+            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/CAMPP-arm64.dmg
+            src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/CAMPP-x64.dmg
 
   build-windows:
     runs-on: windows-latest
@@ -244,8 +252,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/CAMPP-macOS/CAMPP.app
-            artifacts/CAMPP-macOS/CAMPP-universal.dmg
+            artifacts/CAMPP-macOS/CAMPP-arm64.dmg
+            artifacts/CAMPP-macOS/CAMPP-x64.dmg
             artifacts/CAMPP-Windows/*.msi
             artifacts/CAMPP-Linux/*.deb
           draft: true
