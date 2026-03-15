@@ -18,7 +18,7 @@ permissions:
 jobs:
   build-macos:
     runs-on: macos-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     steps:
       - name: Checkout repository
@@ -116,16 +116,54 @@ jobs:
         run: |
           APP_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/CAMPP.app"
 
-          # Create ZIP for notarization
-          zip -r CAMPP-arm64.zip "$APP_PATH"
+          # Create ZIP for notarization (with compression level 0 for speed)
+          zip -0 -r CAMPP-arm64.zip "$APP_PATH"
 
-          # Submit for notarization
-          xcrun notarytool submit CAMPP-arm64.zip \
+          # Submit for notarization (no wait - returns submission ID)
+          SUBMISSION_OUTPUT=$(xcrun notarytool submit CAMPP-arm64.zip \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
-            --wait \
-            --output-format json
+            --output-format json)
+
+          echo "$SUBMISSION_OUTPUT"
+          SUBMISSION_ID=$(echo "$SUBMISSION_OUTPUT" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+          echo "Submission ID: $SUBMISSION_ID"
+
+          # Poll for notarization completion with timeout
+          echo "Waiting for notarization to complete..."
+          MAX_WAIT=600  # 10 minutes max wait
+          ELAPSED=0
+          INTERVAL=30
+
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            STATUS_OUTPUT=$(xcrun notarytool info "$SUBMISSION_ID" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" \
+              --output-format json 2>&1)
+
+            STATUS=$(echo "$STATUS_OUTPUT" | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+            echo "Current status: $STATUS (elapsed: ${ELAPSED}s)"
+
+            if [ "$STATUS" = "Accepted" ]; then
+              echo "Notarization successful!"
+              break
+            elif [ "$STATUS" = "Invalid" ] || [ "$STATUS" = "Rejected" ]; then
+              echo "Notarization failed!"
+              echo "$STATUS_OUTPUT"
+              exit 1
+            fi
+
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+
+          if [ $ELAPSED -ge $MAX_WAIT ]; then
+            echo "Notarization timed out after ${MAX_WAIT}s"
+            echo "Check status manually with: xcrun notarytool info $SUBMISSION_ID"
+            exit 1
+          fi
 
           # Staple the ticket
           xcrun stapler staple "$APP_PATH"
@@ -163,16 +201,54 @@ jobs:
         run: |
           APP_PATH="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/CAMPP.app"
 
-          # Create ZIP for notarization
-          zip -r CAMPP-x64.zip "$APP_PATH"
+          # Create ZIP for notarization (with compression level 0 for speed)
+          zip -0 -r CAMPP-x64.zip "$APP_PATH"
 
-          # Submit for notarization
-          xcrun notarytool submit CAMPP-x64.zip \
+          # Submit for notarization (no wait - returns submission ID)
+          SUBMISSION_OUTPUT=$(xcrun notarytool submit CAMPP-x64.zip \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
-            --wait \
-            --output-format json
+            --output-format json)
+
+          echo "$SUBMISSION_OUTPUT"
+          SUBMISSION_ID=$(echo "$SUBMISSION_OUTPUT" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+          echo "Submission ID: $SUBMISSION_ID"
+
+          # Poll for notarization completion with timeout
+          echo "Waiting for notarization to complete..."
+          MAX_WAIT=600  # 10 minutes max wait
+          ELAPSED=0
+          INTERVAL=30
+
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            STATUS_OUTPUT=$(xcrun notarytool info "$SUBMISSION_ID" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" \
+              --output-format json 2>&1)
+
+            STATUS=$(echo "$STATUS_OUTPUT" | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+            echo "Current status: $STATUS (elapsed: ${ELAPSED}s)"
+
+            if [ "$STATUS" = "Accepted" ]; then
+              echo "Notarization successful!"
+              break
+            elif [ "$STATUS" = "Invalid" ] || [ "$STATUS" = "Rejected" ]; then
+              echo "Notarization failed!"
+              echo "$STATUS_OUTPUT"
+              exit 1
+            fi
+
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+
+          if [ $ELAPSED -ge $MAX_WAIT ]; then
+            echo "Notarization timed out after ${MAX_WAIT}s"
+            echo "Check status manually with: xcrun notarytool info $SUBMISSION_ID"
+            exit 1
+          fi
 
           # Staple the ticket
           xcrun stapler staple "$APP_PATH"
