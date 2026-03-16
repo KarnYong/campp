@@ -368,15 +368,23 @@ jobs:
             -ov -format UDZO \
             "$DMG_PATH"
 
-      # Upload artifacts
+      # Upload artifacts - upload all DMG files found
       - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: CAMPP-macOS
           path: |
-            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/CAMPP-arm64.dmg
-            src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/CAMPP-x64.dmg
-            src-tauri/target/universal-apple-darwin/release/bundle/dmg/CAMPP-universal.dmg
+            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+            src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
+            src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+
+      # List uploaded artifacts for debugging
+      - name: List macOS Artifacts
+        run: |
+          echo "=== macOS DMG files ==="
+          find src-tauri/target -name "*.dmg" -type f || echo "No DMG files found"
+          ls -lah src-tauri/target/*/release/bundle/dmg/ || true
 
   build-windows:
     runs-on: windows-latest
@@ -400,11 +408,22 @@ jobs:
       - name: Build Tauri app
         run: npm run tauri build
 
+      # Upload all Windows bundle formats
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: CAMPP-Windows
-          path: src-tauri/target/release/bundle/msi/*.msi
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+
+      # List uploaded artifacts for debugging
+      - name: List Windows Artifacts
+        run: |
+          echo "=== Windows bundle files ==="
+          find src-tauri/target/release/bundle -type f || echo "No bundle files found"
+          ls -R src-tauri/target/release/bundle/ || true
 
   build-linux:
     runs-on: ubuntu-22.04
@@ -433,6 +452,7 @@ jobs:
       - name: Build Tauri app
         run: npm run tauri build
 
+      # Upload all Linux bundle formats
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -441,6 +461,14 @@ jobs:
             src-tauri/target/release/bundle/deb/*.deb
             src-tauri/target/release/bundle/appimage/*.AppImage
             src-tauri/target/release/bundle/rpm/*.rpm
+          if-no-files-found: warn
+
+      # List uploaded artifacts for debugging
+      - name: List Linux Artifacts
+        run: |
+          echo "=== Linux bundle files ==="
+          find src-tauri/target/release/bundle -type f || echo "No bundle files found"
+          ls -R src-tauri/target/release/bundle/ || true
 
   # Create release with all artifacts
   create-release:
@@ -457,9 +485,25 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: CAMPP-*
+          merge-multiple: false
 
       - name: Show downloaded files
-        run: find artifacts -type f | sort
+        run: |
+          echo "=== Downloaded artifact structure ==="
+          find artifacts -type f | sort
+          echo ""
+          echo "=== Artifact directory listing ==="
+          ls -laR artifacts/
+
+      - name: Prepare release assets
+        run: |
+          echo "=== Preparing release assets ==="
+          # Create a flat directory structure for release assets
+          mkdir -p release-assets
+          find artifacts -type f -exec cp {} release-assets/ \;
+          echo "=== Release assets to upload ==="
+          ls -la release-assets/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -469,9 +513,5 @@ jobs:
           draft: true
           prerelease: false
           generate_release_notes: true
-          files: |
-            artifacts/CAMPP-macOS/CAMPP-*.dmg
-            artifacts/CAMPP-Windows/*.msi
-            artifacts/CAMPP-Linux/*.deb
-            artifacts/CAMPP-Linux/*.AppImage
-            artifacts/CAMPP-Linux/*.rpm
+          files: release-assets/*
+          fail_on_unmatched_files: false

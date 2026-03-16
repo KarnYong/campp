@@ -30,8 +30,8 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
   });
   const [error, setError] = useState<string | null>(null);
   const [packageSelection, setPackageSelection] = useState<PackageSelection>({
-    php: "php-8.4",
-    mariadb: "mariadb-12",
+    php: "php-8.5",
+    mariadb: "mariadb-11.8",
     phpmyadmin: "phpmyadmin-5.2",
   });
   const [existingComponents, setExistingComponents] = useState<ExistingComponent[]>([]);
@@ -695,15 +695,12 @@ const packages = {
     { id: "php-8.4", version: "8.4.16" },
     { id: "php-8.3", version: "8.3.29" },
     { id: "php-8.2", version: "8.2.30" },
-    { id: "php-7.4", version: "7.4.33" },
   ],
   mariadb: [
-    { id: "mariadb-12", version: "12.3.1" },
+    { id: "mariadb-12.3", version: "12.3.1" },
     { id: "mariadb-11.8", version: "11.8.6" },
-    { id: "mariadb-10.9", version: "10.9.8" },
   ],
   phpmyadmin: [
     { id: "phpmyadmin-5.2", version: "5.2.2" },
-    { id: "phpmyadmin-5.1", version: "5.1.4" },
   ],
 };

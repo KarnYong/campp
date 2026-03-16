@@ -11,44 +11,10 @@ use crate::runtime::locator::get_app_data_paths;
 use crate::runtime::packages::{PackageSelection, get_php_package, get_mariadb_package, get_phpmyadmin_package};
 use sha2::{Digest, Sha256};
 
-/// Runtime configuration loaded from runtime-config.json
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RuntimeConfig {
-    pub binaries: BinariesConfig,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BinariesConfig {
-    pub caddy: BinaryConfig,
-    pub php: BinaryConfig,
-    #[serde(rename = "mariadb")]
-    pub mariadb: BinaryConfig,
-    #[serde(rename = "phpmyadmin")]
-    pub phpmyadmin: PhpMyAdminConfig,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BinaryConfig {
-    pub version: String,
-    #[serde(rename = "windowsX64")]
-    pub windows_x64: String,
-    #[serde(rename = "windowsArm64")]
-    pub windows_arm64: String,
-    #[serde(rename = "linuxX64")]
-    pub linux_x64: String,
-    #[serde(rename = "linuxArm64")]
-    pub linux_arm64: String,
-    #[serde(rename = "macOSX64")]
-    pub macos_x64: String,
-    #[serde(rename = "macOSArm64")]
-    pub macos_arm64: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PhpMyAdminConfig {
-    pub version: String,
-    pub url: String,
-}
+/// Runtime configuration loaded from runtime-config.json (shared with packages.rs)
+pub use crate::runtime::packages::{
+    RuntimeConfig, BinariesConfig, BinaryConfig, PhpMyAdminConfig, VersionInfo, VersionInfoSingleUrl, Urls
+};
 
 /// Global runtime config (loaded once)
 static RUNTIME_CONFIG: OnceLock<RuntimeConfig> = OnceLock::new();
@@ -122,38 +88,83 @@ fn get_config() -> &'static RuntimeConfig {
 
 /// Default hardcoded configuration (fallback when config file is not available)
 fn get_default_config() -> RuntimeConfig {
+    use crate::runtime::packages::VersionInfoSingleUrl;
+
     RuntimeConfig {
+        version: "1.0".to_string(),
         binaries: BinariesConfig {
             caddy: BinaryConfig {
-                version: "2.8.4".to_string(),
-                windows_x64: "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_windows_amd64.zip".to_string(),
-                windows_arm64: "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_windows_amd64.zip".to_string(),
-                linux_x64: "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_linux_amd64.tar.gz".to_string(),
-                linux_arm64: "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_linux_arm64.tar.gz".to_string(),
-                macos_x64: "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_darwin_amd64.tar.gz".to_string(),
-                macos_arm64: "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_darwin_arm64.tar.gz".to_string(),
+                versions: vec![
+                    VersionInfo {
+                        id: "caddy-2.8".to_string(),
+                        version: "2.8.4".to_string(),
+                        selected: true,
+                        display_name: "Caddy 2.8.4".to_string(),
+                        eol: false,
+                        lts: false,
+                        urls: Urls {
+                            windows_x64: Some("https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_windows_amd64.zip".to_string()),
+                            windows_arm64: Some("https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_windows_arm64.zip".to_string()),
+                            linux_x64: Some("https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_linux_amd64.tar.gz".to_string()),
+                            linux_arm64: Some("https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_linux_arm64.tar.gz".to_string()),
+                            macos_x64: Some("https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_darwin_amd64.tar.gz".to_string()),
+                            macos_arm64: Some("https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_darwin_arm64.tar.gz".to_string()),
+                        },
+                    },
+                ],
             },
             php: BinaryConfig {
-                version: "8.4.16".to_string(),
-                windows_x64: "https://windows.php.net/downloads/releases/php-8.4.16-Win32-vs17-x64.zip".to_string(),
-                windows_arm64: "https://windows.php.net/downloads/releases/php-8.4.16-Win32-vs17-x64.zip".to_string(),
-                linux_x64: "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-linux-x86_64.tar.gz".to_string(),
-                linux_arm64: "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-linux-aarch64.tar.gz".to_string(),
-                macos_x64: "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-macos-x86_64.tar.gz".to_string(),
-                macos_arm64: "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-macos-aarch64.tar.gz".to_string(),
+                versions: vec![
+                    VersionInfo {
+                        id: "php-8.5".to_string(),
+                        version: "8.5.1".to_string(),
+                        selected: true,
+                        display_name: "PHP 8.5.1".to_string(),
+                        eol: false,
+                        lts: false,
+                        urls: Urls {
+                            windows_x64: Some("https://windows.php.net/downloads/releases/php-8.5.1-Win32-vs17-x64.zip".to_string()),
+                            windows_arm64: Some("https://windows.php.net/downloads/releases/php-8.5.1-Win32-vs17-x86.zip".to_string()),
+                            linux_x64: Some("https://dl.static-php.dev/static-php-cli/bulk/php-8.5.1-fpm-linux-x86_64.tar.gz".to_string()),
+                            linux_arm64: Some("https://dl.static-php.dev/static-php-cli/bulk/php-8.5.1-fpm-linux-aarch64.tar.gz".to_string()),
+                            macos_x64: Some("https://dl.static-php.dev/static-php-cli/bulk/php-8.5.1-fpm-macos-x86_64.tar.gz".to_string()),
+                            macos_arm64: Some("https://dl.static-php.dev/static-php-cli/bulk/php-8.5.1-fpm-macos-aarch64.tar.gz".to_string()),
+                        },
+                    },
+                ],
             },
             mariadb: BinaryConfig {
-                version: "12.2.2".to_string(),
-                windows_x64: "https://archive.mariadb.org/mariadb-12.2.2/winx64-packages/mariadb-12.2.2-winx64.zip".to_string(),
-                windows_arm64: "https://archive.mariadb.org/mariadb-12.2.2/winx64-packages/mariadb-12.2.2-winx64.zip".to_string(),
-                linux_x64: "https://archive.mariadb.org/mariadb-12.2.2/bintar-linux-systemd-x86_64/mariadb-12.2.2-linux-systemd-x86_64.tar.gz".to_string(),
-                linux_arm64: "https://archive.mariadb.org/mariadb-12.2.2/bintar-linux-systemd-aarch64/mariadb-12.2.2-linux-systemd-aarch64.tar.gz".to_string(),
-                macos_x64: "https://archive.mariadb.org/mariadb-12.2.2/bintar-macos-x86_64/mariadb-12.2.2-macos-x86_64.tar.gz".to_string(),
-                macos_arm64: "https://archive.mariadb.org/mariadb-12.2.2/bintar-macos-arm64/mariadb-12.2.2-macos-arm64.tar.gz".to_string(),
+                versions: vec![
+                    VersionInfo {
+                        id: "mariadb-11.8".to_string(),
+                        version: "11.8.6".to_string(),
+                        selected: true,
+                        display_name: "MariaDB 11.8.6".to_string(),
+                        eol: false,
+                        lts: true,
+                        urls: Urls {
+                            windows_x64: Some("https://archive.mariadb.org/mariadb-11.8.6/winx64-packages/mariadb-11.8.6-winx64.zip".to_string()),
+                            windows_arm64: Some("https://archive.mariadb.org/mariadb-11.8.6/winx64-packages/mariadb-11.8.6-winx64.zip".to_string()),
+                            linux_x64: Some("https://archive.mariadb.org/mariadb-11.8.6/bintar-linux-systemd-x86_64/mariadb-11.8.6-linux-systemd-x86_64.tar.gz".to_string()),
+                            linux_arm64: Some("https://archive.mariadb.org/mariadb-11.8.6/bintar-linux-systemd-aarch64/mariadb-11.8.6-linux-systemd-aarch64.tar.gz".to_string()),
+                            macos_x64: Some("https://archive.mariadb.org/mariadb-11.8.6/bintar-macos-x86_64/mariadb-11.8.6-macos-x86_64.tar.gz".to_string()),
+                            macos_arm64: Some("https://archive.mariadb.org/mariadb-11.8.6/bintar-macos-arm64/mariadb-11.8.6-macos-arm64.tar.gz".to_string()),
+                        },
+                    },
+                ],
             },
             phpmyadmin: PhpMyAdminConfig {
-                version: "5.2.2".to_string(),
-                url: "https://files.phpmyadmin.net/phpMyAdmin/5.2.2/phpMyAdmin-5.2.2-all-languages.zip".to_string(),
+                versions: vec![
+                    VersionInfoSingleUrl {
+                        id: "phpmyadmin-5.2".to_string(),
+                        version: "5.2.2".to_string(),
+                        selected: true,
+                        display_name: "phpMyAdmin 5.2.2".to_string(),
+                        eol: false,
+                        lts: false,
+                        url: "https://files.phpmyadmin.net/phpMyAdmin/5.2.2/phpMyAdmin-5.2.2-all-languages.zip".to_string(),
+                    },
+                ],
             },
         },
     }
@@ -181,10 +192,30 @@ impl BinaryComponent {
     pub fn version(&self) -> String {
         let config = get_config();
         match self {
-            BinaryComponent::Caddy => config.binaries.caddy.version.clone(),
-            BinaryComponent::Php => config.binaries.php.version.clone(),
-            BinaryComponent::MariaDB => config.binaries.mariadb.version.clone(),
-            BinaryComponent::PhpMyAdmin => config.binaries.phpmyadmin.version.clone(),
+            BinaryComponent::Caddy => {
+                config.binaries.caddy.versions.iter()
+                    .find(|v| v.selected)
+                    .map(|v| v.version.clone())
+                    .unwrap_or_else(|| config.binaries.caddy.versions.first().map(|v| v.version.clone()).unwrap_or_default())
+            }
+            BinaryComponent::Php => {
+                config.binaries.php.versions.iter()
+                    .find(|v| v.selected)
+                    .map(|v| v.version.clone())
+                    .unwrap_or_else(|| config.binaries.php.versions.first().map(|v| v.version.clone()).unwrap_or_default())
+            }
+            BinaryComponent::MariaDB => {
+                config.binaries.mariadb.versions.iter()
+                    .find(|v| v.selected)
+                    .map(|v| v.version.clone())
+                    .unwrap_or_else(|| config.binaries.mariadb.versions.first().map(|v| v.version.clone()).unwrap_or_default())
+            }
+            BinaryComponent::PhpMyAdmin => {
+                config.binaries.phpmyadmin.versions.iter()
+                    .find(|v| v.selected)
+                    .map(|v| v.version.clone())
+                    .unwrap_or_else(|| config.binaries.phpmyadmin.versions.first().map(|v| v.version.clone()).unwrap_or_default())
+            }
         }
     }
 
@@ -407,40 +438,53 @@ impl RuntimeDownloader {
 
         match component {
             BinaryComponent::Caddy => {
-                let binary_config = &config.binaries.caddy;
+                let version_info = config.binaries.caddy.versions.iter()
+                    .find(|v| v.selected)
+                    .or_else(|| config.binaries.caddy.versions.first())
+                    .unwrap();
                 match self.platform {
-                    Platform::WindowsX64 => binary_config.windows_x64.clone(),
-                    Platform::WindowsArm64 => binary_config.windows_arm64.clone(),
-                    Platform::MacOSX64 => binary_config.macos_x64.clone(),
-                    Platform::MacOSArm64 => binary_config.macos_arm64.clone(),
-                    Platform::LinuxX64 => binary_config.linux_x64.clone(),
-                    Platform::LinuxArm64 => binary_config.linux_arm64.clone(),
+                    Platform::WindowsX64 => version_info.urls.windows_x64.clone().unwrap_or_default(),
+                    Platform::WindowsArm64 => version_info.urls.windows_arm64.clone().unwrap_or_default(),
+                    Platform::MacOSX64 => version_info.urls.macos_x64.clone().unwrap_or_default(),
+                    Platform::MacOSArm64 => version_info.urls.macos_arm64.clone().unwrap_or_default(),
+                    Platform::LinuxX64 => version_info.urls.linux_x64.clone().unwrap_or_default(),
+                    Platform::LinuxArm64 => version_info.urls.linux_arm64.clone().unwrap_or_default(),
                 }
             }
             BinaryComponent::Php => {
-                let binary_config = &config.binaries.php;
+                let version_info = config.binaries.php.versions.iter()
+                    .find(|v| v.selected)
+                    .or_else(|| config.binaries.php.versions.first())
+                    .unwrap();
                 match self.platform {
-                    Platform::WindowsX64 => binary_config.windows_x64.clone(),
-                    Platform::WindowsArm64 => binary_config.windows_arm64.clone(),
-                    Platform::MacOSX64 => binary_config.macos_x64.clone(),
-                    Platform::MacOSArm64 => binary_config.macos_arm64.clone(),
-                    Platform::LinuxX64 => binary_config.linux_x64.clone(),
-                    Platform::LinuxArm64 => binary_config.linux_arm64.clone(),
+                    Platform::WindowsX64 => version_info.urls.windows_x64.clone().unwrap_or_default(),
+                    Platform::WindowsArm64 => version_info.urls.windows_arm64.clone().unwrap_or_default(),
+                    Platform::MacOSX64 => version_info.urls.macos_x64.clone().unwrap_or_default(),
+                    Platform::MacOSArm64 => version_info.urls.macos_arm64.clone().unwrap_or_default(),
+                    Platform::LinuxX64 => version_info.urls.linux_x64.clone().unwrap_or_default(),
+                    Platform::LinuxArm64 => version_info.urls.linux_arm64.clone().unwrap_or_default(),
                 }
             }
             BinaryComponent::MariaDB => {
-                let binary_config = &config.binaries.mariadb;
+                let version_info = config.binaries.mariadb.versions.iter()
+                    .find(|v| v.selected)
+                    .or_else(|| config.binaries.mariadb.versions.first())
+                    .unwrap();
                 match self.platform {
-                    Platform::WindowsX64 => binary_config.windows_x64.clone(),
-                    Platform::WindowsArm64 => binary_config.windows_arm64.clone(),
-                    Platform::MacOSX64 => binary_config.macos_x64.clone(),
-                    Platform::MacOSArm64 => binary_config.macos_arm64.clone(),
-                    Platform::LinuxX64 => binary_config.linux_x64.clone(),
-                    Platform::LinuxArm64 => binary_config.linux_arm64.clone(),
+                    Platform::WindowsX64 => version_info.urls.windows_x64.clone().unwrap_or_default(),
+                    Platform::WindowsArm64 => version_info.urls.windows_arm64.clone().unwrap_or_default(),
+                    Platform::MacOSX64 => version_info.urls.macos_x64.clone().unwrap_or_default(),
+                    Platform::MacOSArm64 => version_info.urls.macos_arm64.clone().unwrap_or_default(),
+                    Platform::LinuxX64 => version_info.urls.linux_x64.clone().unwrap_or_default(),
+                    Platform::LinuxArm64 => version_info.urls.linux_arm64.clone().unwrap_or_default(),
                 }
             }
             BinaryComponent::PhpMyAdmin => {
-                config.binaries.phpmyadmin.url.clone()
+                let version_info = config.binaries.phpmyadmin.versions.iter()
+                    .find(|v| v.selected)
+                    .or_else(|| config.binaries.phpmyadmin.versions.first())
+                    .unwrap();
+                version_info.url.clone()
             }
         }
     }
