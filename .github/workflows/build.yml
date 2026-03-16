@@ -76,10 +76,10 @@ jobs:
           IDENTITY: ${{ steps.signing_identity.outputs.identity }}
         run: |
           import json, os
-          with open('src-tauri/tauri.conf.json', 'r') as f:
+          with open('src-tauri/tauri.conf.json', 'r', encoding='utf-8') as f:
               config = json.load(f)
           config['bundle']['macOS']['signingIdentity'] = os.environ['IDENTITY']
-          with open('src-tauri/tauri.conf.json', 'w') as f:
+          with open('src-tauri/tauri.conf.json', 'w', encoding='utf-8') as f:
               json.dump(config, f, indent='  ')
         shell: python3 {0}
 
@@ -116,8 +116,8 @@ jobs:
         run: |
           APP_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/CAMPP.app"
 
-          # Create ZIP for notarization (with compression level 0 for speed)
-          zip -0 -r CAMPP-arm64.zip "$APP_PATH"
+          # Create ZIP for notarization using ditto (more reliable for macOS bundles)
+          ditto -c -k --keepParent "$APP_PATH" CAMPP-arm64.zip
 
           # Submit for notarization (no wait - returns submission ID)
           SUBMISSION_OUTPUT=$(xcrun notarytool submit CAMPP-arm64.zip \
@@ -127,12 +127,12 @@ jobs:
             --output-format json)
 
           echo "$SUBMISSION_OUTPUT"
-          SUBMISSION_ID=$(echo "$SUBMISSION_OUTPUT" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+          SUBMISSION_ID=$(echo "$SUBMISSION_OUTPUT" | python3 -c 'import sys, json; print(json.load(sys.stdin)["id"])')
           echo "Submission ID: $SUBMISSION_ID"
 
           # Poll for notarization completion with timeout
           echo "Waiting for notarization to complete..."
-          MAX_WAIT=600  # 10 minutes max wait
+          MAX_WAIT=1800  # 30 minutes max wait (notarization can take 15-20 min)
           ELAPSED=0
           INTERVAL=30
 
@@ -143,7 +143,7 @@ jobs:
               --team-id "$APPLE_TEAM_ID" \
               --output-format json 2>&1)
 
-            STATUS=$(echo "$STATUS_OUTPUT" | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+            STATUS=$(echo "$STATUS_OUTPUT" | python3 -c 'import sys, json; print(json.load(sys.stdin)["status"])')
             echo "Current status: $STATUS (elapsed: ${ELAPSED}s)"
 
             if [ "$STATUS" = "Accepted" ]; then
@@ -201,8 +201,8 @@ jobs:
         run: |
           APP_PATH="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/CAMPP.app"
 
-          # Create ZIP for notarization (with compression level 0 for speed)
-          zip -0 -r CAMPP-x64.zip "$APP_PATH"
+          # Create ZIP for notarization using ditto (more reliable for macOS bundles)
+          ditto -c -k --keepParent "$APP_PATH" CAMPP-x64.zip
 
           # Submit for notarization (no wait - returns submission ID)
           SUBMISSION_OUTPUT=$(xcrun notarytool submit CAMPP-x64.zip \
@@ -212,12 +212,12 @@ jobs:
             --output-format json)
 
           echo "$SUBMISSION_OUTPUT"
-          SUBMISSION_ID=$(echo "$SUBMISSION_OUTPUT" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+          SUBMISSION_ID=$(echo "$SUBMISSION_OUTPUT" | python3 -c 'import sys, json; print(json.load(sys.stdin)["id"])')
           echo "Submission ID: $SUBMISSION_ID"
 
           # Poll for notarization completion with timeout
           echo "Waiting for notarization to complete..."
-          MAX_WAIT=600  # 10 minutes max wait
+          MAX_WAIT=1800  # 30 minutes max wait (notarization can take 15-20 min)
           ELAPSED=0
           INTERVAL=30
 
@@ -228,7 +228,7 @@ jobs:
               --team-id "$APPLE_TEAM_ID" \
               --output-format json 2>&1)
 
-            STATUS=$(echo "$STATUS_OUTPUT" | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+            STATUS=$(echo "$STATUS_OUTPUT" | python3 -c 'import sys, json; print(json.load(sys.stdin)["status"])')
             echo "Current status: $STATUS (elapsed: ${ELAPSED}s)"
 
             if [ "$STATUS" = "Accepted" ]; then
@@ -360,7 +360,7 @@ jobs:
           path: artifacts
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             artifacts/CAMPP-macOS/CAMPP-arm64.dmg
