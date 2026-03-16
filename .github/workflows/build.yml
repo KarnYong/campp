@@ -9,7 +9,7 @@ on:
       create_release:
         description: 'Create a GitHub release'
         required: false
-        default: 'true'
+        default: true
         type: boolean
 
 permissions:
@@ -398,21 +398,13 @@ jobs:
         run: npm install
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'CAMPP ${{ github.ref_name }}'
-          releaseBody: 'See CHANGELOG.md for details.'
-          releaseDraft: true
-          prerelease: false
+        run: npm run tauri build
 
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: CAMPP-Windows
-          path: src-tauri/target/*/release/bundle/msi/*.msi
+          path: src-tauri/target/release/bundle/msi/*.msi
 
   build-linux:
     runs-on: ubuntu-22.04
@@ -439,27 +431,26 @@ jobs:
         run: npm install
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'CAMPP ${{ github.ref_name }}'
-          releaseBody: 'See CHANGELOG.md for details.'
-          releaseDraft: true
-          prerelease: false
+        run: npm run tauri build
 
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: CAMPP-Linux
-          path: src-tauri/target/*/release/bundle/deb/*.deb
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/rpm/*.rpm
 
   # Create release with all artifacts
   create-release:
     needs: [build-macos, build-windows, build-linux]
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') || inputs.create_release == 'true'
+    if: |
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.create_release == true)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Download all artifacts
@@ -467,15 +458,20 @@ jobs:
         with:
           path: artifacts
 
+      - name: Show downloaded files
+        run: find artifacts -type f | sort
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            artifacts/CAMPP-macOS/CAMPP-arm64.dmg
-            artifacts/CAMPP-macOS/CAMPP-x64.dmg
-            artifacts/CAMPP-macOS/CAMPP-universal.dmg
-            artifacts/CAMPP-Windows/*.msi
-            artifacts/CAMPP-Linux/*.deb
+          tag_name: ${{ github.ref_name }}
+          name: CAMPP ${{ github.ref_name }}
           draft: true
           prerelease: false
           generate_release_notes: true
+          files: |
+            artifacts/CAMPP-macOS/CAMPP-*.dmg
+            artifacts/CAMPP-Windows/*.msi
+            artifacts/CAMPP-Linux/*.deb
+            artifacts/CAMPP-Linux/*.AppImage
+            artifacts/CAMPP-Linux/*.rpm

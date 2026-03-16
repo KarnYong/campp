@@ -20,7 +20,7 @@ export function StatusBar({ services, ...props }: StatusBarProps) {
         <span className="status-item status-hint">
           <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> Debug
         </span>
-        <span className="status-item">CAMPP v0.1.5</span>
+        <span className="status-item">CAMPP v0.1.6</span>
       </div>
     </div>
   );
