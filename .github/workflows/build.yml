@@ -420,10 +420,13 @@ jobs:
 
       # List uploaded artifacts for debugging
       - name: List Windows Artifacts
+        shell: pwsh
         run: |
-          echo "=== Windows bundle files ==="
-          find src-tauri/target/release/bundle -type f || echo "No bundle files found"
-          ls -R src-tauri/target/release/bundle/ || true
+          Write-Host "=== Windows bundle files ==="
+          Get-ChildItem -Path src-tauri/target/release/bundle -Recurse -File | ForEach-Object { Write-Host $_.FullName }
+          Write-Host ""
+          Write-Host "=== Bundle directory listing ==="
+          Get-ChildItem -Path src-tauri/target/release/bundle -Recurse | Format-Table -AutoSize
 
   build-linux:
     runs-on: ubuntu-22.04
