@@ -18,7 +18,7 @@ permissions:
 jobs:
   build-macos:
     runs-on: macos-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
 
     steps:
       - name: Checkout repository
@@ -261,6 +261,113 @@ jobs:
             -ov -format UDZO \
             "$DMG_PATH"
 
+      # Create Universal Binary
+      - name: Create Universal Binary
+        env:
+          IDENTITY: ${{ steps.signing_identity.outputs.identity }}
+        run: |
+          ARM64_APP="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/CAMPP.app"
+          X64_APP="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/CAMPP.app"
+          UNIVERSAL_APP="src-tauri/target/universal-apple-darwin/release/bundle/macos/CAMPP.app"
+          ENTITLEMENTS="$PWD/src-tauri/entitlements.plist"
+
+          mkdir -p "$(dirname "$UNIVERSAL_APP")"
+
+          # Copy ARM64 app as base
+          ditto "$ARM64_APP" "$UNIVERSAL_APP"
+
+          # Find and merge all binaries using lipo
+          find "$X64_APP/Contents" -type f -exec file {} \; | grep "Mach-O" | while read line; do
+            X64_BINARY=$(echo "$line" | cut -d: -f1 | xargs)
+            REL_PATH="${X64_BINARY#$X64_APP/}"
+            UNIVERSAL_BINARY="$UNIVERSAL_APP/$REL_PATH"
+            ARM64_BINARY="$ARM64_APP/$REL_PATH"
+
+            if [ -f "$ARM64_BINARY" ]; then
+              echo "Merging: $REL_PATH"
+              mkdir -p "$(dirname "$UNIVERSAL_BINARY")"
+              lipo -create -output "$UNIVERSAL_BINARY" "$ARM64_BINARY" "$X64_BINARY"
+            fi
+          done
+
+          # Re-sign the universal app
+          security unlock-keychain -p actions build.keychain
+          codesign --force --options runtime --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$UNIVERSAL_APP"
+          codesign -vvv "$UNIVERSAL_APP"
+
+          # Verify universal binary
+          echo "Verifying universal binary:"
+          file "$UNIVERSAL_APP/Contents/MacOS/campp"
+          lipo -info "$UNIVERSAL_APP/Contents/MacOS/campp"
+
+      # Notarize and Create DMG for Universal
+      - name: Notarize and Create DMG for Universal
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/CAMPP.app"
+
+          # Create ZIP for notarization using ditto
+          ditto -c -k --keepParent "$APP_PATH" CAMPP-universal.zip
+
+          # Submit for notarization
+          SUBMISSION_OUTPUT=$(xcrun notarytool submit CAMPP-universal.zip \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --output-format json)
+
+          echo "$SUBMISSION_OUTPUT"
+          SUBMISSION_ID=$(echo "$SUBMISSION_OUTPUT" | python3 -c 'import sys, json; print(json.load(sys.stdin)["id"])')
+          echo "Submission ID: $SUBMISSION_ID"
+
+          # Poll for notarization completion
+          echo "Waiting for notarization to complete..."
+          MAX_WAIT=1800
+          ELAPSED=0
+          INTERVAL=30
+
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            STATUS_OUTPUT=$(xcrun notarytool info "$SUBMISSION_ID" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" \
+              --output-format json 2>&1)
+
+            STATUS=$(echo "$STATUS_OUTPUT" | python3 -c 'import sys, json; print(json.load(sys.stdin)["status"])')
+            echo "Current status: $STATUS (elapsed: ${ELAPSED}s)"
+
+            if [ "$STATUS" = "Accepted" ]; then
+              echo "Notarization successful!"
+              break
+            elif [ "$STATUS" = "Invalid" ] || [ "$STATUS" = "Rejected" ]; then
+              echo "Notarization failed!"
+              echo "$STATUS_OUTPUT"
+              exit 1
+            fi
+
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+
+          if [ $ELAPSED -ge $MAX_WAIT ]; then
+            echo "Notarization timed out after ${MAX_WAIT}s"
+            exit 1
+          fi
+
+          # Staple the ticket
+          xcrun stapler staple "$APP_PATH"
+
+          # Create DMG
+          DMG_PATH="src-tauri/target/universal-apple-darwin/release/bundle/dmg/CAMPP-universal.dmg"
+          mkdir -p "$(dirname "$DMG_PATH")"
+          hdiutil create -volname "CAMPP" \
+            -srcfolder "$APP_PATH" \
+            -ov -format UDZO \
+            "$DMG_PATH"
+
       # Upload artifacts
       - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v4
@@ -269,6 +376,7 @@ jobs:
           path: |
             src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/CAMPP-arm64.dmg
             src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/CAMPP-x64.dmg
+            src-tauri/target/universal-apple-darwin/release/bundle/dmg/CAMPP-universal.dmg
 
   build-windows:
     runs-on: windows-latest
@@ -365,6 +473,7 @@ jobs:
           files: |
             artifacts/CAMPP-macOS/CAMPP-arm64.dmg
             artifacts/CAMPP-macOS/CAMPP-x64.dmg
+            artifacts/CAMPP-macOS/CAMPP-universal.dmg
             artifacts/CAMPP-Windows/*.msi
             artifacts/CAMPP-Linux/*.deb
           draft: true
