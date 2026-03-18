@@ -641,12 +641,22 @@ fn kill_existing_processes(process_name: &str) {
 
     #[cfg(unix)]
     {
-        // Use pkill on Unix to forcefully terminate processes by name
-        let _ = Command::new("pkill")
+        // Try multiple approaches to kill processes on Unix
+        // 1. First try pkill (most common on Linux)
+        let pkill_result = Command::new("pkill")
             .args(["-9", process_name])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .output();
+
+        // If pkill failed (not found), try killall (more common on macOS)
+        if pkill_result.is_err() {
+            let _ = Command::new("killall")
+                .args(["-9", process_name])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .output();
+        }
 
         // Give the process time to terminate and release ports
         std::thread::sleep(std::time::Duration::from_millis(500));

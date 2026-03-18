@@ -788,6 +788,37 @@ impl RuntimeDownloader {
             .unpack(dest_dir)
             .map_err(|e| format!("Failed to extract {}: {}", archive_path.display(), e))?;
 
+        // Ensure executable permissions are set for binary files on Unix
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            // Known binary paths that need execute permission
+            let binary_paths = [
+                dest_dir.join("caddy"),
+                dest_dir.join("php-fpm"),
+                dest_dir.join("php-cgi"),
+                dest_dir.join("buildroot/bin/php-fpm"),
+                dest_dir.join("buildroot/bin/php"),
+                dest_dir.join("mysql/bin/mysqld"),
+                dest_dir.join("bin/mysqld"),
+            ];
+
+            for path in &binary_paths {
+                if path.exists() {
+                    if let Ok(metadata) = fs::metadata(path) {
+                        let mut perms = metadata.permissions();
+                        let mode = perms.mode();
+                        // Add execute permission if not already set
+                        if mode & 0o111 == 0 {
+                            perms.set_mode(mode | 0o755);
+                            let _ = fs::set_permissions(path, perms);
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -853,6 +884,28 @@ impl RuntimeDownloader {
                 self.extract_tar_gz(&downloaded_path, &runtime_dir)?;
             } else if extension == "zip" {
                 self.extract_zip(&downloaded_path, &runtime_dir)?;
+            } else if extension.is_empty() {
+                // Bare binary - copy directly to runtime directory
+                let binary_name = downloaded_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .ok_or("Invalid binary name")?;
+
+                let dest_path = runtime_dir.join(binary_name);
+                fs::copy(&downloaded_path, &dest_path)
+                    .map_err(|e| format!("Failed to copy binary: {}", e))?;
+
+                // Set executable permission on Unix
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let mut perms = fs::metadata(&dest_path)
+                        .map_err(|e| format!("Failed to get metadata: {}", e))?
+                        .permissions();
+                    perms.set_mode(0o755);
+                    fs::set_permissions(&dest_path, perms)
+                        .map_err(|e| format!("Failed to set permissions: {}", e))?;
+                }
             } else {
                 return Err(format!("Unsupported archive format: {}", extension));
             }
@@ -961,6 +1014,28 @@ impl RuntimeDownloader {
                 self.extract_tar_gz(&downloaded_path, &runtime_dir)?;
             } else if extension == "zip" {
                 self.extract_zip(&downloaded_path, &runtime_dir)?;
+            } else if extension.is_empty() {
+                // Bare binary - copy directly to runtime directory
+                let binary_name = downloaded_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .ok_or("Invalid binary name")?;
+
+                let dest_path = runtime_dir.join(binary_name);
+                fs::copy(&downloaded_path, &dest_path)
+                    .map_err(|e| format!("Failed to copy binary: {}", e))?;
+
+                // Set executable permission on Unix
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let mut perms = fs::metadata(&dest_path)
+                        .map_err(|e| format!("Failed to get metadata: {}", e))?
+                        .permissions();
+                    perms.set_mode(0o755);
+                    fs::set_permissions(&dest_path, perms)
+                        .map_err(|e| format!("Failed to set permissions: {}", e))?;
+                }
             } else {
                 return Err(format!("Unsupported archive format: {}", extension));
             }
