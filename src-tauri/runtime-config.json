@@ -9,17 +9,12 @@
           "version": "2.8.4",
           "selected": true,
           "display_name": "Caddy 2.8.4 (Latest)",
-          "checksums": {
-            "windowsX64": "2631fbe1c4f6fb08783ed6dc6ac238d6655b4c923abe2bce1433dbd7fd079630",
-            "windowsArm64": "32f7b33af84b5d6eb939f7e0580b8f43098936d26fb1ca25b87d5158b7848910",
-            "linuxX64": "a7e8306c54138cf88e371c5ec0caf7baf142ecc1d60a30897dfb67d65d3748c8",
-            "linuxArm64": "93a3eb31883d678c6590c6d823eb6bb9f7a3af66dcd9d53df3eb2c7528b2af05"
-          },
+          "checksums": {},
           "urls": {
-            "windowsX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/caddy-2.8.4-windows/caddy_2.8.4_windows_amd64.zip",
-            "windowsArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/caddy-2.8.4-windows/caddy_2.8.4_windows_arm64.zip",
-            "linuxX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/caddy-2.8.4-windows/caddy_2.8.4_linux_amd64.tar.gz",
-            "linuxArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/caddy-2.8.4-windows/caddy_2.8.4_linux_arm64.tar.gz",
+            "windowsX64": "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_windows_amd64.zip",
+            "windowsArm64": "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_windows_arm64.zip",
+            "linuxX64": "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_linux_amd64.tar.gz",
+            "linuxArm64": "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_linux_arm64.tar.gz",
             "macOSX64": "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_darwin_amd64.tar.gz",
             "macOSArm64": "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_darwin_arm64.tar.gz"
           }
