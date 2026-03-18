@@ -56,6 +56,13 @@ jobs:
           security list-keychains -s build.keychain
           security find-identity -v build.keychain
 
+      - name: Get version from package.json
+        id: get_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
       # Get signing identity from certificate
       - name: Get Signing Identity
         id: signing_identity
@@ -169,7 +176,8 @@ jobs:
           xcrun stapler staple "$APP_PATH"
 
           # Create DMG
-          DMG_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/CAMPP-arm64.dmg"
+          VERSION="${{ steps.get_version.outputs.version }}"
+          DMG_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/CAMPP-${VERSION}-arm64.dmg"
           mkdir -p "$(dirname "$DMG_PATH")"
           hdiutil create -volname "CAMPP" \
             -srcfolder "$APP_PATH" \
@@ -254,7 +262,8 @@ jobs:
           xcrun stapler staple "$APP_PATH"
 
           # Create DMG
-          DMG_PATH="src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/CAMPP-x64.dmg"
+          VERSION="${{ steps.get_version.outputs.version }}"
+          DMG_PATH="src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/CAMPP-${VERSION}-x64.dmg"
           mkdir -p "$(dirname "$DMG_PATH")"
           hdiutil create -volname "CAMPP" \
             -srcfolder "$APP_PATH" \
@@ -361,7 +370,8 @@ jobs:
           xcrun stapler staple "$APP_PATH"
 
           # Create DMG
-          DMG_PATH="src-tauri/target/universal-apple-darwin/release/bundle/dmg/CAMPP-universal.dmg"
+          VERSION="${{ steps.get_version.outputs.version }}"
+          DMG_PATH="src-tauri/target/universal-apple-darwin/release/bundle/dmg/CAMPP-${VERSION}-universal.dmg"
           mkdir -p "$(dirname "$DMG_PATH")"
           hdiutil create -volname "CAMPP" \
             -srcfolder "$APP_PATH" \
@@ -405,8 +415,28 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
+      - name: Get version from package.json
+        id: get_version
+        run: |
+          $VERSION = (node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $env:GITHUB_OUTPUT
+          Write-Host "Building version: $VERSION"
+        shell: pwsh
+
       - name: Build Tauri app
         run: npm run tauri build
+
+      - name: Rename Windows artifacts with version
+        shell: pwsh
+        run: |
+          $version = "${{ steps.get_version.outputs.version }}"
+          Write-Host "Renaming artifacts to include version: $version"
+          Get-ChildItem -Path "src-tauri/target/release/bundle" -Recurse -File | ForEach-Object {
+            $ext = [System.IO.Path]::GetExtension($_.FullName)
+            $newName = "CAMPP-$version$ext"
+            Write-Host "Renaming: $($_.Name) -> $newName"
+            Rename-Item -Path $_.FullName -NewName (Join-Path $_.DirectoryName $newName)
+          }
 
       # Upload all Windows bundle formats
       - name: Upload Windows Artifacts
@@ -452,8 +482,29 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
+      - name: Get version from package.json
+        id: get_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
       - name: Build Tauri app
         run: npm run tauri build
+
+      - name: Rename Linux artifacts with version
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          echo "Renaming artifacts to include version: $VERSION"
+          find src-tauri/target/release/bundle -type f | while read filepath; do
+            dir=$(dirname "$filepath")
+            ext="${filepath##*.}"
+            filename=$(basename "$filepath")
+            name="${filename%.*}"
+            newname="CAMPP-${VERSION}.${ext}"
+            echo "Renaming: $filename -> $newname"
+            mv "$filepath" "$dir/$newname"
+          done
 
       # Upload all Linux bundle formats
       - name: Upload Linux Artifacts
