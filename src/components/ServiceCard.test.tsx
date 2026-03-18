@@ -349,17 +349,17 @@ describe('ServiceCard Component', () => {
       expect(screen.getByText('PHP Runtime')).toBeInTheDocument();
     });
 
-    it('should render MariaDB service card correctly', () => {
+    it('should render MySQL service card correctly', () => {
       render(
         <ServiceCard
-          serviceType={ServiceType.MariaDB}
+          serviceType={ServiceType.MySQL}
           state={ServiceState.Stopped}
           port={3307}
           {...mockHandlers}
         />
       );
 
-      expect(screen.getByText('MariaDB')).toBeInTheDocument();
+      expect(screen.getByText('MySQL')).toBeInTheDocument();
       expect(screen.getByText('Port: 3307')).toBeInTheDocument();
       expect(screen.getByText('Database Server')).toBeInTheDocument();
     });

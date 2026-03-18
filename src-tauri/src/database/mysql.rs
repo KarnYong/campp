@@ -1,9 +1,9 @@
 use std::path::Path;
 
-/// MariaDB initialization
+/// MySQL initialization
 /// TODO: Implement in Phase 5
 
-pub fn initialize_mariadb(data_dir: &Path) -> Result<(), String> {
+pub fn initialize_mysql(data_dir: &Path) -> Result<(), String> {
     // TODO: Run mysqld --initialize
     // TODO: Capture generated root password
     // TODO: Create phpmyadmin user

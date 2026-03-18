@@ -7,11 +7,11 @@ pub struct RuntimePaths {
     pub caddy: PathBuf,
     pub php_cgi: PathBuf,
     pub php_ini: PathBuf,
-    pub mariadb: PathBuf,
+    pub mysql: PathBuf,
     pub phpmyadmin: PathBuf,
     /// Directory where PHP extensions are located (same as php_cgi)
     pub php_ext_dir: PathBuf,
-    /// Data directory for MariaDB
+    /// Data directory for MySQL
     pub mysql_data_dir: PathBuf,
     /// Logs directory
     pub logs_dir: PathBuf,
@@ -30,7 +30,7 @@ pub struct AppDataPaths {
     pub runtime_dir: PathBuf,
     /// Configuration files directory
     pub config_dir: PathBuf,
-    /// MariaDB data directory
+    /// MySQL data directory
     pub mysql_data_dir: PathBuf,
     /// Logs directory
     pub logs_dir: PathBuf,
@@ -110,7 +110,7 @@ pub fn locate_runtime_binaries() -> Result<RuntimePaths, String> {
         php_cgi: detect_php_binary(runtime_dir)?,
         php_ini: detect_php_ini(runtime_dir)?,
         php_ext_dir: detect_php_ext_dir(runtime_dir)?,
-        mariadb: detect_mariadb_binary(runtime_dir)?,
+        mysql: detect_mysql_binary(runtime_dir)?,
         phpmyadmin: phpmyadmin_path,
         mysql_data_dir: app_paths.mysql_data_dir.clone(),
         logs_dir: app_paths.logs_dir.clone(),
@@ -326,18 +326,18 @@ fn detect_php_ext_dir(runtime_dir: &Path) -> Result<PathBuf, String> {
     }
 }
 
-/// Detect MariaDB server binary based on platform
-fn detect_mariadb_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
+/// Detect MySQL server binary based on platform
+fn detect_mysql_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
     #[cfg(target_os = "windows")]
     {
-        // Windows MariaDB structure:
-        // - runtime/mariadb/bin/mysqld.exe
-        // - runtime/mariadb-VERSION/bin/mysqld.exe (versioned directory)
-        // Look for any directory starting with "mariadb"
+        // Windows MySQL structure:
+        // - runtime/mysql/bin/mysqld.exe
+        // - runtime/mysql-VERSION/bin/mysqld.exe (versioned directory)
+        // Look for any directory starting with "mysql"
         if let Ok(entries) = fs::read_dir(runtime_dir) {
             for entry in entries.flatten() {
                 if let Ok(name) = entry.file_name().into_string() {
-                    if name.starts_with("mariadb") && entry.path().is_dir() {
+                    if name.starts_with("mysql") && entry.path().is_dir() {
                         let mysqld_path = entry.path().join("bin").join("mysqld.exe");
                         if mysqld_path.exists() {
                             return Ok(mysqld_path);
@@ -349,7 +349,7 @@ fn detect_mariadb_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
 
         // Fallback paths
         let paths_to_check = vec![
-            runtime_dir.join("mariadb").join("bin").join("mysqld.exe"),
+            runtime_dir.join("mysql").join("bin").join("mysqld.exe"),
             runtime_dir.join("bin").join("mysqld.exe"),
             runtime_dir.join("mysqld.exe"),
         ];
@@ -363,11 +363,11 @@ fn detect_mariadb_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
 
     #[cfg(target_os = "macos")]
     {
-        // macOS MariaDB structure
+        // macOS MySQL structure
         if let Ok(entries) = fs::read_dir(runtime_dir) {
             for entry in entries.flatten() {
                 if let Ok(name) = entry.file_name().into_string() {
-                    if name.starts_with("mariadb") && entry.path().is_dir() {
+                    if name.starts_with("mysql") && entry.path().is_dir() {
                         let mysqld_path = entry.path().join("bin").join("mysqld");
                         if mysqld_path.exists() {
                             return Ok(mysqld_path);
@@ -378,7 +378,7 @@ fn detect_mariadb_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
         }
 
         let paths_to_check = vec![
-            runtime_dir.join("mariadb").join("bin").join("mysqld"),
+            runtime_dir.join("mysql").join("bin").join("mysqld"),
             runtime_dir.join("mysql").join("bin").join("mysqld"),
             runtime_dir.join("bin").join("mysqld"),
             runtime_dir.join("mysqld"),
@@ -393,11 +393,11 @@ fn detect_mariadb_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
 
     #[cfg(target_os = "linux")]
     {
-        // Linux MariaDB structure
+        // Linux MySQL structure
         if let Ok(entries) = fs::read_dir(runtime_dir) {
             for entry in entries.flatten() {
                 if let Ok(name) = entry.file_name().into_string() {
-                    if name.starts_with("mariadb") && entry.path().is_dir() {
+                    if name.starts_with("mysql") && entry.path().is_dir() {
                         let mysqld_path = entry.path().join("bin").join("mysqld");
                         if mysqld_path.exists() {
                             return Ok(mysqld_path);
@@ -408,7 +408,7 @@ fn detect_mariadb_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
         }
 
         let paths_to_check = vec![
-            runtime_dir.join("mariadb").join("bin").join("mysqld"),
+            runtime_dir.join("mysql").join("bin").join("mysqld"),
             runtime_dir.join("mysql").join("bin").join("mysqld"),
             runtime_dir.join("bin").join("mysqld"),
             runtime_dir.join("mysqld"),
@@ -422,7 +422,7 @@ fn detect_mariadb_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
     }
 
     Err(format!(
-        "MariaDB binary not found in {}. Please ensure runtime binaries are downloaded.",
+        "MySQL binary not found in {}. Please ensure runtime binaries are downloaded.",
         runtime_dir.display()
     ))
 }
@@ -492,8 +492,8 @@ pub fn verify_runtime_binaries() -> Result<RuntimePaths, String> {
         return Err(format!("PHP binary not found or not executable: {}", paths.php_cgi.display()));
     }
 
-    if !is_valid_binary(&paths.mariadb) {
-        return Err(format!("MariaDB binary not found or not executable: {}", paths.mariadb.display()));
+    if !is_valid_binary(&paths.mysql) {
+        return Err(format!("MySQL binary not found or not executable: {}", paths.mysql.display()));
     }
 
     Ok(paths)
@@ -581,7 +581,7 @@ mod tests {
             php_cgi: temp_dir.path().join("php").join("php.exe"),
             php_ini: temp_dir.path().join("config").join("php.ini"),
             php_ext_dir: temp_dir.path().join("php").join("ext"),
-            mariadb: temp_dir.path().join("mariadb").join("bin").join("mysqld.exe"),
+            mysql: temp_dir.path().join("mysql").join("bin").join("mysqld.exe"),
             phpmyadmin: temp_dir.path().join("phpmyadmin"),
             mysql_data_dir: temp_dir.path().join("mysql").join("data"),
             logs_dir: temp_dir.path().join("logs"),
@@ -592,7 +592,7 @@ mod tests {
         assert!(paths.caddy.ends_with("caddy.exe"));
         assert!(paths.php_cgi.ends_with("php.exe"));
         assert!(paths.php_ini.ends_with("php.ini"));
-        assert!(paths.mariadb.ends_with("mysqld.exe"));
+        assert!(paths.mysql.ends_with("mysqld.exe"));
         assert!(paths.phpmyadmin.ends_with("phpmyadmin"));
     }
 
@@ -605,7 +605,7 @@ mod tests {
             php_cgi: temp_dir.path().join("php").join("php.exe"),
             php_ini: temp_dir.path().join("config").join("php.ini"),
             php_ext_dir: temp_dir.path().join("php").join("ext"),
-            mariadb: temp_dir.path().join("mariadb").join("bin").join("mysqld.exe"),
+            mysql: temp_dir.path().join("mysql").join("bin").join("mysqld.exe"),
             phpmyadmin: temp_dir.path().join("phpmyadmin"),
             mysql_data_dir: temp_dir.path().join("mysql").join("data"),
             logs_dir: temp_dir.path().join("logs"),
@@ -617,7 +617,7 @@ mod tests {
 
         assert_eq!(paths1.caddy, paths2.caddy);
         assert_eq!(paths1.php_cgi, paths2.php_cgi);
-        assert_eq!(paths1.mariadb, paths2.mariadb);
+        assert_eq!(paths1.mysql, paths2.mysql);
     }
 
     #[test]

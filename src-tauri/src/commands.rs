@@ -369,7 +369,7 @@ pub async fn get_installed_versions() -> Result<std::collections::HashMap<String
     let mut versions = std::collections::HashMap::new();
 
     // Read version from marker files
-    for component in ["caddy", "php", "mariadb", "phpmyadmin"] {
+    for component in ["caddy", "php", "mysql", "phpmyadmin"] {
         let marker_file = runtime_dir.join(format!("{}_installed.txt", component));
         if let Ok(content) = fs::read_to_string(&marker_file) {
             // Parse version from format: "version=1.2.3\ninstalled_at=..."

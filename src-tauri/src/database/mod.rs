@@ -1,4 +1,4 @@
-pub mod mariadb;
+pub mod mysql;
 
-// MariaDB initialization and management
+// MySQL initialization and management
 // TODO: Implement in Phase 5

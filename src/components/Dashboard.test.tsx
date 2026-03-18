@@ -28,8 +28,8 @@ describe('Dashboard Component', () => {
       port: 9000,
       error_message: null,
     },
-    [ServiceType.MariaDB]: {
-      service_type: ServiceType.MariaDB,
+    [ServiceType.MySQL]: {
+      service_type: ServiceType.MySQL,
       state: ServiceState.Stopped,
       port: 3307,
       error_message: null,
@@ -59,7 +59,7 @@ describe('Dashboard Component', () => {
       // Check service cards are rendered
       expect(screen.getByTestId('service-card-caddy')).toBeInTheDocument();
       expect(screen.getByTestId('service-card-php-fpm')).toBeInTheDocument();
-      expect(screen.getByTestId('service-card-mariadb')).toBeInTheDocument();
+      expect(screen.getByTestId('service-card-mysql')).toBeInTheDocument();
     });
 
     it('should fetch service statuses on mount', async () => {
@@ -249,8 +249,8 @@ describe('Dashboard Component', () => {
           ...mockServiceMap[ServiceType.PhpFpm],
           state: ServiceState.Running,
         },
-        [ServiceType.MariaDB]: {
-          ...mockServiceMap[ServiceType.MariaDB],
+        [ServiceType.MySQL]: {
+          ...mockServiceMap[ServiceType.MySQL],
           state: ServiceState.Running,
         },
       };
@@ -262,7 +262,7 @@ describe('Dashboard Component', () => {
       await waitFor(() => {
         expect(screen.getByTestId('service-state-caddy')).toHaveTextContent('running');
         expect(screen.getByTestId('service-state-php-fpm')).toHaveTextContent('running');
-        expect(screen.getByTestId('service-state-mariadb')).toHaveTextContent('running');
+        expect(screen.getByTestId('service-state-mysql')).toHaveTextContent('running');
       });
     });
   });

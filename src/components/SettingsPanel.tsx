@@ -112,7 +112,7 @@ export function SettingsPanel({ onClose, onSettingsChanged }: SettingsPanelProps
             </div>
 
             <div className="settings-row">
-              <label htmlFor="mysql-port">MariaDB Port</label>
+              <label htmlFor="mysql-port">MySQL Port</label>
               <input
                 id="mysql-port"
                 type="number"

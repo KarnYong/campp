@@ -8,7 +8,7 @@ pub enum ServiceType {
     Caddy,
     #[serde(rename = "php-fpm")]
     PhpFpm,
-    MariaDB,
+    MySQL,
 }
 
 impl ServiceType {
@@ -16,15 +16,15 @@ impl ServiceType {
         match self {
             ServiceType::Caddy => 8080,
             ServiceType::PhpFpm => 9000,
-            ServiceType::MariaDB => 3307,
+            ServiceType::MySQL => 3307,
         }
     }
 
     pub fn display_name(&self) -> &'static str {
         match self {
             ServiceType::Caddy => "Caddy",
-            ServiceType::PhpFpm => "PHP-FPM 8.4",
-            ServiceType::MariaDB => "MariaDB",
+            ServiceType::PhpFpm => "PHP-FPM 8.5",
+            ServiceType::MySQL => "MySQL",
         }
     }
 
@@ -32,7 +32,7 @@ impl ServiceType {
         match self {
             ServiceType::Caddy => "Web Server",
             ServiceType::PhpFpm => "PHP Runtime",
-            ServiceType::MariaDB => "Database Server",
+            ServiceType::MySQL => "Database Server",
         }
     }
 
@@ -40,7 +40,7 @@ impl ServiceType {
         match self {
             ServiceType::Caddy => "caddy",
             ServiceType::PhpFpm => "php-cgi",
-            ServiceType::MariaDB => "mysqld",
+            ServiceType::MySQL => "mysqld",
         }
     }
 }
@@ -96,21 +96,21 @@ mod tests {
     fn test_service_type_default_ports() {
         assert_eq!(ServiceType::Caddy.default_port(), 8080);
         assert_eq!(ServiceType::PhpFpm.default_port(), 9000);
-        assert_eq!(ServiceType::MariaDB.default_port(), 3307);
+        assert_eq!(ServiceType::MySQL.default_port(), 3307);
     }
 
     #[test]
     fn test_service_type_display_names() {
         assert_eq!(ServiceType::Caddy.display_name(), "Caddy");
-        assert_eq!(ServiceType::PhpFpm.display_name(), "PHP-FPM 8.4");
-        assert_eq!(ServiceType::MariaDB.display_name(), "MariaDB");
+        assert_eq!(ServiceType::PhpFpm.display_name(), "PHP-FPM 8.5");
+        assert_eq!(ServiceType::MySQL.display_name(), "MySQL");
     }
 
     #[test]
     fn test_service_type_binary_names() {
         assert_eq!(ServiceType::Caddy.binary_name(), "caddy");
         assert_eq!(ServiceType::PhpFpm.binary_name(), "php-cgi");
-        assert_eq!(ServiceType::MariaDB.binary_name(), "mysqld");
+        assert_eq!(ServiceType::MySQL.binary_name(), "mysqld");
     }
 
     #[test]
@@ -192,7 +192,7 @@ mod tests {
         let mut set = HashSet::new();
         set.insert(ServiceType::Caddy);
         set.insert(ServiceType::PhpFpm);
-        set.insert(ServiceType::MariaDB);
+        set.insert(ServiceType::MySQL);
 
         assert_eq!(set.len(), 3);
     }

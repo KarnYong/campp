@@ -90,7 +90,7 @@ impl ProcessManager {
     pub fn with_settings(settings: crate::config::AppSettings) -> Self {
         let mut services = HashMap::new();
 
-        for service_type in [ServiceType::Caddy, ServiceType::PhpFpm, ServiceType::MariaDB] {
+        for service_type in [ServiceType::Caddy, ServiceType::PhpFpm, ServiceType::MySQL] {
             services.insert(
                 service_type,
                 ServiceProcess {
@@ -115,7 +115,7 @@ impl ProcessManager {
         match service_type {
             ServiceType::Caddy => settings.web_port,
             ServiceType::PhpFpm => settings.php_port,
-            ServiceType::MariaDB => settings.mysql_port,
+            ServiceType::MySQL => settings.mysql_port,
         }
     }
 
@@ -178,7 +178,7 @@ impl ProcessManager {
         let result = match service {
             ServiceType::Caddy => start_caddy(service_process, &paths, self.settings.php_port, self.settings.mysql_port),
             ServiceType::PhpFpm => start_php_fpm(service_process, &paths),
-            ServiceType::MariaDB => start_mariadb(service_process, &paths),
+            ServiceType::MySQL => start_mysql(service_process, &paths),
         };
 
         match result {
@@ -429,76 +429,118 @@ fn start_php_fpm(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> 
     }
 }
 
-/// Start MariaDB database server
-fn start_mariadb(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> Result<(), String> {
-    // Kill any existing MariaDB processes to avoid port conflicts
+/// Start MySQL database server
+fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> Result<(), String> {
+    // Kill any existing MySQL processes to avoid port conflicts
     kill_existing_processes("mysqld");
 
-    // Initialize MariaDB data directory if needed
-    initialize_mariadb_data_dir(paths)?;
+    // Initialize MySQL data directory if needed
+    initialize_mysql_data_dir(paths)?;
 
-    // Convert path to forward slashes for Windows compatibility
-    let data_dir_str = paths.mysql_data_dir.to_string_lossy()
-        .replace('\\', "/");
+    // Clean path and use proper Windows format for MySQL
+    let data_dir_str = paths.mysql_data_dir.to_string_lossy().to_string();
+    let data_dir_str = data_dir_str.trim_end_matches('\\').trim_end_matches('/');
+
+    // Check if we need to create 127.0.0.1 user (first run)
+    let user_created_flag = paths.mysql_data_dir.join(".user_127_0_0_1_created");
+    let needs_init_file = !user_created_flag.exists();
+
+    let init_file_path = if needs_init_file {
+        // Create init file to add root@127.0.0.1 user
+        let init_file = paths.logs_dir.join("mysql_init_user.sql");
+        fs::write(&init_file, "CREATE USER IF NOT EXISTS 'root'@'127.0.0.1' IDENTIFIED BY '';\n\
+            GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1' WITH GRANT OPTION;\n\
+            FLUSH PRIVILEGES;\n")
+            .map_err(|e| format!("Failed to create init file: {}", e))?;
+        Some(init_file)
+    } else {
+        None
+    };
 
     // Open log file with retry logic
-    let log_path = paths.logs_dir.join("mariadb.log");
-    let log_file = open_log_file_with_retry(&log_path, "MariaDB")?;
+    let log_path = paths.logs_dir.join("mysql.log");
+    let log_file = open_log_file_with_retry(&log_path, "MySQL")?;
 
-    // Start MariaDB with minimal options
-    // NOTE: MariaDB is initialized with --initialize-insecure which creates
-    // a root user with no password. Grant tables are loaded normally so
-    // phpMyAdmin can properly detect user privileges (e.g., DROP DATABASE).
-    let mut child = configure_no_window(Command::new(&paths.mariadb))
-        .arg("--no-defaults")
-        .arg("--datadir")
+    // Build MySQL command with optional init file
+    let mut cmd = configure_no_window(Command::new(&paths.mysql));
+    cmd.arg("--datadir")
         .arg(&data_dir_str)
         .arg("--port")
         .arg(service_process.port.to_string())
         .arg("--bind-address=127.0.0.1")
         .arg("--console")
+        .arg("--skip-name-resolve");
+
+    // Add init file on first run
+    if let Some(ref init_file) = init_file_path {
+        cmd.arg("--init-file")
+            .arg(init_file);
+    }
+
+    let mut child = cmd
         .stdout(Stdio::from(log_file.try_clone().unwrap()))
         .stderr(Stdio::from(log_file))
         .spawn()
         .map_err(|e| {
-            // Provide helpful error message
             let log_content = fs::read_to_string(&log_path).unwrap_or_else(|_| String::from("Could not read log"));
-            format!(
-                "Failed to start MariaDB: {}\n\nMariaDB log:\n{}",
-                e, log_content
-            )
+            format!("Failed to start MySQL: {}\n\nMySQL log:\n{}", e, log_content)
         })?;
 
-    // Give MariaDB more time to start (it's slower than other services)
+    // Give MySQL more time to start (it's slower than other services)
     std::thread::sleep(std::time::Duration::from_secs(3));
 
     // Check if process is still running
     match child.try_wait() {
-        Ok(Some(status)) => Err(format!(
-            "MariaDB exited immediately with status: {:?}\n\nCheck logs at: {:?}",
-            status, log_path
-        )),
+        Ok(Some(status)) => {
+            // Clean up init file if it exists
+            if let Some(init_file) = init_file_path {
+                let _ = fs::remove_file(&init_file);
+            }
+            Err(format!(
+                "MySQL exited immediately with status: {:?}\n\nCheck logs at: {:?}",
+                status, log_path
+            ))
+        }
         Ok(None) => {
+            // Mark user as created after successful start
+            if needs_init_file {
+                let _ = fs::write(&user_created_flag, "done");
+                eprintln!("MySQL root@127.0.0.1 user created during startup");
+            }
             service_process.child = Some(child);
             service_process.log_file = Some(log_path);
             Ok(())
         }
-        Err(e) => Err(format!("Failed to check MariaDB process: {}", e)),
+        Err(e) => {
+            if let Some(init_file) = init_file_path {
+                let _ = fs::remove_file(&init_file);
+            }
+            Err(format!("Failed to check MySQL process: {}", e))
+        }
     }
 }
 
-/// Initialize MariaDB data directory
-fn initialize_mariadb_data_dir(paths: &RuntimePaths) -> Result<(), String> {
+/// Initialize MySQL data directory
+fn initialize_mysql_data_dir(paths: &RuntimePaths) -> Result<(), String> {
     // Check if already initialized by looking for mysql system tables
     let mysql_dir = paths.mysql_data_dir.join("mysql");
     if mysql_dir.exists() {
-        // Check if system tables exist (MAD is MariaDB's Aria engine format)
-        let db_mad = mysql_dir.join("db.MAD");
-        let db_frm = mysql_dir.join("db.frm");
+        // MySQL 8.4+ uses .sdi files (Schema Data Information) for table metadata
+        // Check if any .sdi files exist in the mysql directory
+        let entries: Vec<_> = mysql_dir.read_dir()
+            .and_then(|e| e.collect::<Result<_, _>>())
+            .unwrap_or_default();
 
-        if db_mad.exists() || db_frm.exists() {
+        let has_sdi_files = entries.iter().any(|entry| {
+            entry.path().extension()
+                .and_then(|ext| ext.to_str())
+                .map(|ext| ext.eq_ignore_ascii_case("sdi"))
+                .unwrap_or(false)
+        });
+
+        if has_sdi_files {
             // Already initialized
-            eprintln!("MariaDB data directory already initialized");
+            eprintln!("MySQL data directory already initialized");
             return Ok(());
         }
     }
@@ -511,40 +553,24 @@ fn initialize_mariadb_data_dir(paths: &RuntimePaths) -> Result<(), String> {
     let data_dir_str = paths.mysql_data_dir.to_string_lossy()
         .replace('\\', "/");
 
-    eprintln!("Initializing MariaDB data directory at: {}", data_dir_str);
+    eprintln!("Initializing MySQL data directory at: {}", data_dir_str);
 
-    // Use mysql_install_db.exe (Windows) or mariadb-install-db (Unix)
-    // This is more reliable than --initialize-insecure for this build
-    let bin_dir = paths.mariadb.parent()
-        .ok_or_else(|| "MariaDB binary path has no parent".to_string())?;
+    // MySQL 8.0+ uses mysqld --initialize-insecure instead of mysql_install_db
+    let mysqld = &paths.mysql;
 
-    let install_db = if cfg!(windows) {
-        bin_dir.join("mysql_install_db.exe")
-    } else {
-        // On Unix, try mariadb-install-db
-        bin_dir.join("mariadb-install-db")
-    };
-
-    if !install_db.exists() {
-        return Err(format!(
-            "MariaDB installation tool not found at: {:?}\n\
-             Please ensure MariaDB is properly installed.",
-            install_db
-        ));
-    }
-
-    let init_log_path = paths.logs_dir.join("mariadb_init.log");
+    let init_log_path = paths.logs_dir.join("mysql_init.log");
     let init_log_file = fs::File::create(&init_log_path)
         .map_err(|e| format!("Failed to create init log file: {}", e))?;
 
-    let mut child = configure_no_window(Command::new(&install_db))
+    let mut child = configure_no_window(Command::new(mysqld))
+        .arg("--initialize-insecure")
         .arg("--datadir")
         .arg(&data_dir_str)
-        .arg("--password=")  // Empty password for root
+        .arg("--console")
         .stdout(Stdio::from(init_log_file.try_clone().unwrap()))
         .stderr(Stdio::from(init_log_file))
         .spawn()
-        .map_err(|e| format!("Failed to start MariaDB initialization: {}", e))?;
+        .map_err(|e| format!("Failed to start MySQL initialization: {}", e))?;
 
     // Wait for initialization with longer timeout (120 seconds)
     let timeout = std::time::Duration::from_secs(120);
@@ -560,7 +586,7 @@ fn initialize_mariadb_data_dir(paths: &RuntimePaths) -> Result<(), String> {
             }
             Ok(None) => {
                 if start.elapsed() > timeout {
-                    eprintln!("MariaDB initialization timeout, killing process");
+                    eprintln!("MySQL initialization timeout, killing process");
                     let _ = child.kill();
                     // Force wait to get final status
                     let _ = child.wait();
@@ -577,19 +603,19 @@ fn initialize_mariadb_data_dir(paths: &RuntimePaths) -> Result<(), String> {
     };
 
     if !success {
-        eprintln!("MariaDB initialization failed. Output:\n{}", output);
+        eprintln!("MySQL initialization failed. Output:\n{}", output);
         return Err(format!(
-            "MariaDB initialization failed. Check the log file at: {:?}",
+            "MySQL initialization failed. Check the log file at: {:?}",
             init_log_path
         ));
     }
 
-    eprintln!("MariaDB initialization completed successfully");
+    eprintln!("MySQL initialization completed successfully");
 
     // Verify that mysql directory was created
     if !mysql_dir.exists() {
         return Err(format!(
-            "MariaDB initialization failed - mysql directory not created at {:?}. \
+            "MySQL initialization failed - mysql directory not created at {:?}. \
              Check the log file at: {:?}",
             mysql_dir, init_log_path
         ));
@@ -762,6 +788,24 @@ cgi.fix_pathinfo = 1
 
 ; Security settings
 expose_php = Off
+
+; OPcache settings optimized for phpMyAdmin performance
+zend_extension=opcache
+opcache.enable=1
+opcache.memory_consumption=256
+opcache.interned_strings_buffer=16
+opcache.max_accelerated_files=40000
+opcache.revalidate_freq=60
+opcache.fast_shutdown=1
+opcache.enable_cli=0
+opcache.validate_timestamps=1
+opcache.save_comments=1
+opcache.jit=tracing
+opcache.jit_buffer_size=128M
+
+; Realpath cache for better file path resolution (doubled)
+realpath_cache_size=8192K
+realpath_cache_ttl=300
 "#, error_log, ext_dir_str, session_path, session_path);
 
     let mut file = File::create(path)
@@ -781,7 +825,7 @@ fn generate_php_fpm_conf(path: &PathBuf, paths: &RuntimePaths, php_port: u16) ->
 
     let fpm_conf_content = format!(
         r#"; CAMPP PHP-FPM Configuration
-; Minimal config for static-php builds
+; Optimized for phpMyAdmin performance
 
 [global]
 error_log = {logs_dir}/php-fpm.log
@@ -794,15 +838,22 @@ listen = 127.0.0.1:{php_port}
 listen.owner = {user}
 listen.group = {user}
 listen.mode = 0660
-pm = dynamic
-pm.max_children = 5
-pm.start_servers = 2
-pm.min_spare_servers = 1
-pm.max_spare_servers = 3
-pm.max_requests = 500
+
+; Process manager - static for better performance (no spawning delays)
+pm = static
+pm.max_children = 10
+
+; Worker recycling to prevent memory leaks
+pm.max_requests = 1000
+
+; Request settings for phpMyAdmin
+request_terminate_timeout = 300
 php_admin_value[error_log] = {logs_dir}/php-fpm.log
 php_admin_flag[log_errors] = on
 php_value[session.save_path] = {logs_dir}/php-sessions
+
+; Performance tuning
+php_value[memory_limit] = 256M
 "#,
         logs_dir = paths.logs_dir.display().to_string().replace('\\', "/"),
         user = user,
@@ -858,7 +909,7 @@ fn generate_phpmyadmin_config(paths: &RuntimePaths, mysql_port: u16) -> Result<(
 // Cookie encryption key (exactly 32 bytes)
 $cfg['blowfish_secret'] = '{}';
 
-// Server configuration
+// Server configuration (optimized for performance)
 $i = 0;
 $i++;
 $cfg['Servers'][$i]['auth_type'] = 'config';
@@ -870,6 +921,30 @@ $cfg['Servers'][$i]['compress'] = false;
 $cfg['Servers'][$i]['AllowNoPassword'] = true;
 $cfg['Servers'][$i]['hide_db'] = '^(information_schema|mysql|performance_schema)$';
 
+// Performance optimizations
+$cfg['Servers'][$i]['persistent_connections'] = true;
+$cfg['Servers'][$i]['connect_type'] = 'tcp';
+$cfg['Servers'][$i]['DisableIS'] = true;
+$cfg['Servers'][$i]['MaxTableUiprefs'] = 100;
+
+// phpMyAdmin configuration storage settings (improves performance)
+$cfg['Servers'][$i]['pmadb'] = 'phpmyadmin';
+$cfg['Servers'][$i]['controluser'] = 'pma';
+$cfg['Servers'][$i]['controlpass'] = '';
+$cfg['Servers'][$i]['bookmarktable'] = 'pma__bookmark';
+$cfg['Servers'][$i]['relation'] = 'pma__relation';
+$cfg['Servers'][$i]['userpreferences'] = 'pma__userconfig';
+$cfg['Servers'][$i]['table_info'] = 'pma__table_info';
+$cfg['Servers'][$i]['column_info'] = 'pma__column_info';
+$cfg['Servers'][$i]['history'] = 'pma__history';
+$cfg['Servers'][$i]['recent'] = 'pma__recent';
+$cfg['Servers'][$i]['table_uiprefs'] = 'pma__table_uiprefs';
+$cfg['Servers'][$i]['tracking'] = 'pma__tracking';
+$cfg['Servers'][$i]['table_coords'] = 'pma__table_coords';
+$cfg['Servers'][$i]['pdf_pages'] = 'pma__pdf_pages';
+$cfg['Servers'][$i]['designer_settings'] = 'pma__designer_settings';
+$cfg['Servers'][$i]['export_templates'] = 'pma__export_templates';
+
 // Upload and save directories
 $cfg['UploadDir'] = '{}';
 $cfg['SaveDir'] = '{}';
@@ -877,14 +952,26 @@ $cfg['SaveDir'] = '{}';
 // Temp directory (absolute path for reliability)
 $cfg['TempDir'] = '{}';
 
-// Disable configuration storage warning (optional advanced features)
-$cfg['PmaNoRelation_DisableWarning'] = true;
+// Disable database statistics warning and server info
+$cfg['ShowServerInfo'] = false;
+$cfg['ShowPhpInfo'] = false;
+$cfg['ShowChangelogUrl'] = false;
 
 // Default language
 $cfg['DefaultLang'] = 'en';
 
 // Theme
 $cfg['ThemeDefault'] = 'pmahomme';
+
+// Performance settings
+$cfg['MemoryLimit'] = '256M';
+$cfg['LoginCookieValidity'] = 1440;
+$cfg['ExecTimeLimit'] = 300;
+
+// Navigation and query optimizations
+$cfg['NavigationTreeEnableGrouping'] = true;
+$cfg['NavigationTreeDisplayItemFilterMinimum'] = 30;
+$cfg['FirstDayOfCalendar'] = 1;
 
 // Execution time (for large database operations)
 $cfg['ExecTimeLimit'] = 0;
@@ -934,7 +1021,7 @@ mod tests {
 
         assert_eq!(manager.status(ServiceType::Caddy), ServiceState::Stopped);
         assert_eq!(manager.status(ServiceType::PhpFpm), ServiceState::Stopped);
-        assert_eq!(manager.status(ServiceType::MariaDB), ServiceState::Stopped);
+        assert_eq!(manager.status(ServiceType::MySQL), ServiceState::Stopped);
     }
 
     #[test]
@@ -963,16 +1050,16 @@ mod tests {
     fn test_service_error_state_handling() {
         let mut manager = ProcessManager::new();
 
-        let service = manager.services.get_mut(&ServiceType::MariaDB).unwrap();
+        let service = manager.services.get_mut(&ServiceType::MySQL).unwrap();
         service.state = ServiceState::Error;
         service.error_message = Some("Test error".to_string());
 
-        assert_eq!(manager.status(ServiceType::MariaDB), ServiceState::Error);
+        assert_eq!(manager.status(ServiceType::MySQL), ServiceState::Error);
 
         let statuses = manager.get_all_statuses();
-        let mariadb_info = statuses.get(&ServiceType::MariaDB).unwrap();
-        assert_eq!(mariadb_info.state, ServiceState::Error);
-        assert_eq!(mariadb_info.error_message, Some("Test error".to_string()));
+        let mysql_info = statuses.get(&ServiceType::MySQL).unwrap();
+        assert_eq!(mysql_info.state, ServiceState::Error);
+        assert_eq!(mysql_info.error_message, Some("Test error".to_string()));
     }
 
     #[test]
@@ -983,7 +1070,7 @@ mod tests {
 
         assert_eq!(manager.status(ServiceType::Caddy), ServiceState::Stopped);
         assert_eq!(manager.status(ServiceType::PhpFpm), ServiceState::Stopped);
-        assert_eq!(manager.status(ServiceType::MariaDB), ServiceState::Stopped);
+        assert_eq!(manager.status(ServiceType::MySQL), ServiceState::Stopped);
     }
 
     #[test]
@@ -996,8 +1083,8 @@ mod tests {
         let php = manager.services.get(&ServiceType::PhpFpm).unwrap();
         assert_eq!(php.port, 9000);
 
-        let mariadb = manager.services.get(&ServiceType::MariaDB).unwrap();
-        assert_eq!(mariadb.port, 3307);
+        let mysql = manager.services.get(&ServiceType::MySQL).unwrap();
+        assert_eq!(mysql.port, 3307);
     }
 
     #[test]
@@ -1010,12 +1097,12 @@ mod tests {
         let php = manager.services.get_mut(&ServiceType::PhpFpm).unwrap();
         php.state = ServiceState::Starting;
 
-        let mariadb = manager.services.get_mut(&ServiceType::MariaDB).unwrap();
-        mariadb.state = ServiceState::Stopped;
+        let mysql = manager.services.get_mut(&ServiceType::MySQL).unwrap();
+        mysql.state = ServiceState::Stopped;
 
         assert_eq!(manager.status(ServiceType::Caddy), ServiceState::Running);
         assert_eq!(manager.status(ServiceType::PhpFpm), ServiceState::Starting);
-        assert_eq!(manager.status(ServiceType::MariaDB), ServiceState::Stopped);
+        assert_eq!(manager.status(ServiceType::MySQL), ServiceState::Stopped);
     }
 
     #[test]
@@ -1043,7 +1130,7 @@ mod integration_tests {
     /// Check if runtime binaries are available for integration testing
     fn has_runtime_binaries() -> bool {
         if let Ok(paths) = locate_runtime_binaries() {
-            paths.caddy.exists() && paths.php_cgi.exists() && paths.mariadb.exists()
+            paths.caddy.exists() && paths.php_cgi.exists() && paths.mysql.exists()
         } else {
             false
         }
@@ -1078,7 +1165,7 @@ mod integration_tests {
 
     /// Clean up any running services after test
     fn cleanup_services(manager: &mut ProcessManager) {
-        for service in [ServiceType::Caddy, ServiceType::PhpFpm, ServiceType::MariaDB] {
+        for service in [ServiceType::Caddy, ServiceType::PhpFpm, ServiceType::MySQL] {
             let _ = manager.stop(service);
         }
         // Give processes time to fully exit
@@ -1100,7 +1187,7 @@ mod integration_tests {
             let log_name = match service {
                 ServiceType::Caddy => "caddy.log",
                 ServiceType::PhpFpm => "php-fpm.log",
-                ServiceType::MariaDB => "mariadb.log",
+                ServiceType::MySQL => "mysql.log",
             };
             let log_path = paths.logs_dir.join(log_name);
             if log_path.exists() {
@@ -1264,7 +1351,7 @@ mod integration_tests {
 
     #[test]
     #[ignore]
-    fn test_integration_start_stop_mariadb() {
+    fn test_integration_start_stop_mysql() {
         let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
 
         let mut manager = match setup_test() {
@@ -1275,19 +1362,19 @@ mod integration_tests {
             }
         };
 
-        // Start MariaDB
-        let result = manager.start(ServiceType::MariaDB);
+        // Start MySQL
+        let result = manager.start(ServiceType::MySQL);
         if let Err(e) = &result {
-            let logs = read_log_file(&manager, ServiceType::MariaDB);
-            panic!("MariaDB failed to start: {}\n\nLogs:\n{}", e, logs);
+            let logs = read_log_file(&manager, ServiceType::MySQL);
+            panic!("MySQL failed to start: {}\n\nLogs:\n{}", e, logs);
         }
 
-        // Wait for MariaDB to be running (longer timeout)
-        let is_running = wait_for_state(&mut manager, ServiceType::MariaDB, ServiceState::Running, 15);
-        assert!(is_running, "MariaDB should be in Running state");
+        // Wait for MySQL to be running (longer timeout)
+        let is_running = wait_for_state(&mut manager, ServiceType::MySQL, ServiceState::Running, 15);
+        assert!(is_running, "MySQL should be in Running state");
 
-        // Stop MariaDB
-        manager.stop(ServiceType::MariaDB).expect("MariaDB should stop");
+        // Stop MySQL
+        manager.stop(ServiceType::MySQL).expect("MySQL should stop");
 
         cleanup_services(&mut manager);
     }
@@ -1345,15 +1432,15 @@ mod integration_tests {
             let logs = read_log_file(&manager, ServiceType::PhpFpm);
             panic!("PHP failed to start: {}\n\nLogs:\n{}", e, logs);
         }
-        if let Err(e) = manager.start(ServiceType::MariaDB) {
-            let logs = read_log_file(&manager, ServiceType::MariaDB);
-            panic!("MariaDB failed to start: {}\n\nLogs:\n{}", e, logs);
+        if let Err(e) = manager.start(ServiceType::MySQL) {
+            let logs = read_log_file(&manager, ServiceType::MySQL);
+            panic!("MySQL failed to start: {}\n\nLogs:\n{}", e, logs);
         }
 
         // Wait for all to be running
         let caddy_running = wait_for_state(&mut manager, ServiceType::Caddy, ServiceState::Running, 10);
         let php_running = wait_for_state(&mut manager, ServiceType::PhpFpm, ServiceState::Running, 10);
-        let mariadb_running = wait_for_state(&mut manager, ServiceType::MariaDB, ServiceState::Running, 20);
+        let mysql_running = wait_for_state(&mut manager, ServiceType::MySQL, ServiceState::Running, 20);
 
         if !caddy_running {
             let logs = read_log_file(&manager, ServiceType::Caddy);
@@ -1363,13 +1450,13 @@ mod integration_tests {
             let logs = read_log_file(&manager, ServiceType::PhpFpm);
             panic!("PHP not running. Logs:\n{}", logs);
         }
-        if !mariadb_running {
-            let logs = read_log_file(&manager, ServiceType::MariaDB);
-            panic!("MariaDB not running. Logs:\n{}", logs);
+        if !mysql_running {
+            let logs = read_log_file(&manager, ServiceType::MySQL);
+            panic!("MySQL not running. Logs:\n{}", logs);
         }
 
         // Stop all services
-        manager.stop(ServiceType::MariaDB).ok();
+        manager.stop(ServiceType::MySQL).ok();
         manager.stop(ServiceType::PhpFpm).ok();
         manager.stop(ServiceType::Caddy).ok();
 

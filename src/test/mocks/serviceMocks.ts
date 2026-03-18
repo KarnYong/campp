@@ -42,9 +42,9 @@ export function createMockServiceMap(
       description: 'PHP runtime',
       port: 9000,
     }),
-    MariaDB: createMockServiceInfo({
-      name: 'MariaDB',
-      displayName: 'MariaDB',
+    MySQL: createMockServiceInfo({
+      name: 'MySQL',
+      displayName: 'MySQL',
       description: 'Database',
       port: 3307,
     }),
@@ -58,7 +58,7 @@ export function createMockServiceMap(
 export function createMockServiceMapWithStates(
   caddyState: ServiceState = 'Stopped',
   phpState: ServiceState = 'Stopped',
-  mariaDBState: ServiceState = 'Stopped'
+  mysqlState: ServiceState = 'Stopped'
 ): ServiceMap {
   return {
     Caddy: createMockServiceInfo({
@@ -75,12 +75,12 @@ export function createMockServiceMapWithStates(
       port: 9000,
       state: phpState,
     }),
-    MariaDB: createMockServiceInfo({
-      name: 'MariaDB',
-      displayName: 'MariaDB',
+    MySQL: createMockServiceInfo({
+      name: 'MySQL',
+      displayName: 'MySQL',
       description: 'Database',
       port: 3307,
-      state: mariaDBState,
+      state: mysqlState,
     }),
   };
 }

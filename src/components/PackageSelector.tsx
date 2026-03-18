@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { PackagesConfig, PackageSelection, PhpPackage, MariaDBPackage, PhpMyAdminPackage } from "../types/services";
+import { PackagesConfig, PackageSelection, PhpPackage, MySQLPackage, PhpMyAdminPackage } from "../types/services";
 
 interface PackageSelectorProps {
   onSelectionChange: (selection: PackageSelection) => void;
@@ -13,7 +13,7 @@ export function PackageSelector({ onSelectionChange, initialSelection }: Package
   const [selection, setSelection] = useState<PackageSelection>(
     initialSelection || {
       php: "php-8.4",
-      mariadb: "mariadb-12",
+      mysql: "mysql-8.4",
       phpmyadmin: "phpmyadmin-5.2",
     }
   );
@@ -43,8 +43,8 @@ export function PackageSelector({ onSelectionChange, initialSelection }: Package
     setSelection({ ...selection, php: value });
   };
 
-  const handleMariaDBChange = (value: string) => {
-    setSelection({ ...selection, mariadb: value });
+  const handleMySQLChange = (value: string) => {
+    setSelection({ ...selection, mysql: value });
   };
 
   const handlePhpMyAdminChange = (value: string) => {
@@ -83,15 +83,15 @@ export function PackageSelector({ onSelectionChange, initialSelection }: Package
 
       <div className="package-group">
         <label className="package-label">
-          <span>MariaDB Version</span>
+          <span>MySQL Version</span>
           <span className="package-label-hint">Database server for your applications</span>
         </label>
         <select
-          value={selection.mariadb}
-          onChange={(e) => handleMariaDBChange(e.target.value)}
+          value={selection.mysql}
+          onChange={(e) => handleMySQLChange(e.target.value)}
           className="package-select"
         >
-          {packages.mariadb.map((pkg: MariaDBPackage) => (
+          {packages.mysql.map((pkg: MySQLPackage) => (
             <option key={pkg.id} value={pkg.id}>
               {pkg.display_name}
               {pkg.lts && " (LTS)"}
@@ -122,7 +122,7 @@ export function PackageSelector({ onSelectionChange, initialSelection }: Package
 
       <div className="package-info">
         <p className="package-info-text">
-          <strong>Recommended:</strong> PHP 8.5, MariaDB 11.4 (LTS), phpMyAdmin 5.2
+          <strong>Recommended:</strong> PHP 8.5, MySQL 8.4 (LTS), phpMyAdmin 5.2
         </p>
         <p className="package-info-text">
           <strong>Note:</strong> EOL versions may have security vulnerabilities but are provided for legacy application compatibility.

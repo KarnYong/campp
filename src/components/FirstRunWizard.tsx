@@ -31,7 +31,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
   const [error, setError] = useState<string | null>(null);
   const [packageSelection, setPackageSelection] = useState<PackageSelection>({
     php: "php-8.5",
-    mariadb: "mariadb-11.8",
+    mysql: "mysql-8.4",
     phpmyadmin: "phpmyadmin-5.2",
   });
   const [existingComponents, setExistingComponents] = useState<ExistingComponent[]>([]);
@@ -100,7 +100,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
         version,
         displayName: name === "caddy" ? "Caddy" :
                       name === "php" ? "PHP" :
-                      name === "mariadb" ? "MariaDB" :
+                      name === "mysql" ? "MySQL" :
                       name === "phpmyadmin" ? "phpMyAdmin" : name,
       }));
 
@@ -265,7 +265,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
           {step === "welcome" && (
             <div className="wizard-message">
               <p>
-                CAMPP requires runtime binaries (Caddy, PHP-FPM, MariaDB, and phpMyAdmin)
+                CAMPP requires runtime binaries (Caddy, PHP-FPM, MySQL, and phpMyAdmin)
                 to be installed on your system. These will be downloaded and extracted to
                 your local data directory.
               </p>
@@ -308,7 +308,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
           {step === "packages" && (
             <div className="wizard-message">
               <p>
-                Select the versions of PHP, MariaDB, and phpMyAdmin you want to install.
+                Select the versions of PHP, MySQL, and phpMyAdmin you want to install.
                 The latest stable versions are recommended for new projects.
               </p>
               <PackageSelector
@@ -337,8 +337,8 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
                   // Find the new version for this component
                   const newVersion = component.name === "php"
                     ? packages.php.find(p => p.id === packageSelection.php)?.version
-                    : component.name === "mariadb"
-                    ? packages.mariadb.find(p => p.id === packageSelection.mariadb)?.version
+                    : component.name === "mysql"
+                    ? packages.mysql.find(p => p.id === packageSelection.mysql)?.version
                     : component.name === "phpmyadmin"
                     ? packages.phpmyadmin.find(p => p.id === packageSelection.phpmyadmin)?.version
                     : component.name === "caddy"
@@ -449,8 +449,8 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
                   <span className="installed-version">{packages.php.find(p => p.id === packageSelection.php)?.version || "8.5.1"}</span>
                 </div>
                 <div className="installed-component">
-                  <span className="installed-name">MariaDB</span>
-                  <span className="installed-version">{packages.mariadb.find(p => p.id === packageSelection.mariadb)?.version || "11.4.5"}</span>
+                  <span className="installed-name">MySQL</span>
+                  <span className="installed-version">{packages.mysql.find(p => p.id === packageSelection.mysql)?.version || "8.4.0"}</span>
                 </div>
                 <div className="installed-component">
                   <span className="installed-name">phpMyAdmin</span>
@@ -696,9 +696,9 @@ const packages = {
     { id: "php-8.3", version: "8.3.29" },
     { id: "php-8.2", version: "8.2.30" },
   ],
-  mariadb: [
-    { id: "mariadb-12.3", version: "12.3.1" },
-    { id: "mariadb-11.8", version: "11.8.6" },
+  mysql: [
+    { id: "mysql-8.4", version: "8.4.0" },
+    { id: "mysql-8.0", version: "8.0.40" },
   ],
   phpmyadmin: [
     { id: "phpmyadmin-5.2", version: "5.2.2" },

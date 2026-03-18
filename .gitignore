@@ -27,3 +27,4 @@ dist-ssr
 .claude/
 .agents/
 skills-lock.json
+link.md

@@ -8,12 +8,12 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use crate::runtime::locator::get_app_data_paths;
-use crate::runtime::packages::{PackageSelection, get_php_package, get_mariadb_package, get_phpmyadmin_package};
+use crate::runtime::packages::{PackageSelection, get_php_package, get_mysql_package, get_phpmyadmin_package};
 use sha2::{Digest, Sha256};
 
 /// Runtime configuration loaded from runtime-config.json (shared with packages.rs)
 pub use crate::runtime::packages::{
-    RuntimeConfig, BinariesConfig, BinaryConfig, PhpMyAdminConfig, VersionInfo, VersionInfoSingleUrl, Urls
+    RuntimeConfig, BinariesConfig, BinaryConfig, PhpMyAdminConfig, VersionInfo, VersionInfoSingleUrl, Urls, Checksums
 };
 
 /// Global runtime config (loaded once)
@@ -102,13 +102,14 @@ fn get_default_config() -> RuntimeConfig {
                         display_name: "Caddy 2.8.4".to_string(),
                         eol: false,
                         lts: false,
+                        checksums: Checksums::default(),
                         urls: Urls {
                             windows_x64: Some("https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_windows_amd64.zip".to_string()),
                             windows_arm64: Some("https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_windows_arm64.zip".to_string()),
                             linux_x64: Some("https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_linux_amd64.tar.gz".to_string()),
                             linux_arm64: Some("https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_linux_arm64.tar.gz".to_string()),
-                            macos_x64: Some("https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_darwin_amd64.tar.gz".to_string()),
-                            macos_arm64: Some("https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_darwin_arm64.tar.gz".to_string()),
+                            macos_x64: Some("https://caddyserver.com/api/download?os=darwin&arch=amd64&package=standard".to_string()),
+                            macos_arm64: Some("https://caddyserver.com/api/download?os=darwin&arch=arm64&package=standard".to_string()),
                         },
                     },
                 ],
@@ -122,33 +123,35 @@ fn get_default_config() -> RuntimeConfig {
                         display_name: "PHP 8.5.1".to_string(),
                         eol: false,
                         lts: false,
+                        checksums: Checksums::default(),
                         urls: Urls {
                             windows_x64: Some("https://windows.php.net/downloads/releases/php-8.5.1-Win32-vs17-x64.zip".to_string()),
                             windows_arm64: Some("https://windows.php.net/downloads/releases/php-8.5.1-Win32-vs17-x86.zip".to_string()),
-                            linux_x64: Some("https://dl.static-php.dev/static-php-cli/bulk/php-8.5.1-fpm-linux-x86_64.tar.gz".to_string()),
-                            linux_arm64: Some("https://dl.static-php.dev/static-php-cli/bulk/php-8.5.1-fpm-linux-aarch64.tar.gz".to_string()),
-                            macos_x64: Some("https://dl.static-php.dev/static-php-cli/bulk/php-8.5.1-fpm-macos-x86_64.tar.gz".to_string()),
-                            macos_arm64: Some("https://dl.static-php.dev/static-php-cli/bulk/php-8.5.1-fpm-macos-aarch64.tar.gz".to_string()),
+                            linux_x64: Some("https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-linux-x86_64.tar.gz".to_string()),
+                            linux_arm64: Some("https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-linux-aarch64.tar.gz".to_string()),
+                            macos_x64: Some("https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-macos-x86_64.tar.gz".to_string()),
+                            macos_arm64: Some("https://dl.static-php.dev/static-php-cli/bulk/php-8.4.18-fpm-macos-aarch64.tar.gz".to_string()),
                         },
                     },
                 ],
             },
-            mariadb: BinaryConfig {
+            mysql: BinaryConfig {
                 versions: vec![
                     VersionInfo {
-                        id: "mariadb-11.8".to_string(),
-                        version: "11.8.6".to_string(),
+                        id: "mysql-8.4".to_string(),
+                        version: "8.4.0".to_string(),
                         selected: true,
-                        display_name: "MariaDB 11.8.6".to_string(),
+                        display_name: "MySQL 8.4.0 LTS".to_string(),
                         eol: false,
                         lts: true,
+                        checksums: Checksums::default(),
                         urls: Urls {
-                            windows_x64: Some("https://archive.mariadb.org/mariadb-11.8.6/winx64-packages/mariadb-11.8.6-winx64.zip".to_string()),
-                            windows_arm64: Some("https://archive.mariadb.org/mariadb-11.8.6/winx64-packages/mariadb-11.8.6-winx64.zip".to_string()),
-                            linux_x64: Some("https://archive.mariadb.org/mariadb-11.8.6/bintar-linux-systemd-x86_64/mariadb-11.8.6-linux-systemd-x86_64.tar.gz".to_string()),
-                            linux_arm64: Some("https://archive.mariadb.org/mariadb-11.8.6/bintar-linux-systemd-aarch64/mariadb-11.8.6-linux-systemd-aarch64.tar.gz".to_string()),
-                            macos_x64: Some("https://archive.mariadb.org/mariadb-11.8.6/bintar-macos-x86_64/mariadb-11.8.6-macos-x86_64.tar.gz".to_string()),
-                            macos_arm64: Some("https://archive.mariadb.org/mariadb-11.8.6/bintar-macos-arm64/mariadb-11.8.6-macos-arm64.tar.gz".to_string()),
+                            windows_x64: Some("https://dev.mysql.com/get/Downloads/MySQL-8.4/mysql-8.4.0-winx64.zip".to_string()),
+                            windows_arm64: Some("https://dev.mysql.com/get/Downloads/MySQL-8.4/mysql-8.4.0-winx64.zip".to_string()),
+                            linux_x64: Some("https://dev.mysql.com/get/Downloads/MySQL-8.4/mysql-8.4.0-linux-glibc2.28-x86_64.tar.xz".to_string()),
+                            linux_arm64: Some("https://dev.mysql.com/get/Downloads/MySQL-8.4/mysql-8.4.0-linux-glibc2.28-aarch64.tar.xz".to_string()),
+                            macos_x64: Some("https://dev.mysql.com/get/Downloads/MySQL-8.4/mysql-8.4.0-macos14-x86_64.tar.gz".to_string()),
+                            macos_arm64: Some("https://dev.mysql.com/get/Downloads/MySQL-8.4/mysql-8.4.0-macos14-arm64.tar.gz".to_string()),
                         },
                     },
                 ],
@@ -162,6 +165,7 @@ fn get_default_config() -> RuntimeConfig {
                         display_name: "phpMyAdmin 5.2.2".to_string(),
                         eol: false,
                         lts: false,
+                        checksum: None,
                         url: "https://files.phpmyadmin.net/phpMyAdmin/5.2.2/phpMyAdmin-5.2.2-all-languages.zip".to_string(),
                     },
                 ],
@@ -175,7 +179,7 @@ fn get_default_config() -> RuntimeConfig {
 pub enum BinaryComponent {
     Caddy,
     Php,
-    MariaDB,
+    MySQL,
     PhpMyAdmin,
 }
 
@@ -184,7 +188,7 @@ impl BinaryComponent {
         match self {
             BinaryComponent::Caddy => "Caddy",
             BinaryComponent::Php => "PHP",
-            BinaryComponent::MariaDB => "MariaDB",
+            BinaryComponent::MySQL => "MySQL",
             BinaryComponent::PhpMyAdmin => "phpMyAdmin",
         }
     }
@@ -204,11 +208,11 @@ impl BinaryComponent {
                     .map(|v| v.version.clone())
                     .unwrap_or_else(|| config.binaries.php.versions.first().map(|v| v.version.clone()).unwrap_or_default())
             }
-            BinaryComponent::MariaDB => {
-                config.binaries.mariadb.versions.iter()
+            BinaryComponent::MySQL => {
+                config.binaries.mysql.versions.iter()
                     .find(|v| v.selected)
                     .map(|v| v.version.clone())
-                    .unwrap_or_else(|| config.binaries.mariadb.versions.first().map(|v| v.version.clone()).unwrap_or_default())
+                    .unwrap_or_else(|| config.binaries.mysql.versions.first().map(|v| v.version.clone()).unwrap_or_default())
             }
             BinaryComponent::PhpMyAdmin => {
                 config.binaries.phpmyadmin.versions.iter()
@@ -227,7 +231,7 @@ impl BinaryComponent {
         match self {
             BinaryComponent::Caddy => "caddy",
             BinaryComponent::Php => "php",
-            BinaryComponent::MariaDB => "mariadb",
+            BinaryComponent::MySQL => "mysql",
             BinaryComponent::PhpMyAdmin => "phpmyadmin",
         }
     }
@@ -243,8 +247,8 @@ impl RuntimeDownloader {
                         return pkg.version;
                     }
                 }
-                BinaryComponent::MariaDB => {
-                    if let Some(pkg) = get_mariadb_package(&selection.mariadb) {
+                BinaryComponent::MySQL => {
+                    if let Some(pkg) = get_mysql_package(&selection.mysql) {
                         return pkg.version;
                     }
                 }
@@ -320,6 +324,18 @@ impl Platform {
                 "tar.gz"
             }
         }
+    }
+
+    /// Get the URL key for config lookup (matches JSON keys)
+    pub fn url_key(&self) -> String {
+        match self {
+            Platform::WindowsX64 => "windowsX64",
+            Platform::WindowsArm64 => "windowsArm64",
+            Platform::LinuxX64 => "linuxX64",
+            Platform::LinuxArm64 => "linuxArm64",
+            Platform::MacOSX64 => "macOSX64",
+            Platform::MacOSArm64 => "macOSArm64",
+        }.to_string()
     }
 }
 
@@ -410,8 +426,8 @@ impl RuntimeDownloader {
                         };
                     }
                 }
-                BinaryComponent::MariaDB => {
-                    if let Some(pkg) = get_mariadb_package(&selection.mariadb) {
+                BinaryComponent::MySQL => {
+                    if let Some(pkg) = get_mysql_package(&selection.mysql) {
                         return match self.platform {
                             Platform::WindowsX64 => pkg.windows_x64,
                             Platform::WindowsArm64 => pkg.windows_arm64,
@@ -465,10 +481,10 @@ impl RuntimeDownloader {
                     Platform::LinuxArm64 => version_info.urls.linux_arm64.clone().unwrap_or_default(),
                 }
             }
-            BinaryComponent::MariaDB => {
-                let version_info = config.binaries.mariadb.versions.iter()
+            BinaryComponent::MySQL => {
+                let version_info = config.binaries.mysql.versions.iter()
                     .find(|v| v.selected)
-                    .or_else(|| config.binaries.mariadb.versions.first())
+                    .or_else(|| config.binaries.mysql.versions.first())
                     .unwrap();
                 match self.platform {
                     Platform::WindowsX64 => version_info.urls.windows_x64.clone().unwrap_or_default(),
@@ -520,10 +536,17 @@ impl RuntimeDownloader {
 
         eprintln!("Downloading {} from {}", component.name(), url);
 
-        let response = self
-            .client
-            .get(&url)
-            .header("User-Agent", "CAMPP/1.0")
+        // MySQL downloads require specific headers to bypass their gateway
+        let mut request = self.client.get(&url)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+
+        // Add Referer header for MySQL downloads (required by dev.mysql.com gateway)
+        if component == BinaryComponent::MySQL && url.contains("dev.mysql.com") {
+            request = request.header("Referer", "https://dev.mysql.com/downloads/mysql/")
+                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+        }
+
+        let response = request
             .send()
             .await
             .map_err(|e| format!("Failed to fetch {}: {}", component.name(), e))?;
@@ -608,6 +631,22 @@ impl RuntimeDownloader {
         file.write_all(&bytes)
             .map_err(|e| format!("Failed to write to file: {}", e))?;
 
+        // Verify checksum if available
+        if let Some(expected_checksum) = self.get_expected_checksum(&component, &url) {
+            let actual_checksum = self.calculate_checksum_from_bytes(&bytes)
+                .map_err(|e| format!("Failed to calculate checksum: {}", e))?;
+
+            if actual_checksum.to_lowercase() != expected_checksum.to_lowercase() {
+                return Err(format!(
+                    "Checksum verification failed for {}.\nExpected: {}\nActual: {}\n\nThe downloaded file may be corrupted or tampered with.",
+                    component.name(),
+                    expected_checksum,
+                    actual_checksum
+                ));
+            }
+            eprintln!("Checksum verified for {}: {}", component.name(), actual_checksum);
+        }
+
         let percent = if total_bytes > 0 {
             ((downloaded_bytes as f64 / total_bytes as f64) * 100.0) as u8
         } else {
@@ -645,6 +684,52 @@ impl RuntimeDownloader {
         }
 
         Ok(hex::encode(hasher.finalize()))
+    }
+
+    /// Calculate SHA256 checksum from bytes
+    fn calculate_checksum_from_bytes(&self, bytes: &[u8]) -> Result<String, String> {
+        let mut hasher = Sha256::new();
+        hasher.update(bytes);
+        Ok(hex::encode(hasher.finalize()))
+    }
+
+    /// Get the expected checksum for a component based on current platform
+    fn get_expected_checksum(&self, component: &BinaryComponent, url: &str) -> Option<String> {
+        use crate::runtime::packages::get_config;
+
+        let config = get_config()?;
+        let platform_key = self.platform.url_key();
+
+        match component {
+            BinaryComponent::Php | BinaryComponent::MySQL | BinaryComponent::Caddy => {
+                let version_info = match component {
+                    BinaryComponent::Caddy => config.binaries.caddy.versions.iter(),
+                    BinaryComponent::Php => config.binaries.php.versions.iter(),
+                    BinaryComponent::MySQL => config.binaries.mysql.versions.iter(),
+                    _ => return None,
+                };
+
+                for version in version_info {
+                    if version.selected {
+                        return match platform_key.as_str() {
+                            "windowsX64" => version.checksums.windows_x64.clone(),
+                            "windowsArm64" => version.checksums.windows_arm64.clone(),
+                            "linuxX64" => version.checksums.linux_x64.clone(),
+                            "linuxArm64" => version.checksums.linux_arm64.clone(),
+                            "macOSX64" => version.checksums.macos_x64.clone(),
+                            "macOSArm64" => version.checksums.macos_arm64.clone(),
+                            _ => None,
+                        };
+                    }
+                }
+                None
+            }
+            BinaryComponent::PhpMyAdmin => {
+                let version = config.binaries.phpmyadmin.versions.iter()
+                    .find(|v| v.selected)?;
+                version.checksum.clone()
+            }
+        }
     }
 
     /// Extract a ZIP archive
@@ -714,7 +799,7 @@ impl RuntimeDownloader {
         let components = [
             BinaryComponent::Caddy,
             BinaryComponent::Php,
-            BinaryComponent::MariaDB,
+            BinaryComponent::MySQL,
             BinaryComponent::PhpMyAdmin,
         ];
         let total = components.len() as u8;
@@ -809,12 +894,12 @@ impl RuntimeDownloader {
     pub async fn download_all_with_skip(
         &self,
         progress_cb: ProgressCallback,
-        skip_list: &[&str], // Component names to skip (e.g., ["php", "mariadb"])
+        skip_list: &[&str], // Component names to skip (e.g., ["php", "mysql"])
     ) -> Result<Vec<PathBuf>, String> {
         let components = [
             BinaryComponent::Caddy,
             BinaryComponent::Php,
-            BinaryComponent::MariaDB,
+            BinaryComponent::MySQL,
             BinaryComponent::PhpMyAdmin,
         ];
         let total = components.len() as u8;
@@ -948,17 +1033,17 @@ impl RuntimeDownloader {
         // Check for marker files created during simulation or actual binaries
         let caddy_marker = runtime_dir.join("caddy_installed.txt");
         let php_marker = runtime_dir.join("php_installed.txt");
-        let mariadb_marker = runtime_dir.join("mariadb_installed.txt");
+        let mysql_marker = runtime_dir.join("mysql_installed.txt");
         let phpmyadmin_marker = runtime_dir.join("phpmyadmin_installed.txt");
 
         // Also check for actual binaries (for production use)
         let caddy_exe = runtime_dir.join("caddy").join("caddy.exe");
         let php_exe = runtime_dir.join("php").join("php.exe");
-        let mariadb_exe = runtime_dir.join("mariadb").join("bin").join("mysqld.exe");
+        let mysql_exe = runtime_dir.join("mysql").join("bin").join("mysqld.exe");
 
-        caddy_marker.exists() || php_marker.exists() || mariadb_marker.exists()
+        caddy_marker.exists() || php_marker.exists() || mysql_marker.exists()
             || phpmyadmin_marker.exists() || caddy_exe.exists() || php_exe.exists()
-            || mariadb_exe.exists()
+            || mysql_exe.exists()
     }
 
     /// Check which components are already installed with their versions
@@ -969,7 +1054,7 @@ impl RuntimeDownloader {
             Err(_) => return installed,
         };
 
-        for component in ["caddy", "php", "mariadb", "phpmyadmin"] {
+        for component in ["caddy", "php", "mysql", "phpmyadmin"] {
             let marker_file = runtime_dir.join(format!("{}_installed.txt", component));
             if let Ok(content) = fs::read_to_string(&marker_file) {
                 // Parse version from format: "version=1.2.3\ninstalled_at=..."
@@ -1006,6 +1091,6 @@ fn is_executable(name: &str) -> bool {
         || name.ends_with("php-fpm")
         || name.ends_with("mysqld")
         || name.ends_with("mysql")
-        || name.ends_with("mariadbd")
+        || name.ends_with("mysqld")
         || name.contains("bin/")
 }

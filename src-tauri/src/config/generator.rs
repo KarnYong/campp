@@ -42,6 +42,13 @@ impl ConfigGenerator {
 
         format!(
             r#":{caddy_port} {{
+    # Enable HTTP/2 and HTTP/3 for better performance
+    servers {{
+        protocol {{
+            experimental_http3
+        }}
+    }}
+
     # phpMyAdmin - must come before global directives
     # Redirect /phpmyadmin to /phpmyadmin/
     redir /phpmyadmin /phpmyadmin/
@@ -62,20 +69,25 @@ impl ConfigGenerator {
     # File server for project files
     file_server browse
 
+    # Enhanced compression with better levels
+    encode {{
+        gzip 6
+        zstd
+    }}
+
     # Logging
     log {{
         output file "{log_file}"
         format json
     }}
 
-    # Encode responses
-    encode gzip
-
     # Security headers
     header {{
         X-Content-Type-Options nosniff
         X-Frame-Options SAMEORIGIN
         Referrer-Policy no-referrer
+        # Enable compression hints
+        Cache-Control "no-transform"
     }}
 }}
 "#,

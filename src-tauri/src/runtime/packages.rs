@@ -6,7 +6,7 @@ use std::sync::OnceLock;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PackagesConfig {
     pub php: Vec<PhpPackage>,
-    pub mariadb: Vec<MariaDBPackage>,
+    pub mysql: Vec<MySQLPackage>,
     pub phpmyadmin: Vec<PhpMyAdminPackage>,
 }
 
@@ -36,9 +36,9 @@ pub struct PhpPackage {
     pub recommended: bool,
 }
 
-/// MariaDB package with version and download URLs
+/// MySQL package with version and download URLs
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MariaDBPackage {
+pub struct MySQLPackage {
     pub id: String,
     pub version: String,
     pub display_name: String,
@@ -81,7 +81,8 @@ pub struct PhpMyAdminPackage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PackageSelection {
     pub php: String,
-    pub mariadb: String,
+    #[serde(alias = "mariadb")]
+    pub mysql: String,
     pub phpmyadmin: String,
 }
 
@@ -89,7 +90,7 @@ impl Default for PackageSelection {
     fn default() -> Self {
         Self {
             php: "php-8.5".to_string(),
-            mariadb: "mariadb-11.8".to_string(),
+            mysql: "mysql-8.4".to_string(),
             phpmyadmin: "phpmyadmin-5.2".to_string(),
         }
     }
@@ -108,8 +109,8 @@ pub struct BinariesConfig {
     pub caddy: BinaryConfig,
     #[serde(rename = "php")]
     pub php: BinaryConfig,
-    #[serde(rename = "mariadb")]
-    pub mariadb: BinaryConfig,
+    #[serde(rename = "mysql")]
+    pub mysql: BinaryConfig,
     #[serde(rename = "phpmyadmin")]
     pub phpmyadmin: PhpMyAdminConfig,
 }
@@ -134,7 +135,38 @@ pub struct VersionInfo {
     pub eol: bool,
     #[serde(default)]
     pub lts: bool,
+    #[serde(default)]
+    pub checksums: Checksums,
     pub urls: Urls,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Checksums {
+    #[serde(rename = "windowsX64", default)]
+    pub windows_x64: Option<String>,
+    #[serde(rename = "windowsArm64", default)]
+    pub windows_arm64: Option<String>,
+    #[serde(rename = "linuxX64", default)]
+    pub linux_x64: Option<String>,
+    #[serde(rename = "linuxArm64", default)]
+    pub linux_arm64: Option<String>,
+    #[serde(rename = "macOSX64", default)]
+    pub macos_x64: Option<String>,
+    #[serde(rename = "macOSArm64", default)]
+    pub macos_arm64: Option<String>,
+}
+
+impl Default for Checksums {
+    fn default() -> Self {
+        Self {
+            windows_x64: None,
+            windows_arm64: None,
+            linux_x64: None,
+            linux_arm64: None,
+            macos_x64: None,
+            macos_arm64: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -147,6 +179,8 @@ pub struct VersionInfoSingleUrl {
     pub eol: bool,
     #[serde(default)]
     pub lts: bool,
+    #[serde(default)]
+    pub checksum: Option<String>,
     pub url: String,
 }
 
@@ -170,7 +204,7 @@ pub struct Urls {
 static RUNTIME_CONFIG: OnceLock<Option<RuntimeConfig>> = OnceLock::new();
 
 /// Load runtime configuration from file
-fn load_runtime_config_from_file() -> Option<RuntimeConfig> {
+pub fn load_runtime_config_from_file() -> Option<RuntimeConfig> {
     // Try to load from various locations
     let mut paths_to_try = vec![
         "runtime-config.json".to_string(),
@@ -222,7 +256,7 @@ pub fn get_available_packages() -> PackagesConfig {
                 lts: v.lts,
                 recommended: v.selected,
             }).collect(),
-            mariadb: cfg.binaries.mariadb.versions.iter().map(|v| MariaDBPackage {
+            mysql: cfg.binaries.mysql.versions.iter().map(|v| MySQLPackage {
                 id: v.id.clone(),
                 version: v.version.clone(),
                 display_name: v.display_name.clone(),
@@ -263,10 +297,10 @@ pub fn get_selected_package_ids() -> PackageSelection {
                 .find(|v| v.selected)
                 .map(|v| v.id.clone())
                 .unwrap_or_else(|| "php-8.5".to_string()),
-            mariadb: cfg.binaries.mariadb.versions.iter()
+            mysql: cfg.binaries.mysql.versions.iter()
                 .find(|v| v.selected)
                 .map(|v| v.id.clone())
-                .unwrap_or_else(|| "mariadb-11.8".to_string()),
+                .unwrap_or_else(|| "mysql-8.4".to_string()),
             phpmyadmin: cfg.binaries.phpmyadmin.versions.iter()
                 .find(|v| v.selected)
                 .map(|v| v.id.clone())
@@ -285,10 +319,10 @@ pub fn get_php_package(id: &str) -> Option<PhpPackage> {
         .find(|p| p.id == id)
 }
 
-/// Get MariaDB package by ID
-pub fn get_mariadb_package(id: &str) -> Option<MariaDBPackage> {
+/// Get MySQL package by ID
+pub fn get_mysql_package(id: &str) -> Option<MySQLPackage> {
     get_available_packages()
-        .mariadb
+        .mysql
         .into_iter()
         .find(|p| p.id == id)
 }
@@ -304,6 +338,11 @@ pub fn get_phpmyadmin_package(id: &str) -> Option<PhpMyAdminPackage> {
 /// Reload the runtime configuration (call after modifying the config file)
 pub fn reload_runtime_config() {
     RUNTIME_CONFIG.set(load_runtime_config_from_file());
+}
+
+/// Get the runtime configuration
+pub fn get_config() -> Option<RuntimeConfig> {
+    RUNTIME_CONFIG.get_or_init(|| load_runtime_config_from_file()).clone()
 }
 
 /// Get default hardcoded packages (fallback when config file is not available)
@@ -367,34 +406,48 @@ fn get_default_packages() -> PackagesConfig {
                 recommended: false,
             },
         ],
-        mariadb: vec![
-            MariaDBPackage {
-                id: "mariadb-12.3".to_string(),
-                version: "12.3.1".to_string(),
-                display_name: "MariaDB 12.3 (Latest)".to_string(),
-                windows_x64: "https://archive.mariadb.org/mariadb-12.3.1/winx64-packages/mariadb-12.3.1-winx64.zip".to_string(),
-                windows_arm64: "https://archive.mariadb.org/mariadb-12.3.1/winx64-packages/mariadb-12.3.1-winx64.zip".to_string(),
-                linux_x64: "https://archive.mariadb.org/mariadb-12.3.1/bintar-linux-systemd-x86_64/mariadb-12.3.1-linux-systemd-x86_64.tar.gz".to_string(),
-                linux_arm64: "https://archive.mariadb.org/mariadb-12.3.1/bintar-linux-systemd-aarch64/mariadb-12.3.1-linux-systemd-aarch64.tar.gz".to_string(),
-                macos_x64: "https://archive.mariadb.org/mariadb-12.3.1/bintar-macos-x86_64/mariadb-12.3.1-macos-x86_64.tar.gz".to_string(),
-                macos_arm64: "https://archive.mariadb.org/mariadb-12.3.1/bintar-macos-arm64/mariadb-12.3.1-macos-arm64.tar.gz".to_string(),
+        mysql: vec![
+            MySQLPackage {
+                id: "mysql-9.6".to_string(),
+                version: "9.6.0".to_string(),
+                display_name: "MySQL 9.6 (Latest)".to_string(),
+                windows_x64: "https://dev.mysql.com/get/Downloads/MySQL-9.6/mysql-9.6.0-winx64.zip".to_string(),
+                windows_arm64: "https://dev.mysql.com/get/Downloads/MySQL-9.6/mysql-9.6.0-winx64.zip".to_string(),
+                linux_x64: "https://dev.mysql.com/get/Downloads/MySQL-9.6/mysql-9.6.0-linux-glibc2.28-x86_64.tar.xz".to_string(),
+                linux_arm64: "https://dev.mysql.com/get/Downloads/MySQL-9.6/mysql-9.6.0-linux-glibc2.28-aarch64.tar.xz".to_string(),
+                macos_x64: "https://dev.mysql.com/get/Downloads/MySQL-9.6/mysql-9.6.0-macos15-x86_64.tar.gz".to_string(),
+                macos_arm64: "https://dev.mysql.com/get/Downloads/MySQL-9.6/mysql-9.6.0-macos15-arm64.tar.gz".to_string(),
                 eol: false,
                 lts: false,
                 recommended: false,
             },
-            MariaDBPackage {
-                id: "mariadb-11.8".to_string(),
-                version: "11.8.6".to_string(),
-                display_name: "MariaDB 11.8 (LTS - Recommended)".to_string(),
-                windows_x64: "https://archive.mariadb.org/mariadb-11.8.6/winx64-packages/mariadb-11.8.6-winx64.zip".to_string(),
-                windows_arm64: "https://archive.mariadb.org/mariadb-11.8.6/winx64-packages/mariadb-11.8.6-winx64.zip".to_string(),
-                linux_x64: "https://archive.mariadb.org/mariadb-11.8.6/bintar-linux-systemd-x86_64/mariadb-11.8.6-linux-systemd-x86_64.tar.gz".to_string(),
-                linux_arm64: "https://archive.mariadb.org/mariadb-11.8.6/bintar-linux-systemd-aarch64/mariadb-11.8.6-linux-systemd-aarch64.tar.gz".to_string(),
-                macos_x64: "https://archive.mariadb.org/mariadb-11.8.6/bintar-macos-x86_64/mariadb-11.8.6-macos-x86_64.tar.gz".to_string(),
-                macos_arm64: "https://archive.mariadb.org/mariadb-11.8.6/bintar-macos-arm64/mariadb-11.8.6-macos-arm64.tar.gz".to_string(),
+            MySQLPackage {
+                id: "mysql-8.4".to_string(),
+                version: "8.4.0".to_string(),
+                display_name: "MySQL 8.4 LTS (Recommended)".to_string(),
+                windows_x64: "https://dev.mysql.com/get/Downloads/MySQL-8.4/mysql-8.4.0-winx64.zip".to_string(),
+                windows_arm64: "https://dev.mysql.com/get/Downloads/MySQL-8.4/mysql-8.4.0-winx64.zip".to_string(),
+                linux_x64: "https://dev.mysql.com/get/Downloads/MySQL-8.4/mysql-8.4.0-linux-glibc2.28-x86_64.tar.xz".to_string(),
+                linux_arm64: "https://dev.mysql.com/get/Downloads/MySQL-8.4/mysql-8.4.0-linux-glibc2.28-aarch64.tar.xz".to_string(),
+                macos_x64: "https://dev.mysql.com/get/Downloads/MySQL-8.4/mysql-8.4.0-macos14-x86_64.tar.gz".to_string(),
+                macos_arm64: "https://dev.mysql.com/get/Downloads/MySQL-8.4/mysql-8.4.0-macos14-arm64.tar.gz".to_string(),
                 eol: false,
                 lts: true,
                 recommended: true,
+            },
+            MySQLPackage {
+                id: "mysql-8.0".to_string(),
+                version: "8.0.40".to_string(),
+                display_name: "MySQL 8.0 LTS (Legacy)".to_string(),
+                windows_x64: "https://dev.mysql.com/get/Downloads/MySQL-8.0/mysql-8.0.40-winx64.zip".to_string(),
+                windows_arm64: "https://dev.mysql.com/get/Downloads/MySQL-8.0/mysql-8.0.40-winx64.zip".to_string(),
+                linux_x64: "https://dev.mysql.com/get/Downloads/MySQL-8.0/mysql-8.0.40-linux-glibc2.28-x86_64.tar.xz".to_string(),
+                linux_arm64: "https://dev.mysql.com/get/Downloads/MySQL-8.0/mysql-8.0.40-linux-glibc2.28-aarch64.tar.xz".to_string(),
+                macos_x64: "https://dev.mysql.com/get/Downloads/MySQL-8.0/mysql-8.0.40-macos14-x86_64.tar.gz".to_string(),
+                macos_arm64: "https://dev.mysql.com/get/Downloads/MySQL-8.0/mysql-8.0.40-macos14-arm64.tar.gz".to_string(),
+                eol: false,
+                lts: true,
+                recommended: false,
             },
         ],
         phpmyadmin: vec![

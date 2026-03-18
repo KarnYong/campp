@@ -119,11 +119,11 @@ export function mockAllServiceStatuses(statuses: Record<string, string>) {
       state: statuses.PhpFpm || 'Stopped',
       error_message: null,
     },
-    MariaDB: {
-      name: 'MariaDB',
-      displayName: 'MariaDB',
+    MySQL: {
+      name: 'MySQL',
+      displayName: 'MySQL',
       port: 3307,
-      state: statuses.MariaDB || 'Stopped',
+      state: statuses.MySQL || 'Stopped',
       error_message: null,
     },
   });

@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Dashboard } from "./components/Dashboard";
 import { FirstRunWizard } from "./components/FirstRunWizard";
 import "./App.css";
@@ -76,7 +75,7 @@ function App() {
   const handleOpenRuntimeFolder = async () => {
     try {
       const runtimeDir = await invoke<string>("get_runtime_dir");
-      await revealItemInDir(runtimeDir);
+      await invoke("open_folder", { path: runtimeDir });
     } catch (error) {
       console.error("Failed to open folder:", error);
       alert("Failed to open folder: " + error);

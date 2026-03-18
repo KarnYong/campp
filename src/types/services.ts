@@ -5,7 +5,7 @@
 export enum ServiceType {
   Caddy = "caddy",
   PhpFpm = "php-fpm",
-  MariaDB = "mariadb",
+  MySQL = "mysql",
 }
 
 export enum ServiceState {
@@ -60,7 +60,7 @@ export interface PhpPackage {
   recommended: boolean;
 }
 
-export interface MariaDBPackage {
+export interface MySQLPackage {
   id: string;
   version: string;
   display_name: string;
@@ -87,30 +87,30 @@ export interface PhpMyAdminPackage {
 
 export interface PackagesConfig {
   php: PhpPackage[];
-  mariadb: MariaDBPackage[];
+  mysql: MySQLPackage[];
   phpmyadmin: PhpMyAdminPackage[];
 }
 
 export interface PackageSelection {
   php: string;
-  mariadb: string;
+  mysql: string;
   phpmyadmin: string;
 }
 
 export const DEFAULT_PORTS = {
   [ServiceType.Caddy]: 8080,
   [ServiceType.PhpFpm]: 9000,
-  [ServiceType.MariaDB]: 3307,
+  [ServiceType.MySQL]: 3307,
 } as const;
 
 export const SERVICE_DISPLAY_NAMES = {
   [ServiceType.Caddy]: "Caddy",
   [ServiceType.PhpFpm]: "PHP-FPM",
-  [ServiceType.MariaDB]: "MariaDB",
+  [ServiceType.MySQL]: "MySQL",
 } as const;
 
 export const SERVICE_DESCRIPTIONS = {
   [ServiceType.Caddy]: "Web Server",
   [ServiceType.PhpFpm]: "PHP Runtime",
-  [ServiceType.MariaDB]: "Database Server",
+  [ServiceType.MySQL]: "Database Server",
 } as const;

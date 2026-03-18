@@ -62,7 +62,7 @@ pub fn run() {
                             let app = app.clone();
                             tauri::async_runtime::spawn(async move {
                                 if let Ok(runtime_dir) = commands::get_runtime_dir().await {
-                                    let _ = tauri_plugin_opener::reveal_item_in_dir(runtime_dir);
+                                    let _ = commands::open_folder(runtime_dir).await;
                                 }
                             });
                         }

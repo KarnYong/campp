@@ -142,7 +142,7 @@ export function Dashboard() {
       <header className="dashboard-header">
         <div className="header-content">
           <div className="header-title">
-            <h1>CAMPP = Caddy + MariaDB + PHP</h1>
+            <h1>CAMPP = Caddy + MySQL + PHP</h1>
             <p className="dashboard-subtitle">
               Development environment for apps using MySQL (PHP included)
             </p>
@@ -214,8 +214,8 @@ export function Dashboard() {
             {installedVersions.php && (
               <span className="version-badge">PHP {installedVersions.php}</span>
             )}
-            {installedVersions.mariadb && (
-              <span className="version-badge">MariaDB {installedVersions.mariadb}</span>
+            {installedVersions.mysql && (
+              <span className="version-badge">MySQL {installedVersions.mysql}</span>
             )}
             {installedVersions.phpmyadmin && (
               <span className="version-badge">phpMyAdmin {installedVersions.phpmyadmin}</span>
@@ -226,7 +226,7 @@ export function Dashboard() {
 
       <main className="dashboard-main">
         <div className="service-grid">
-          {[ServiceType.Caddy, ServiceType.PhpFpm, ServiceType.MariaDB].map((serviceType) => {
+          {[ServiceType.Caddy, ServiceType.PhpFpm, ServiceType.MySQL].map((serviceType) => {
             const service = services[serviceType];
             if (!service) return null;
             return (
