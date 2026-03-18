@@ -77,9 +77,7 @@ export function Dashboard() {
       await refreshStatuses();
     } catch (error) {
       console.error(`Failed to start ${serviceType}:`, error);
-      // Show error to user
       alert(`Failed to start ${serviceType}:\n${error}`);
-      // Refresh to show error state in UI
       await refreshStatuses();
     }
   };
@@ -124,10 +122,7 @@ export function Dashboard() {
 
   const openProjectRoot = async () => {
     try {
-      // On Windows, open the installation directory; on other platforms, open project root
-      console.log("installDir:", installDir, "projectRoot:", projectRoot);
       const pathToOpen = installDir || projectRoot;
-      console.log("Opening path:", pathToOpen);
       if (pathToOpen) {
         await revealItemInDir(pathToOpen);
       }
@@ -138,155 +133,253 @@ export function Dashboard() {
 
   return (
     <>
-    <div className="dashboard" data-testid="dashboard">
-      <header className="dashboard-header">
-        <div className="header-content">
-          <div className="header-title">
-            <h1>CAMPP = Caddy + MySQL + PHP</h1>
-            <p className="dashboard-subtitle">
-              Development environment for apps using MySQL (PHP included)
-            </p>
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          backgroundColor: "var(--bg-app)",
+          color: "var(--text-primary)",
+        }}
+        data-testid="dashboard"
+      >
+        {/* Header */}
+        <header
+          style={{
+            backgroundColor: "var(--bg-card)",
+            borderBottom: "1px solid var(--border-color)",
+            padding: "0.75rem 1.5rem",
+          }}
+        >
+          <div style={{ maxWidth: "80rem", margin: "0 auto" }}>
+            {/* Title Section */}
+            <div>
+              <h1
+                style={{
+                  fontSize: "1.25rem",
+                  fontWeight: 600,
+                  margin: 0,
+                  color: "var(--text-primary)",
+                }}
+              >
+                CAMPP = Caddy + MySQL + PHP
+              </h1>
+              <p
+                style={{
+                  fontSize: "0.875rem",
+                  color: "var(--text-secondary)",
+                  marginTop: "0.25rem",
+                  marginBottom: 0,
+                }}
+              >
+                Development environment for apps using MySQL (PHP included)
+              </p>
+            </div>
+
+            {/* Quick Actions */}
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
+              <button
+                className="btn-quick-action"
+                onClick={openWebServer}
+                disabled={!isCaddyRunning}
+                title={isCaddyRunning ? `Open ${webServerUrl}` : "Start Caddy to enable"}
+              >
+                <span style={{ fontSize: "1rem" }}>🌐</span>
+                Open Site
+              </button>
+              <button
+                className="btn-quick-action"
+                onClick={openProjectRoot}
+                disabled={!installDir && !projectRoot}
+                title={installDir || projectRoot ? `Open ${installDir || projectRoot}` : "Directory not set"}
+              >
+                <span style={{ fontSize: "1rem" }}>📁</span>
+                Projects
+              </button>
+              <button
+                className="btn-quick-action"
+                onClick={openPhpMyAdmin}
+                disabled={!isCaddyRunning}
+                title={isCaddyRunning ? `Open ${phpMyAdminUrl}` : "Start Caddy to enable"}
+              >
+                <span style={{ fontSize: "1rem" }}>🗄️</span>
+                phpMyAdmin
+              </button>
+              <button
+                className="btn-quick-action"
+                onClick={() => setShowSettings(true)}
+                title="Open Settings"
+              >
+                <span style={{ fontSize: "1rem" }}>⚙️</span>
+                Settings
+              </button>
+              <button
+                className="btn-quick-action"
+                onClick={async () => {
+                  try {
+                    await invoke("open_manual");
+                  } catch (err) {
+                    console.error("Failed to open manual:", err);
+                  }
+                }}
+                title="Read User Manual"
+              >
+                <span style={{ fontSize: "1rem" }}>?</span>
+                Help
+              </button>
+            </div>
           </div>
-        </div>
-        <div className="header-actions">
-          <div className="quick-actions">
-            <button
-              className="btn-quick-action"
-              onClick={openWebServer}
-              disabled={!isCaddyRunning}
-              title={isCaddyRunning ? `Open ${webServerUrl}` : "Start Caddy to enable"}
-            >
-              <span className="btn-icon">🌐</span>
-              Open Site
-            </button>
-            <button
-              className="btn-quick-action"
-              onClick={openProjectRoot}
-              disabled={!installDir && !projectRoot}
-              title={installDir || projectRoot ? `Open ${installDir || projectRoot}` : "Directory not set"}
-            >
-              <span className="btn-icon">📁</span>
-              Projects
-            </button>
-            <button
-              className="btn-quick-action"
-              onClick={openPhpMyAdmin}
-              disabled={!isCaddyRunning}
-              title={isCaddyRunning ? `Open ${phpMyAdminUrl}` : "Start Caddy to enable"}
-            >
-              <span className="btn-icon">🗄️</span>
-              phpMyAdmin
-            </button>
-            <button
-              className="btn-quick-action"
-              onClick={() => setShowSettings(true)}
-              title="Open Settings"
-            >
-              <span className="btn-icon">⚙️</span>
-              Settings
-            </button>
-            <button
-              className="btn-quick-action btn-help"
-              onClick={async () => {
-                try {
-                  await invoke("open_manual");
-                } catch (err) {
-                  console.error("Failed to open manual:", err);
-                }
+        </header>
+
+        {/* Installed Versions Bar */}
+        {Object.keys(installedVersions).length > 0 && (
+          <div
+            style={{
+              backgroundColor: "var(--bg-card-secondary)",
+              borderBottom: "1px solid var(--border-color)",
+              padding: "0.5rem 1rem",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+                flexWrap: "wrap",
+                maxWidth: "96rem",
+                margin: "0 auto",
               }}
-              title="Read User Manual"
             >
-              <span className="btn-icon">?</span>
-              Help
-            </button>
+              <span
+                style={{
+                  fontSize: "0.75rem",
+                  fontWeight: 500,
+                  color: "var(--text-secondary)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                Installed:
+              </span>
+              {installedVersions.caddy && (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    padding: "0.25rem 0.625rem",
+                    backgroundColor: "var(--bg-card)",
+                    borderRadius: "0.25rem",
+                    fontSize: "0.75rem",
+                    fontWeight: 500,
+                    color: "var(--text-primary)",
+                    border: "1px solid var(--border-color)",
+                  }}
+                >
+                  Caddy {installedVersions.caddy}
+                </span>
+              )}
+              {installedVersions.php && (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    padding: "0.25rem 0.625rem",
+                    backgroundColor: "var(--bg-card)",
+                    borderRadius: "0.25rem",
+                    fontSize: "0.75rem",
+                    fontWeight: 500,
+                    color: "var(--text-primary)",
+                    border: "1px solid var(--border-color)",
+                  }}
+                >
+                  PHP {installedVersions.php}
+                </span>
+              )}
+              {installedVersions.mysql && (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    padding: "0.25rem 0.625rem",
+                    backgroundColor: "var(--bg-card)",
+                    borderRadius: "0.25rem",
+                    fontSize: "0.75rem",
+                    fontWeight: 500,
+                    color: "var(--text-primary)",
+                    border: "1px solid var(--border-color)",
+                  }}
+                >
+                  MySQL {installedVersions.mysql}
+                </span>
+              )}
+              {installedVersions.phpmyadmin && (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    padding: "0.25rem 0.625rem",
+                    backgroundColor: "var(--bg-card)",
+                    borderRadius: "0.25rem",
+                    fontSize: "0.75rem",
+                    fontWeight: 500,
+                    color: "var(--text-primary)",
+                    border: "1px solid var(--border-color)",
+                  }}
+                >
+                  phpMyAdmin {installedVersions.phpmyadmin}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
-      </header>
+        )}
 
-      {/* Installed Versions Display */}
-      {Object.keys(installedVersions).length > 0 && (
-        <div className="versions-bar">
-          <div className="versions-container">
-            <span className="versions-label">Installed:</span>
-            {installedVersions.caddy && (
-              <span className="version-badge">Caddy {installedVersions.caddy}</span>
-            )}
-            {installedVersions.php && (
-              <span className="version-badge">PHP {installedVersions.php}</span>
-            )}
-            {installedVersions.mysql && (
-              <span className="version-badge">MySQL {installedVersions.mysql}</span>
-            )}
-            {installedVersions.phpmyadmin && (
-              <span className="version-badge">phpMyAdmin {installedVersions.phpmyadmin}</span>
-            )}
+        {/* Main Content - Service Grid */}
+        <main
+          style={{
+            flex: 1,
+            padding: "1rem 1.5rem",
+          }}
+        >
+          <div
+            className="service-grid-responsive"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: "1rem",
+              maxWidth: "80rem",
+              margin: "0 auto",
+            }}
+          >
+            {[ServiceType.Caddy, ServiceType.PhpFpm, ServiceType.MySQL].map((serviceType) => {
+              const service = services[serviceType];
+              if (!service) return null;
+              return (
+                <ServiceCard
+                  key={serviceType}
+                  serviceType={serviceType}
+                  state={service.state as ServiceState}
+                  port={service.port}
+                  error={service.error_message}
+                  onStart={() => startService(serviceType)}
+                  onStop={() => stopService(serviceType)}
+                  onRestart={() => restartService(serviceType)}
+                />
+              );
+            })}
           </div>
-        </div>
-      )}
+        </main>
 
-      <main className="dashboard-main">
-        <div className="service-grid">
-          {[ServiceType.Caddy, ServiceType.PhpFpm, ServiceType.MySQL].map((serviceType) => {
-            const service = services[serviceType];
-            if (!service) return null;
-            return (
-              <ServiceCard
-                key={serviceType}
-                serviceType={serviceType}
-                state={service.state as ServiceState}
-                port={service.port}
-                error={service.error_message}
-                onStart={() => startService(serviceType)}
-                onStop={() => stopService(serviceType)}
-                onRestart={() => restartService(serviceType)}
-              />
-            );
-          })}
-        </div>
-      </main>
+        {/* Status Bar */}
+        <StatusBar services={services} data-testid="status-bar" />
 
-      <StatusBar services={services} data-testid="status-bar" />
-
-      {showSettings && (
-        <SettingsPanel
-          onClose={() => setShowSettings(false)}
-          onSettingsChanged={refreshStatuses}
-        />
-      )}
-    </div>
-
-    <style>{`
-      .versions-bar {
-        background: #1f2937;
-        border-bottom: 1px solid #374151;
-        padding: 0.5rem 1rem;
-      }
-      .versions-container {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        flex-wrap: wrap;
-        max-width: 1400px;
-        margin: 0 auto;
-      }
-      .versions-label {
-        font-size: 0.75rem;
-        font-weight: 500;
-        color: #9ca3af;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-      }
-      .version-badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 0.25rem 0.625rem;
-        background: #374151;
-        border-radius: 0.25rem;
-        font-size: 0.75rem;
-        color: #e5e7eb;
-        font-weight: 500;
-      }
-    `}</style>
+        {/* Settings Panel */}
+        {showSettings && (
+          <SettingsPanel
+            onClose={() => setShowSettings(false)}
+            onSettingsChanged={refreshStatuses}
+          />
+        )}
+      </div>
     </>
   );
 }

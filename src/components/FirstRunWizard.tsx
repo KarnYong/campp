@@ -6,6 +6,7 @@ import { PackageSelector } from "./PackageSelector";
 
 interface FirstRunWizardProps {
   onComplete: () => void;
+  [key: string]: any; // Allow additional props like data-testid
 }
 
 type WizardStep = "welcome" | "packages" | "confirm" | "download" | "complete";
@@ -16,7 +17,24 @@ interface ExistingComponent {
   displayName: string;
 }
 
-export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
+// Package versions for display
+const packages = {
+  php: [
+    { id: "php-8.5", version: "8.5.1" },
+    { id: "php-8.4", version: "8.4.16" },
+    { id: "php-8.3", version: "8.3.29" },
+    { id: "php-8.2", version: "8.2.30" },
+  ],
+  mysql: [
+    { id: "mysql-8.4", version: "8.4.0" },
+    { id: "mysql-8.0", version: "8.0.40" },
+  ],
+  phpmyadmin: [
+    { id: "phpmyadmin-5.2", version: "5.2.2" },
+  ],
+};
+
+export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
   const [step, setStep] = useState<WizardStep>("welcome");
   const [progress, setProgress] = useState<DownloadProgressType>({
     step: "downloading",
@@ -118,7 +136,7 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
   };
 
   const proceedWithDownload = async (skipList: string[]) => {
-    setError(null); // Clear any previous errors
+    setError(null);
     setStep("download");
 
     try {
@@ -126,21 +144,18 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
       await invoke("update_package_selection", { packageSelection });
 
       if (skipList.length > 0) {
-        // Download with skip list
         const result = await invoke<string>("download_runtime_with_skip", {
           packageSelection,
           skipList,
         });
         console.log(result);
       } else {
-        // Download all
         const result = await invoke<string>("download_runtime_with_packages", { packageSelection });
         console.log(result);
       }
     } catch (err) {
       console.error("Download error:", err);
       setError(err as string);
-      // Keep user on confirm step to see error and retry, don't reset to packages
       setStep("confirm");
     }
   };
@@ -160,22 +175,17 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
   };
 
   const handleSkipToDashboard = () => {
-    // User wants to use existing installation without downloading
-    // Mark as complete and go to dashboard
     onComplete();
   };
 
   const handleSkipFromWelcome = async () => {
-    // Check if there are existing components and skip to dashboard if so
     try {
       const existing = await invoke<Record<string, string>>("check_existing_components");
       const existingList = Object.keys(existing);
 
       if (existingList.length > 0) {
-        // There are existing components, skip to dashboard
         onComplete();
       } else {
-        // No existing components, show a message
         alert("No existing installation found. Please download the runtime components to continue.");
       }
     } catch (err) {
@@ -228,63 +238,117 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
     return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
   };
 
+  const getStepNumber = () => {
+    switch (step) {
+      case "welcome": return 1;
+      case "packages": return 2;
+      case "confirm": return 3;
+      case "download": return 4;
+      case "complete": return 4;
+      default: return 1;
+    }
+  };
+
+  const currentStepNum = getStepNumber();
+
   return (
-    <div className="first-run-wizard">
-      <div className="wizard-container">
-        <div className="wizard-header">
-          <h1>Welcome to CAMPP</h1>
-          <p className="wizard-subtitle">
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "1rem",
+        backgroundColor: "var(--bg-app)",
+        color: "var(--text-primary)",
+      }}
+      {...props}
+    >
+      <div
+        style={{
+          backgroundColor: "var(--bg-card)",
+          border: "1px solid var(--border-color)",
+          borderRadius: "0.75rem",
+          padding: "1.25rem",
+          maxWidth: "28rem",
+          width: "100%",
+          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+        }}
+      >
+        {/* Header */}
+        <div style={{ textAlign: "center", marginBottom: "1rem" }}>
+          <h1 style={{ fontSize: "1.5rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+            Welcome to CAMPP
+          </h1>
+          <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>
             Local Web Development Stack
           </p>
-          {/* Step indicator */}
-          <div className="wizard-steps">
-            <div className={`wizard-step ${step === "welcome" || step === "packages" || step === "confirm" || step === "download" || step === "complete" ? "active" : ""} ${step === "download" || step === "complete" ? "completed" : ""}`}>
-              <div className="step-number">1</div>
-              <div className="step-label">Welcome</div>
-            </div>
-            <div className="wizard-step-line"></div>
-            <div className={`wizard-step ${step === "packages" || step === "confirm" || step === "download" || step === "complete" ? "active" : ""} ${step === "download" || step === "complete" ? "completed" : ""}`}>
-              <div className="step-number">2</div>
-              <div className="step-label">Packages</div>
-            </div>
-            <div className="wizard-step-line"></div>
-            <div className={`wizard-step ${step === "confirm" || step === "download" || step === "complete" ? "active" : ""} ${step === "download" || step === "complete" ? "completed" : ""}`}>
-              <div className="step-number">3</div>
-              <div className="step-label">Confirm</div>
-            </div>
-            <div className="wizard-step-line"></div>
-            <div className={`wizard-step ${step === "download" || step === "complete" ? "active" : ""} ${step === "complete" ? "completed" : ""}`}>
-              <div className="step-number">4</div>
-              <div className="step-label">Download</div>
-            </div>
+
+          {/* Compact Step Indicator */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.25rem", marginTop: "0.75rem" }}>
+            {[1, 2, 3, 4].map((stepNum) => (
+              <div key={stepNum} style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                <div style={{
+                  width: "1.25rem",
+                  height: "1.25rem",
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "0.625rem",
+                  fontWeight: 500,
+                  color: currentStepNum >= stepNum ? "white" : "var(--text-secondary)",
+                  backgroundColor: currentStepNum > stepNum ? "var(--color-success)" : currentStepNum >= stepNum ? "var(--bg-card-secondary)" : "transparent",
+                  border: currentStepNum < stepNum ? "1px solid var(--border-color)" : "none",
+                }}>
+                  {stepNum}
+                </div>
+                {stepNum < 4 && (
+                  <div style={{ width: "1rem", height: "1px", backgroundColor: currentStepNum > stepNum ? "var(--color-success)" : "var(--border-color)" }} />
+                )}
+              </div>
+            ))}
           </div>
         </div>
 
-        <div className="wizard-content">
+        {/* Content */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           {/* Welcome Step */}
           {step === "welcome" && (
-            <div className="wizard-message">
-              <p>
+            <div>
+              <p style={{ fontSize: "0.875rem", lineHeight: 1.5, color: "var(--text-primary)", marginBottom: "0.75rem" }}>
                 CAMPP requires runtime binaries (Caddy, PHP-FPM, MySQL, and phpMyAdmin)
-                to be installed on your system. These will be downloaded and extracted to
-                your local data directory.
+                to be installed on your system.
               </p>
               {hasExistingOnWelcome ? (
-                <p className="wizard-info wizard-info-existing">
-                  <strong>Existing installation detected!</strong> You can use your current installation or download fresh components.
-                </p>
+                <div
+                  style={{
+                    padding: "0.5rem",
+                    borderRadius: "0.375rem",
+                    backgroundColor: "rgba(16, 185, 129, 0.1)",
+                    border: "1px solid var(--color-success)",
+                    marginBottom: "0.75rem",
+                    fontSize: "0.875rem",
+                  }}
+                >
+                  <strong>Existing installation detected!</strong>
+                </div>
               ) : (
-                <p className="wizard-info">
+                <div className="info-box" style={{ marginBottom: "0.75rem", padding: "0.5rem", fontSize: "0.875rem" }}>
                   <strong>Estimated download size:</strong> ~150 MB
-                </p>
+                </div>
               )}
-              <div className="wizard-actions">
+              <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                 {hasExistingOnWelcome && (
-                  <button onClick={handleSkipFromWelcome} className="btn-secondary btn-use-existing">
-                    Use Existing Installation
+                  <button
+                    onClick={handleSkipFromWelcome}
+                    className="btn-secondary"
+                    style={{ fontSize: "0.875rem", padding: "0.5rem 1rem", borderColor: "var(--color-primary)", color: "var(--color-primary)" }}
+                  >
+                    Use Existing
                   </button>
                 )}
-                <button onClick={handleNext} className="btn-primary">
+                <button onClick={handleNext} className="btn-primary" style={{ fontSize: "0.875rem", padding: "0.5rem 1rem" }}>
                   {hasExistingOnWelcome ? "Download Fresh" : "Get Started"}
                 </button>
                 <button
@@ -295,8 +359,9 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
                       console.error("Failed to open manual:", err);
                     }
                   }}
-                  className="btn-help"
+                  className="btn-secondary"
                   title="Read User Manual"
+                  style={{ fontSize: "0.875rem", padding: "0.5rem 0.75rem" }}
                 >
                   ?
                 </button>
@@ -306,20 +371,19 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
 
           {/* Package Selection Step */}
           {step === "packages" && (
-            <div className="wizard-message">
-              <p>
-                Select the versions of PHP, MySQL, and phpMyAdmin you want to install.
-                The latest stable versions are recommended for new projects.
+            <div>
+              <p style={{ fontSize: "0.875rem", marginBottom: "0.75rem" }}>
+                Select the versions of PHP, MySQL, and phpMyAdmin.
               </p>
               <PackageSelector
                 onSelectionChange={handlePackageChange}
                 initialSelection={packageSelection}
               />
-              <div className="wizard-actions">
-                <button onClick={handleBack} className="btn-secondary">
+              <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem" }}>
+                <button onClick={handleBack} className="btn-secondary" style={{ fontSize: "0.875rem", padding: "0.5rem 1rem" }}>
                   Back
                 </button>
-                <button onClick={startDownload} className="btn-primary">
+                <button onClick={startDownload} className="btn-primary" style={{ fontSize: "0.875rem", padding: "0.5rem 1rem" }}>
                   Download & Install
                 </button>
               </div>
@@ -328,13 +392,23 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
 
           {/* Confirm Overwrite Step */}
           {step === "confirm" && (
-            <div className="wizard-message">
-              <p>
-                The following components are already installed and will be replaced:
+            <div>
+              <p style={{ fontSize: "0.875rem", marginBottom: "0.5rem" }}>
+                Components already installed:
               </p>
-              <div className="existing-components-list">
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.375rem",
+                  margin: "0.5rem 0",
+                  padding: "0.5rem",
+                  backgroundColor: "var(--bg-card-secondary)",
+                  borderRadius: "0.375rem",
+                  border: "1px solid var(--border-color)",
+                }}
+              >
                 {existingComponents.map((component) => {
-                  // Find the new version for this component
                   const newVersion = component.name === "php"
                     ? packages.php.find(p => p.id === packageSelection.php)?.version
                     : component.name === "mysql"
@@ -346,37 +420,64 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
                     : component.version;
 
                   return (
-                    <div key={component.name} className="existing-component-item">
-                      <span className="existing-component-name">{component.displayName}</span>
-                      <span className="version-replacement">
-                        <span className="existing-component-version">{component.version}</span>
-                        <span className="version-arrow"> → </span>
-                        <span className="new-component-version">{newVersion || "Unknown"}</span>
-                      </span>
+                    <div
+                      key={component.name}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "0.375rem",
+                        backgroundColor: "var(--bg-card)",
+                        borderRadius: "0.25rem",
+                        fontSize: "0.875rem",
+                      }}
+                    >
+                      <span style={{ fontWeight: 500 }}>{component.displayName}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
+                        <span style={{ fontSize: "0.75rem", color: "var(--color-error)", textDecoration: "line-through" }}>
+                          {component.version}
+                        </span>
+                        <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>→</span>
+                        <span style={{ fontSize: "0.75rem", color: "var(--color-success)", fontWeight: 500 }}>
+                          {newVersion || "Unknown"}
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
               </div>
-              <p className="wizard-info">
-                <strong>What would you like to do?</strong>
-              </p>
               {error && (
-                <div className="error-message">
-                  <p><strong>Error:</strong> {error}</p>
-                  <button onClick={() => setError(null)} className="btn-dismiss">Dismiss</button>
+                <div className="error-box" style={{ marginBottom: "0.5rem", padding: "0.5rem", fontSize: "0.875rem" }}>
+                  <p className="error-box-text" style={{ margin: "0 0 0.375rem 0" }}>
+                    <strong>Error:</strong> {error}
+                  </p>
+                  <button
+                    onClick={() => setError(null)}
+                    style={{
+                      padding: "0.25rem 0.5rem",
+                      borderRadius: "0.25rem",
+                      border: "1px solid var(--color-error)",
+                      backgroundColor: "transparent",
+                      color: "var(--color-error)",
+                      fontSize: "0.75rem",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Dismiss
+                  </button>
                 </div>
               )}
-              <div className="wizard-actions">
-                <button onClick={handleCancel} className="btn-secondary">
-                  Back to Selection
+              <div style={{ display: "flex", justifyContent: "center", gap: "0.375rem", flexWrap: "wrap" }}>
+                <button onClick={handleCancel} className="btn-secondary" style={{ fontSize: "0.875rem", padding: "0.5rem 0.75rem" }}>
+                  Back
                 </button>
-                <button onClick={handleSkipToDashboard} className="btn-secondary btn-skip">
-                  Use Existing & Continue
+                <button onClick={handleSkipToDashboard} className="btn-secondary" style={{ fontSize: "0.875rem", padding: "0.5rem 0.75rem", borderColor: "var(--color-success)", color: "var(--color-success)" }}>
+                  Use Existing
                 </button>
-                <button onClick={handleSkipExisting} className="btn-secondary">
+                <button onClick={handleSkipExisting} className="btn-secondary" style={{ fontSize: "0.875rem", padding: "0.5rem 0.75rem" }}>
                   Skip & Update
                 </button>
-                <button onClick={handleOverwriteAll} className="btn-primary">
+                <button onClick={handleOverwriteAll} className="btn-primary" style={{ fontSize: "0.875rem", padding: "0.5rem 1rem" }}>
                   Overwrite All
                 </button>
               </div>
@@ -385,51 +486,87 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
 
           {/* Download Step */}
           {step === "download" && (
-            <div className="download-progress">
-              <div className="progress-header">
-                <h3>{getStepLabel()}</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              {/* Progress Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <h3 style={{ fontSize: "1rem", fontWeight: 600 }}>{getStepLabel()}</h3>
                 {progress.step === "downloading" && (
-                  <span className="progress-percent">{progress.percent}%</span>
+                  <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--color-primary)" }}>
+                    {progress.percent}%
+                  </span>
                 )}
               </div>
 
+              {/* Current Component Info */}
               {progress.componentDisplay && (
-                <div className="current-component-info">
-                  <div className="component-info-main">
-                    <span className="component-name">
+                <div
+                  style={{
+                    backgroundColor: "var(--bg-card-secondary)",
+                    borderRadius: "0.375rem",
+                    padding: "0.5rem",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>
                       {progress.currentComponent || progress.componentDisplay}
                     </span>
                     {progress.version && (
-                      <span className="component-version">{progress.version}</span>
+                      <span
+                        style={{
+                          padding: "0.125rem 0.375rem",
+                          backgroundColor: "var(--color-primary)",
+                          borderRadius: "0.25rem",
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          color: "white",
+                        }}
+                      >
+                        {progress.version}
+                      </span>
                     )}
                   </div>
                 </div>
               )}
 
-              <div className="progress-bar-container">
+              {/* Progress Bar */}
+              <div className="progress-container">
                 <div
-                  className={`progress-bar ${progress.step === "extracting" || progress.step === "installing" ? "progress-animated" : ""}`}
+                  className={progress.step === "extracting" || progress.step === "installing" ? "progress-bar-animated" : "progress-bar"}
                   style={{
                     width: progress.step === "extracting" || progress.step === "installing"
                       ? "100%"
-                      : `${progress.percent}%`
+                      : `${progress.percent}%`,
                   }}
                 />
               </div>
 
+              {/* Download Details */}
               {progress.step === "downloading" && progress.totalBytes > 0 && (
-                <div className="download-details">
+                <div style={{ textAlign: "center", fontSize: "0.875rem", color: "var(--text-secondary)" }}>
                   <span>
-                    {formatBytes(progress.downloadedBytes)} /{" "}
-                    {formatBytes(progress.totalBytes)}
+                    {formatBytes(progress.downloadedBytes)} / {formatBytes(progress.totalBytes)}
                   </span>
                 </div>
               )}
 
+              {/* Error Display */}
               {error && (
-                <div className="error-message">
-                  <p>Error: {error}</p>
-                  <button onClick={() => setError(null)}>Dismiss</button>
+                <div className="error-box" style={{ padding: "0.5rem", fontSize: "0.875rem" }}>
+                  <p className="error-box-text" style={{ margin: "0 0 0.375rem 0" }}>Error: {error}</p>
+                  <button
+                    onClick={() => setError(null)}
+                    style={{
+                      padding: "0.25rem 0.5rem",
+                      borderRadius: "0.25rem",
+                      border: "1px solid var(--color-error)",
+                      backgroundColor: "transparent",
+                      color: "var(--color-error)",
+                      fontSize: "0.75rem",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Dismiss
+                  </button>
                 </div>
               )}
             </div>
@@ -437,270 +574,60 @@ export function FirstRunWizard({ onComplete }: FirstRunWizardProps) {
 
           {/* Complete Step */}
           {step === "complete" && (
-            <div className="complete-message">
-              <p>Runtime binaries installed successfully!</p>
-              <div className="installed-components">
-                <div className="installed-component">
-                  <span className="installed-name">Caddy</span>
-                  <span className="installed-version">2.8.4</span>
-                </div>
-                <div className="installed-component">
-                  <span className="installed-name">PHP</span>
-                  <span className="installed-version">{packages.php.find(p => p.id === packageSelection.php)?.version || "8.5.1"}</span>
-                </div>
-                <div className="installed-component">
-                  <span className="installed-name">MySQL</span>
-                  <span className="installed-version">{packages.mysql.find(p => p.id === packageSelection.mysql)?.version || "8.4.0"}</span>
-                </div>
-                <div className="installed-component">
-                  <span className="installed-name">phpMyAdmin</span>
-                  <span className="installed-version">{packages.phpmyadmin.find(p => p.id === packageSelection.phpmyadmin)?.version || "5.2.2"}</span>
-                </div>
-              </div>
-              <p className="shortcut-hint">
-                Press <kbd>Ctrl+Shift+D</kbd> (Mac: <kbd>Cmd+Shift+D</kbd>) to open download folder
+            <div style={{ textAlign: "center" }}>
+              <p style={{ marginBottom: "0.75rem", color: "var(--color-success)", fontWeight: 500, fontSize: "0.875rem" }}>
+                Runtime binaries installed successfully!
               </p>
-              <button onClick={onComplete} className="btn-primary">
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "0.5rem",
+                  justifyContent: "center",
+                  marginBottom: "1rem",
+                }}
+              >
+                {[
+                  { name: "Caddy", version: "2.8.4" },
+                  { name: "PHP", version: packages.php.find(p => p.id === packageSelection.php)?.version || "8.5.1" },
+                  { name: "MySQL", version: packages.mysql.find(p => p.id === packageSelection.mysql)?.version || "8.4.0" },
+                  { name: "phpMyAdmin", version: packages.phpmyadmin.find(p => p.id === packageSelection.phpmyadmin)?.version || "5.2.2" },
+                ].map((pkg) => (
+                  <div
+                    key={pkg.name}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.375rem",
+                      padding: "0.375rem 0.5rem",
+                      backgroundColor: "var(--bg-card-secondary)",
+                      borderRadius: "0.375rem",
+                      fontSize: "0.875rem",
+                    }}
+                  >
+                    <span style={{ fontWeight: 500 }}>{pkg.name}</span>
+                    <span
+                      style={{
+                        padding: "0.125rem 0.375rem",
+                        backgroundColor: "var(--color-success)",
+                        borderRadius: "0.25rem",
+                        fontSize: "0.75rem",
+                        fontWeight: 500,
+                        color: "white",
+                      }}
+                    >
+                      {pkg.version}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <button onClick={onComplete} className="btn-primary" style={{ fontSize: "0.875rem", padding: "0.5rem 1rem" }}>
                 Continue to Dashboard
               </button>
             </div>
           )}
         </div>
       </div>
-
-      <style>{`
-        .wizard-steps {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.5rem;
-          margin-top: 1rem;
-        }
-        .wizard-step {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 0.25rem;
-          opacity: 0.5;
-          transition: opacity 0.3s;
-        }
-        .wizard-step.active {
-          opacity: 1;
-        }
-        .wizard-step.completed {
-          opacity: 1;
-        }
-        .wizard-step.completed .step-number {
-          background: #10b981;
-        }
-        .step-number {
-          width: 28px;
-          height: 28px;
-          border-radius: 50%;
-          background: #374151;
-          color: #fff;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 0.875rem;
-          font-weight: 500;
-        }
-        .step-label {
-          font-size: 0.75rem;
-          color: #9ca3af;
-        }
-        .wizard-step.active .step-label {
-          color: #fff;
-        }
-        .wizard-step-line {
-          width: 40px;
-          height: 2px;
-          background: #374151;
-        }
-        .wizard-step.active + .wizard-step-line,
-        .wizard-step.completed + .wizard-step-line {
-          background: #10b981;
-        }
-        .package-selector {
-          display: flex;
-          flex-direction: column;
-          gap: 1.5rem;
-          margin: 1.5rem 0;
-        }
-        .package-group {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-        }
-        .package-label {
-          display: flex;
-          flex-direction: column;
-          gap: 0.25rem;
-          font-size: 0.875rem;
-          font-weight: 500;
-          color: #d1d5db;
-        }
-        .package-label-hint {
-          font-size: 0.75rem;
-          font-weight: 400;
-          color: #9ca3af;
-        }
-        .package-select {
-          padding: 0.75rem;
-          border-radius: 0.5rem;
-          border: 1px solid #374151;
-          background: #1f2937;
-          color: #f9fafb;
-          font-size: 0.875rem;
-          cursor: pointer;
-        }
-        .package-select:hover {
-          border-color: #4b5563;
-        }
-        .package-select:focus {
-          outline: none;
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-        .package-info {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-          padding: 1rem;
-          background: #1f2937;
-          border-radius: 0.5rem;
-          border: 1px solid #374151;
-        }
-        .package-info-text {
-          font-size: 0.875rem;
-          color: #9ca3af;
-          margin: 0;
-        }
-        .btn-secondary {
-          padding: 0.75rem 1.5rem;
-          border-radius: 0.5rem;
-          border: 1px solid #374151;
-          background: transparent;
-          color: #f9fafb;
-          font-size: 0.875rem;
-          font-weight: 500;
-          cursor: pointer;
-          transition: background 0.2s;
-        }
-        .btn-secondary:hover {
-          background: #374151;
-        }
-        .existing-components-list {
-          display: flex;
-          flex-direction: column;
-          gap: 0.75rem;
-          margin: 1.5rem 0;
-          padding: 1rem;
-          background: #1f2937;
-          border-radius: 0.5rem;
-          border: 1px solid #374151;
-        }
-        .existing-component-item {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 0.75rem;
-          background: #374151;
-          border-radius: 0.375rem;
-        }
-        .existing-component-name {
-          font-size: 0.875rem;
-          font-weight: 500;
-          color: #f9fafb;
-        }
-        .version-replacement {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-        .existing-component-version {
-          font-size: 0.75rem;
-          color: #ef4444;
-          padding: 0.25rem 0.5rem;
-          background: #1f2937;
-          border-radius: 0.25rem;
-          text-decoration: line-through;
-        }
-        .version-arrow {
-          font-size: 0.75rem;
-          color: #9ca3af;
-        }
-        .new-component-version {
-          font-size: 0.75rem;
-          color: #10b981;
-          padding: 0.25rem 0.5rem;
-          background: #1f2937;
-          border-radius: 0.25rem;
-          font-weight: 500;
-        }
-        .error-message {
-          padding: 1rem;
-          background: rgba(239, 68, 68, 0.2);
-          border: 1px solid #ef4444;
-          border-radius: 0.5rem;
-          margin: 1rem 0;
-        }
-        .error-message p {
-          margin: 0 0 0.5rem 0;
-          color: #fca5a5;
-          font-size: 0.875rem;
-        }
-        .btn-dismiss {
-          padding: 0.375rem 0.75rem;
-          border-radius: 0.375rem;
-          border: 1px solid #ef4444;
-          background: transparent;
-          color: #fca5a5;
-          font-size: 0.75rem;
-          cursor: pointer;
-          transition: background 0.2s;
-        }
-        .btn-dismiss:hover {
-          background: rgba(239, 68, 68, 0.2);
-        }
-        .btn-skip {
-          border-color: #10b981;
-          color: #10b981;
-        }
-        .btn-skip:hover {
-          background: rgba(16, 185, 129, 0.1);
-        }
-        .btn-use-existing {
-          border-color: #3b82f6;
-          color: #3b82f6;
-        }
-        .btn-use-existing:hover {
-          background: rgba(59, 130, 246, 0.1);
-        }
-        .wizard-info-existing {
-          background: rgba(16, 185, 129, 0.1);
-          border: 1px solid #10b981;
-          border-radius: 0.5rem;
-          padding: 0.75rem;
-        }
-      `}</style>
     </div>
   );
 }
-
-// Import packages for displaying versions
-const packages = {
-  php: [
-    { id: "php-8.5", version: "8.5.1" },
-    { id: "php-8.4", version: "8.4.16" },
-    { id: "php-8.3", version: "8.3.29" },
-    { id: "php-8.2", version: "8.2.30" },
-  ],
-  mysql: [
-    { id: "mysql-8.4", version: "8.4.0" },
-    { id: "mysql-8.0", version: "8.0.40" },
-  ],
-  phpmyadmin: [
-    { id: "phpmyadmin-5.2", version: "5.2.2" },
-  ],
-};

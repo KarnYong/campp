@@ -10,17 +10,29 @@ export function StatusBar({ services, ...props }: StatusBarProps) {
   const totalCount = Object.keys(services).length;
 
   return (
-    <div className="status-bar" {...props}>
-      <div className="status-bar-left">
-        <span className="status-item">
+    <div
+      style={{
+        backgroundColor: "var(--bg-card)",
+        borderTop: "1px solid var(--border-color)",
+        padding: "0.5rem 1.5rem",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        fontSize: "0.75rem",
+        color: "var(--text-secondary)",
+      }}
+      {...props}
+    >
+      <div style={{ display: "flex", gap: "1.5rem" }}>
+        <span style={{ display: "flex", alignItems: "center" }}>
           Services: {runningCount}/{totalCount} running
         </span>
       </div>
-      <div className="status-bar-right">
-        <span className="status-item status-hint">
-          <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> Debug
+      <div style={{ display: "flex", gap: "1.5rem", alignItems: "center" }}>
+        <span style={{ display: "flex", alignItems: "center" }}>
+          <kbd className="kbd">Ctrl</kbd>+<kbd className="kbd">Shift</kbd>+<kbd className="kbd">D</kbd> Debug
         </span>
-        <span className="status-item">CAMPP v0.1.7</span>
+        <span>CAMPP v0.1.7</span>
       </div>
     </div>
   );

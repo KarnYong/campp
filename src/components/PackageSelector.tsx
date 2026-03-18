@@ -52,24 +52,33 @@ export function PackageSelector({ onSelectionChange, initialSelection }: Package
   };
 
   if (loading) {
-    return <div className="package-selector-loading">Loading available packages...</div>;
+    return (
+      <div style={{ textAlign: "center", color: "var(--text-secondary)", fontSize: "0.875rem", padding: "1rem" }}>
+        Loading available packages...
+      </div>
+    );
   }
 
   if (!packages) {
-    return <div className="package-selector-error">Failed to load available packages</div>;
+    return (
+      <div style={{ textAlign: "center", color: "var(--color-error)", fontSize: "0.875rem" }}>
+        Failed to load available packages
+      </div>
+    );
   }
 
   return (
-    <div className="package-selector">
-      <div className="package-group">
-        <label className="package-label">
-          <span>PHP Version</span>
-          <span className="package-label-hint">Required for running PHP applications</span>
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+      {/* PHP Version Selector */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+        <label style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--text-primary)" }}>
+          PHP Version
         </label>
         <select
           value={selection.php}
           onChange={(e) => handlePhpChange(e.target.value)}
-          className="package-select"
+          className="input"
+          style={{ cursor: "pointer", padding: "0.375rem 0.5rem", fontSize: "0.875rem", width: "100%" }}
         >
           {packages.php.map((pkg: PhpPackage) => (
             <option key={pkg.id} value={pkg.id}>
@@ -81,15 +90,16 @@ export function PackageSelector({ onSelectionChange, initialSelection }: Package
         </select>
       </div>
 
-      <div className="package-group">
-        <label className="package-label">
-          <span>MySQL Version</span>
-          <span className="package-label-hint">Database server for your applications</span>
+      {/* MySQL Version Selector */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+        <label style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--text-primary)" }}>
+          MySQL Version
         </label>
         <select
           value={selection.mysql}
           onChange={(e) => handleMySQLChange(e.target.value)}
-          className="package-select"
+          className="input"
+          style={{ cursor: "pointer", padding: "0.375rem 0.5rem", fontSize: "0.875rem", width: "100%" }}
         >
           {packages.mysql.map((pkg: MySQLPackage) => (
             <option key={pkg.id} value={pkg.id}>
@@ -101,15 +111,16 @@ export function PackageSelector({ onSelectionChange, initialSelection }: Package
         </select>
       </div>
 
-      <div className="package-group">
-        <label className="package-label">
-          <span>phpMyAdmin Version</span>
-          <span className="package-label-hint">Web-based database administration tool</span>
+      {/* phpMyAdmin Version Selector */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+        <label style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--text-primary)" }}>
+          phpMyAdmin Version
         </label>
         <select
           value={selection.phpmyadmin}
           onChange={(e) => handlePhpMyAdminChange(e.target.value)}
-          className="package-select"
+          className="input"
+          style={{ cursor: "pointer", padding: "0.375rem 0.5rem", fontSize: "0.875rem", width: "100%" }}
         >
           {packages.phpmyadmin.map((pkg: PhpMyAdminPackage) => (
             <option key={pkg.id} value={pkg.id}>
@@ -120,12 +131,13 @@ export function PackageSelector({ onSelectionChange, initialSelection }: Package
         </select>
       </div>
 
-      <div className="package-info">
-        <p className="package-info-text">
+      {/* Package Info Box */}
+      <div className="info-box" style={{ padding: "0.5rem", fontSize: "0.875rem" }}>
+        <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", margin: "0 0 0.375rem 0" }}>
           <strong>Recommended:</strong> PHP 8.5, MySQL 8.4 (LTS), phpMyAdmin 5.2
         </p>
-        <p className="package-info-text">
-          <strong>Note:</strong> EOL versions may have security vulnerabilities but are provided for legacy application compatibility.
+        <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", margin: 0 }}>
+          <strong>Note:</strong> EOL versions may have security vulnerabilities.
         </p>
       </div>
     </div>
