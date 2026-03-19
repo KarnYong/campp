@@ -534,7 +534,9 @@ impl RuntimeDownloader {
         let url = self.get_binary_url(component);
         let extension = Self::get_extension_from_url(&url);
 
-        eprintln!("Downloading {} from {}", component.name(), url);
+        eprintln!("[DEBUG] Platform: {:?}", self.platform);
+        eprintln!("[DEBUG] Downloading {} from: {}", component.name(), url);
+        eprintln!("[DEBUG] Full URL ({} chars): {}", url.len(), url);
 
         // Set platform-appropriate User-Agent
         let user_agent = match self.platform {
@@ -562,9 +564,10 @@ impl RuntimeDownloader {
         let status = response.status();
         if !status.is_success() {
             return Err(format!(
-                "HTTP error {}: Failed to download {}",
+                "HTTP error {}: Failed to download {}\nURL: {}",
                 status.as_u16(),
-                component.name()
+                component.name(),
+                url
             ));
         }
 
