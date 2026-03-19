@@ -496,12 +496,14 @@ jobs:
         run: |
           VERSION="${{ steps.get_version.outputs.version }}"
           echo "Renaming artifacts to include version: $VERSION"
-          find src-tauri/target/release/bundle -type f | while read filepath; do
+          # Rename only the actual bundle artifacts, not internal package files
+          for filepath in src-tauri/target/release/bundle/deb/*.deb \
+                         src-tauri/target/release/bundle/appimage/*.AppImage \
+                         src-tauri/target/release/bundle/rpm/*.rpm; do
+            [ -f "$filepath" ] || continue
             dir=$(dirname "$filepath")
-            ext="${filepath##*.}"
             filename=$(basename "$filepath")
-            name="${filename%.*}"
-            newname="CAMPP-${VERSION}.${ext}"
+            newname="CAMPP-${VERSION}.${filename##*.}"
             echo "Renaming: $filename -> $newname"
             mv "$filepath" "$dir/$newname"
           done
