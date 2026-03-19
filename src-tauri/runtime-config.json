@@ -39,12 +39,12 @@
             "macOSArm64": "9fb9a6a5ce41a384a611ec3f3e2deb5329ef0ce68848ab50ac7bb391b1890c23"
           },
           "urls": {
-            "windowsX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1-windows/php-8.5.1-Win32-vs17-x64.zip",
-            "windowsArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1-windows/php-8.5.1-Win32-vs17-x86.zip",
-            "linuxX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1-windows/php-8.4.18-fpm-linux-x86_64.tar.gz",
-            "linuxArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1-windows/php-8.4.18-fpm-linux-aarch64.tar.gz",
-            "macOSX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1-windows/php-8.4.18-fpm-macos-x86_64.tar.gz",
-            "macOSArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1-windows/php-8.4.18-fpm-macos-aarch64.tar.gz"
+            "windowsX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.5.1-Win32-vs17-x64.zip",
+            "windowsArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.5.1-Win32-vs17-x86.zip",
+            "linuxX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.4.18-fpm-linux-x86_64.tar.gz",
+            "linuxArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.4.18-fpm-linux-aarch64.tar.gz",
+            "macOSX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.4.18-fpm-macos-x86_64.tar.gz",
+            "macOSArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.4.18-fpm-macos-aarch64.tar.gz"
           }
         }
       ]
@@ -67,12 +67,12 @@
             "macOSArm64": "b4ad74a78aa4378df00e1164c9979dd660ea09bf47e05f6ef8324f4ea1418618"
           },
           "urls": {
-            "windowsX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0-windows/mysql-8.4.0-winx64.zip",
-            "windowsArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0-windows/mysql-8.4.0-winx64.zip",
-            "linuxX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0-windows/mysql-8.4.0-linux-glibc2.28-x86_64.tar.xz",
-            "linuxArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0-windows/mysql-8.4.0-linux-glibc2.28-aarch64.tar.xz",
-            "macOSX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0-windows/mysql-8.4.0-macos14-x86_64.tar.gz",
-            "macOSArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0-windows/mysql-8.4.0-macos14-arm64.tar.gz"
+            "windowsX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-winx64.zip",
+            "windowsArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-winx64.zip",
+            "linuxX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-linux-glibc2.28-x86_64.tar.xz",
+            "linuxArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-linux-glibc2.28-aarch64.tar.xz",
+            "macOSX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-macos14-x86_64.tar.gz",
+            "macOSArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-macos14-arm64.tar.gz"
           }
         }
       ]
