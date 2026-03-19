@@ -114,3 +114,22 @@ export const SERVICE_DESCRIPTIONS = {
   [ServiceType.PhpFpm]: "PHP Runtime",
   [ServiceType.MySQL]: "Database Server",
 } as const;
+
+// System dependency types
+export interface InstallCommand {
+  distribution: string;
+  command: string;
+}
+
+export interface Dependency {
+  name: string;
+  installed: boolean;
+  description: string;
+  install_commands: InstallCommand[];
+}
+
+export interface DependencyCheckResult {
+  dependencies: Dependency[];
+  all_satisfied: boolean;
+  platform_notes: string;
+}

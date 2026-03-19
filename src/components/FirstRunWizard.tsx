@@ -1,7 +1,11 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { DownloadProgress as DownloadProgressType, PackageSelection } from "../types/services";
+import {
+  DownloadProgress as DownloadProgressType,
+  PackageSelection,
+  DependencyCheckResult,
+} from "../types/services";
 import { PackageSelector } from "./PackageSelector";
 
 interface FirstRunWizardProps {
@@ -9,7 +13,7 @@ interface FirstRunWizardProps {
   [key: string]: any; // Allow additional props like data-testid
 }
 
-type WizardStep = "welcome" | "packages" | "confirm" | "download" | "complete";
+type WizardStep = "welcome" | "packages" | "dependencies" | "confirm" | "download" | "complete";
 
 interface ExistingComponent {
   name: string;
@@ -54,6 +58,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
   });
   const [existingComponents, setExistingComponents] = useState<ExistingComponent[]>([]);
   const [hasExistingOnWelcome, setHasExistingOnWelcome] = useState(false);
+  const [dependencyCheckResult, setDependencyCheckResult] = useState<DependencyCheckResult | null>(null);
 
   // Check for existing components when welcome step loads
   useEffect(() => {
@@ -108,7 +113,21 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
   const startDownload = async () => {
     setError(null);
 
-    // First, check for existing components
+    // First, check system dependencies
+    try {
+      const depsResult = await invoke<DependencyCheckResult>("check_system_dependencies");
+      setDependencyCheckResult(depsResult);
+
+      if (!depsResult.all_satisfied) {
+        setStep("dependencies");
+        return;
+      }
+    } catch (err) {
+      console.error("Failed to check dependencies:", err);
+      // Continue anyway if dependency check fails
+    }
+
+    // Then, check for existing components
     try {
       const existing = await invoke<Record<string, string>>("check_existing_components");
 
@@ -202,6 +221,8 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
   const handleBack = () => {
     if (step === "packages") {
       setStep("welcome");
+    } else if (step === "dependencies") {
+      setStep("packages");
     }
   };
 
@@ -242,9 +263,10 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
     switch (step) {
       case "welcome": return 1;
       case "packages": return 2;
-      case "confirm": return 3;
-      case "download": return 4;
-      case "complete": return 4;
+      case "dependencies": return 3;
+      case "confirm": return 4;
+      case "download": return 5;
+      case "complete": return 5;
       default: return 1;
     }
   };
@@ -286,7 +308,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
 
           {/* Compact Step Indicator */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.25rem", marginTop: "0.75rem" }}>
-            {[1, 2, 3, 4].map((stepNum) => (
+            {[1, 2, 3, 4, 5].map((stepNum) => (
               <div key={stepNum} style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
                 <div style={{
                   width: "1.25rem",
@@ -303,7 +325,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
                 }}>
                   {stepNum}
                 </div>
-                {stepNum < 4 && (
+                {stepNum < 5 && (
                   <div style={{ width: "1rem", height: "1px", backgroundColor: currentStepNum > stepNum ? "var(--color-success)" : "var(--border-color)" }} />
                 )}
               </div>
@@ -385,6 +407,87 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
                 </button>
                 <button onClick={startDownload} className="btn-primary" style={{ fontSize: "0.875rem", padding: "0.5rem 1rem" }}>
                   Download & Install
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Dependencies Step */}
+          {step === "dependencies" && dependencyCheckResult && (
+            <div>
+              <p style={{ fontSize: "0.875rem", marginBottom: "0.5rem", color: "var(--color-error)", fontWeight: 600 }}>
+                Missing System Dependencies
+              </p>
+              <p style={{ fontSize: "0.875rem", marginBottom: "0.75rem", color: "var(--text-secondary)" }}>
+                {dependencyCheckResult.platform_notes}
+              </p>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.5rem",
+                  margin: "0.5rem 0",
+                  padding: "0.5rem",
+                  backgroundColor: "rgba(239, 68, 68, 0.1)",
+                  borderRadius: "0.375rem",
+                  border: "1px solid var(--color-error)",
+                }}
+              >
+                {dependencyCheckResult.dependencies
+                  .filter((dep) => !dep.installed)
+                  .map((dep) => (
+                    <div key={dep.name} style={{ marginBottom: "0.5rem" }}>
+                      <div style={{ fontWeight: 600, marginBottom: "0.25rem", fontSize: "0.875rem" }}>
+                        {dep.name}
+                      </div>
+                      <div style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", marginBottom: "0.375rem" }}>
+                        {dep.description}
+                      </div>
+                      <div style={{ fontSize: "0.8125rem", fontWeight: 500, marginBottom: "0.25rem" }}>
+                        Install command for your distribution:
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.25rem",
+                        }}
+                      >
+                        {dep.install_commands.map((cmd) => (
+                          <div
+                            key={cmd.distribution}
+                            style={{
+                              backgroundColor: "var(--bg-card)",
+                              padding: "0.375rem 0.5rem",
+                              borderRadius: "0.25rem",
+                              fontSize: "0.75rem",
+                            }}
+                          >
+                            <div style={{ fontWeight: 600, marginBottom: "0.125rem" }}>{cmd.distribution}:</div>
+                            <code
+                              style={{
+                                fontFamily: "monospace",
+                                fontSize: "0.75rem",
+                                wordBreak: "break-all",
+                              }}
+                            >
+                              {cmd.command}
+                            </code>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+              <p style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", marginBottom: "0.75rem" }}>
+                After installing the dependencies, click "Retry Check" to continue.
+              </p>
+              <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem" }}>
+                <button onClick={handleBack} className="btn-secondary" style={{ fontSize: "0.875rem", padding: "0.5rem 1rem" }}>
+                  Back
+                </button>
+                <button onClick={startDownload} className="btn-primary" style={{ fontSize: "0.875rem", padding: "0.5rem 1rem" }}>
+                  Retry Check
                 </button>
               </div>
             </div>

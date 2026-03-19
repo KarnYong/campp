@@ -97,6 +97,7 @@ pub fn run() {
             commands::check_ports,
             // Runtime download commands
             commands::check_runtime_installed,
+            commands::check_system_dependencies,
             commands::download_runtime,
             commands::download_runtime_with_packages,
             commands::download_runtime_with_skip,

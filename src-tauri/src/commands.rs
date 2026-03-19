@@ -3,6 +3,7 @@
 //! This module contains all Tauri commands that are exposed to the frontend.
 
 use crate::process::{ServiceMap, ServiceState, ServiceType};
+use crate::runtime::deps::DependencyCheckResult;
 use crate::runtime::downloader::{DownloadProgress, RuntimeDownloader};
 use crate::runtime::packages::{PackageSelection, PackagesConfig};
 use crate::config::AppSettings;
@@ -423,4 +424,10 @@ pub async fn download_runtime_with_skip(
         .await?;
 
     Ok("Runtime binaries installed successfully".to_string())
+}
+
+/// Check system dependencies (libraries required by runtime binaries)
+#[tauri::command]
+pub async fn check_system_dependencies() -> DependencyCheckResult {
+    crate::runtime::deps::check_system_dependencies()
 }
