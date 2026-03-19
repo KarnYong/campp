@@ -46,8 +46,8 @@ pub fn check_system_dependencies() -> DependencyCheckResult {
 
     #[cfg(target_os = "linux")]
     {
-        // Check for libaio (required by MySQL/MariaDB)
-        dependencies.push(check_libaio());
+        // Using MariaDB systemd tarball which doesn't require libaio
+        // No additional dependency checks needed
     }
 
     #[cfg(target_os = "windows")]
@@ -200,7 +200,7 @@ fn check_library(lib_name: &str) -> bool {
 fn get_platform_notes() -> String {
     #[cfg(target_os = "linux")]
     {
-        "Linux systems require libaio library for MySQL/MariaDB to run.".to_string()
+        "Using MariaDB systemd tarball - no additional dependencies required.".to_string()
     }
 
     #[cfg(target_os = "windows")]
