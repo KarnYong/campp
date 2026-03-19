@@ -378,15 +378,15 @@ jobs:
             -ov -format UDZO \
             "$DMG_PATH"
 
-      # Upload artifacts - upload all DMG files found
+      # Upload artifacts - only upload DMGs with our new naming pattern
       - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: CAMPP-macOS
           path: |
-            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
-            src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
-            src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/CAMPP-*.dmg
+            src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/CAMPP-*.dmg
+            src-tauri/target/universal-apple-darwin/release/bundle/dmg/CAMPP-*.dmg
           if-no-files-found: error
 
       # List uploaded artifacts for debugging
