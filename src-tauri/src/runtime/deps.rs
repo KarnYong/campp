@@ -4,6 +4,7 @@
 //! needed by the runtime binaries (especially MySQL/MariaDB on Linux).
 
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::path::Path;
 
 /// Represents a system dependency that needs to be checked
@@ -74,35 +75,92 @@ pub fn check_system_dependencies() -> DependencyCheckResult {
 /// Check for libaio library on Linux
 #[cfg(target_os = "linux")]
 fn check_libaio() -> Dependency {
-    let installed = check_library("libaio.so.1") || check_library("libaio.so.1.0.1");
+    // Check for libaio.so.1 specifically (what MySQL needs)
+    let has_symlink = check_library("libaio.so.1");
+
+    // Also check if the actual library file exists
+    let has_lib_file = check_library("libaio.so.1.0.1") || check_library("libaio.so.1.0.0");
+
+    // It's only properly installed if the symlink exists
+    let installed = has_symlink;
+
+    // Build install commands with symlink fix instructions
+    let mut install_commands = vec![
+        InstallCommand {
+            distribution: "Ubuntu 24.04+ / Debian 12+".to_string(),
+            command: "sudo apt install libaio1t64 && sudo ln -sf /usr/lib/x86_64-linux-gnu/libaio.so.1.0.1 /usr/lib/x86_64-linux-gnu/libaio.so.1".to_string(),
+        },
+        InstallCommand {
+            distribution: "Ubuntu/Debian (older)".to_string(),
+            command: "sudo apt install libaio1".to_string(),
+        },
+        InstallCommand {
+            distribution: "Fedora/RHEL/CentOS".to_string(),
+            command: "sudo dnf install libaio".to_string(),
+        },
+        InstallCommand {
+            distribution: "Arch Linux".to_string(),
+            command: "sudo pacman -S libaio".to_string(),
+        },
+        InstallCommand {
+            distribution: "openSUSE".to_string(),
+            command: "sudo zypper install libaio1".to_string(),
+        },
+    ];
+
+    // If the library file exists but symlink doesn't, add a fix command
+    if has_lib_file && !has_symlink {
+        let symlink_path = find_libaio_path();
+        if let Some(base_path) = symlink_path {
+            install_commands.insert(0, InstallCommand {
+                distribution: "Fix: Create missing symlink".to_string(),
+                command: format!("sudo ln -sf {} {}", base_path, get_symlink_target(&base_path)),
+            });
+        }
+    }
 
     Dependency {
         name: "libaio".to_string(),
         installed,
         description: "Linux AIO library - Required by MySQL/MariaDB".to_string(),
-        install_commands: vec![
-            InstallCommand {
-                distribution: "Ubuntu/Debian".to_string(),
-                command: "sudo apt update && sudo apt install libaio1t64".to_string(),
-            },
-            InstallCommand {
-                distribution: "Ubuntu/Debian (older)".to_string(),
-                command: "sudo apt install libaio1".to_string(),
-            },
-            InstallCommand {
-                distribution: "Fedora/RHEL/CentOS".to_string(),
-                command: "sudo dnf install libaio".to_string(),
-            },
-            InstallCommand {
-                distribution: "Arch Linux".to_string(),
-                command: "sudo pacman -S libaio".to_string(),
-            },
-            InstallCommand {
-                distribution: "openSUSE".to_string(),
-                command: "sudo zypper install libaio1".to_string(),
-            },
-        ],
+        install_commands,
     }
+}
+
+/// Find the path to the libaio library file
+#[cfg(target_os = "linux")]
+fn find_libaio_path() -> Option<String> {
+    let paths = [
+        "/usr/lib/x86_64-linux-gnu/libaio.so.1.0.1",
+        "/usr/lib/x86_64-linux-gnu/libaio.so.1.0.0",
+        "/usr/lib64/libaio.so.1.0.1",
+        "/usr/lib64/libaio.so.1.0.0",
+        "/usr/lib/libaio.so.1.0.1",
+        "/usr/lib/libaio.so.1.0.0",
+        "/lib/x86_64-linux-gnu/libaio.so.1.0.1",
+        "/lib/x86_64-linux-gnu/libaio.so.1.0.0",
+    ];
+
+    for path in paths {
+        if Path::new(path).exists() {
+            return Some(path.to_string());
+        }
+    }
+
+    None
+}
+
+/// Get the target path for the symlink based on the library path
+#[cfg(target_os = "linux")]
+fn get_symlink_target(lib_path: &str) -> String {
+    // Extract the directory and create the symlink path
+    if let Some(parent) = Path::new(lib_path).parent() {
+        let symlink_path = parent.join("libaio.so.1");
+        return symlink_path.to_string_lossy().to_string();
+    }
+
+    // Fallback to common location
+    "/usr/lib/x86_64-linux-gnu/libaio.so.1".to_string()
 }
 
 /// Check if a shared library is available on the system
