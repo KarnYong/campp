@@ -937,23 +937,11 @@ $cfg['Servers'][$i]['connect_type'] = 'tcp';
 $cfg['Servers'][$i]['DisableIS'] = true;
 $cfg['Servers'][$i]['MaxTableUiprefs'] = 100;
 
-// phpMyAdmin configuration storage settings (improves performance)
-$cfg['Servers'][$i]['pmadb'] = 'phpmyadmin';
-$cfg['Servers'][$i]['controluser'] = 'pma';
-$cfg['Servers'][$i]['controlpass'] = '';
-$cfg['Servers'][$i]['bookmarktable'] = 'pma__bookmark';
-$cfg['Servers'][$i]['relation'] = 'pma__relation';
-$cfg['Servers'][$i]['userpreferences'] = 'pma__userconfig';
-$cfg['Servers'][$i]['table_info'] = 'pma__table_info';
-$cfg['Servers'][$i]['column_info'] = 'pma__column_info';
-$cfg['Servers'][$i]['history'] = 'pma__history';
-$cfg['Servers'][$i]['recent'] = 'pma__recent';
-$cfg['Servers'][$i]['table_uiprefs'] = 'pma__table_uiprefs';
-$cfg['Servers'][$i]['tracking'] = 'pma__tracking';
-$cfg['Servers'][$i]['table_coords'] = 'pma__table_coords';
-$cfg['Servers'][$i]['pdf_pages'] = 'pma__pdf_pages';
-$cfg['Servers'][$i]['designer_settings'] = 'pma__designer_settings';
-$cfg['Servers'][$i]['export_templates'] = 'pma__export_templates';
+// Configuration storage is disabled by default
+// To enable: create phpmyadmin database, pma user, and import sql/create_tables.sql
+// $cfg['Servers'][$i]['pmadb'] = 'phpmyadmin';
+// $cfg['Servers'][$i]['controluser'] = 'pma';
+// $cfg['Servers'][$i]['controlpass'] = '';
 
 // Upload and save directories
 $cfg['UploadDir'] = '{}';

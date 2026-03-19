@@ -432,9 +432,20 @@ jobs:
           $version = "${{ steps.get_version.outputs.version }}"
           Write-Host "Renaming artifacts to include version: $version"
           Get-ChildItem -Path "src-tauri/target/release/bundle" -Recurse -File | ForEach-Object {
+            $filename = $_.Name
             $ext = [System.IO.Path]::GetExtension($_.FullName)
-            $newName = "CAMPP-$version$ext"
-            Write-Host "Renaming: $($_.Name) -> $newName"
+            # Extract architecture from filename (e.g., "x64" from "CAMPP_0.1.7_x64-setup.nsis")
+            if ($filename -match '_x64[-_]') {
+              $newName = "CAMPP-$version-x64$ext"
+            } elseif ($filename -match '_ia32[-_]') {
+              $newName = "CAMPP-$version-ia32$ext"
+            } elseif ($filename -match '_arm64[-_]') {
+              $newName = "CAMPP-$version-arm64$ext"
+            } else {
+              # Default to x64 for Windows (most common)
+              $newName = "CAMPP-$version-x64$ext"
+            }
+            Write-Host "Renaming: $filename -> $newName"
             Rename-Item -Path $_.FullName -NewName (Join-Path $_.DirectoryName $newName)
           }
 
@@ -503,7 +514,22 @@ jobs:
             [ -f "$filepath" ] || continue
             dir=$(dirname "$filepath")
             filename=$(basename "$filepath")
-            newname="CAMPP-${VERSION}.${filename##*.}"
+            ext="${filename##*.}"
+
+            # Extract architecture from filename
+            # Examples: CAMPP_0.1.7_amd64.deb, CAMPP-0.1.7-1.x86_64.rpm
+            if [[ "$filename" =~ _amd64|_x86_64|x86_64 ]]; then
+              arch="amd64"
+            elif [[ "$filename" =~ _arm64|aarch64 ]]; then
+              arch="arm64"
+            elif [[ "$filename" =~ _i386|_i686 ]]; then
+              arch="i386"
+            else
+              # Default to amd64
+              arch="amd64"
+            fi
+
+            newname="CAMPP-${VERSION}-${arch}.${ext}"
             echo "Renaming: $filename -> $newname"
             mv "$filepath" "$dir/$newname"
           done
