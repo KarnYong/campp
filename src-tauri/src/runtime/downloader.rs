@@ -536,9 +536,16 @@ impl RuntimeDownloader {
 
         eprintln!("Downloading {} from {}", component.name(), url);
 
+        // Set platform-appropriate User-Agent
+        let user_agent = match self.platform {
+            Platform::LinuxX64 | Platform::LinuxArm64 => "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            Platform::MacOSX64 | Platform::MacOSArm64 => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            Platform::WindowsX64 | Platform::WindowsArm64 => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        };
+
         // MySQL downloads require specific headers to bypass their gateway
         let mut request = self.client.get(&url)
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            .header("User-Agent", user_agent);
 
         // Add Referer header for MySQL downloads (required by dev.mysql.com gateway)
         if component == BinaryComponent::MySQL && url.contains("dev.mysql.com") {
