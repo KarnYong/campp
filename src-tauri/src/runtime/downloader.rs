@@ -832,6 +832,78 @@ impl RuntimeDownloader {
         Ok(())
     }
 
+    /// Extract a tar.xz archive
+    fn extract_tar_xz(&self, archive_path: &Path, dest_dir: &Path) -> Result<(), String> {
+        use xz2::read::XzDecoder;
+
+        let file = File::open(archive_path).map_err(|e| format!("Failed to open archive: {}", e))?;
+        let decoder = XzDecoder::new(file);
+        let mut archive = tar::Archive::new(decoder);
+
+        // Unpack the archive, ignoring the first directory level if needed
+        archive
+            .unpack(dest_dir)
+            .map_err(|e| format!("Failed to extract {}: {}", archive_path.display(), e))?;
+
+        // Ensure executable permissions are set for binary files on Unix
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            // Known binary paths that need execute permission
+            let binary_paths = [
+                dest_dir.join("caddy"),
+                dest_dir.join("php-fpm"),
+                dest_dir.join("php-cgi"),
+                dest_dir.join("buildroot/bin/php-fpm"),
+                dest_dir.join("buildroot/bin/php"),
+                dest_dir.join("mysql/bin/mysqld"),
+                dest_dir.join("bin/mysqld"),
+            ];
+
+            for path in &binary_paths {
+                if path.exists() {
+                    if let Ok(metadata) = fs::metadata(path) {
+                        let mut perms = metadata.permissions();
+                        let mode = perms.mode();
+                        // Set execute bits if not already set
+                        if mode & 0o111 == 0 {
+                            perms.set_mode(mode | 0o755);
+                            let _ = fs::set_permissions(path, perms);
+                        }
+                    }
+                }
+            }
+
+            // Recursively set executable permission for all files in bin directories
+            if let Ok(entries) = fs::read_dir(dest_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
+                            if dir_name == "bin" || dir_name == "sbin" {
+                                if let Ok(bin_entries) = fs::read_dir(&path) {
+                                    for bin_entry in bin_entries.flatten() {
+                                        let bin_path = bin_entry.path();
+                                        if bin_path.is_file() {
+                                            if let Ok(metadata) = fs::metadata(&bin_path) {
+                                                let mut perms = metadata.permissions();
+                                                perms.set_mode(0o755);
+                                                let _ = fs::set_permissions(&bin_path, perms);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// Download and install all runtime binaries
     pub async fn download_all(
         &self,
@@ -890,8 +962,16 @@ impl RuntimeDownloader {
                 .map(|n| n.ends_with(".tar.gz"))
                 .unwrap_or(false);
 
+            let is_tar_xz = downloaded_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.ends_with(".tar.xz"))
+                .unwrap_or(false);
+
             if is_tar_gz || extension == "gz" {
                 self.extract_tar_gz(&downloaded_path, &runtime_dir)?;
+            } else if is_tar_xz || extension == "xz" {
+                self.extract_tar_xz(&downloaded_path, &runtime_dir)?;
             } else if extension == "zip" {
                 self.extract_zip(&downloaded_path, &runtime_dir)?;
             } else if extension.is_empty() {
@@ -1020,8 +1100,16 @@ impl RuntimeDownloader {
                 .map(|n| n.ends_with(".tar.gz"))
                 .unwrap_or(false);
 
+            let is_tar_xz = downloaded_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.ends_with(".tar.xz"))
+                .unwrap_or(false);
+
             if is_tar_gz || extension == "gz" {
                 self.extract_tar_gz(&downloaded_path, &runtime_dir)?;
+            } else if is_tar_xz || extension == "xz" {
+                self.extract_tar_xz(&downloaded_path, &runtime_dir)?;
             } else if extension == "zip" {
                 self.extract_zip(&downloaded_path, &runtime_dir)?;
             } else if extension.is_empty() {
