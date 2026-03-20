@@ -20,6 +20,11 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 180
 
+    env:
+      APP_NAME: CAMPP
+      KEYCHAIN_NAME: build.keychain
+      KEYCHAIN_PASSWORD: actions
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -36,369 +41,348 @@ jobs:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Install frontend dependencies
-        run: npm install
-
-      # Import Code Signing Certificate
-      - name: Import Certificate
-        env:
-          CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        run: |
-          echo "$CERTIFICATE_BASE64" | base64 --decode > certificate.p12
-          security create-keychain -p actions build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p actions build.keychain
-          security import certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productsign
-          # Set keychain settings to prevent UI prompts
-          security set-keychain-settings -lut 21600 build.keychain
-          # Add codesign to ACL with all necessary flags
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions build.keychain
-          security list-keychains -s build.keychain
-          security find-identity -v build.keychain
+        run: npm ci
 
       - name: Get version from package.json
         id: get_version
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Building version: $VERSION"
 
-      # Get signing identity from certificate
-      - name: Get Signing Identity
+      - name: Import signing certificate
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          echo "$CERTIFICATE_BASE64" | base64 --decode > certificate.p12
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
+          security default-keychain -s "$KEYCHAIN_NAME"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
+          security import certificate.p12 \
+            -k "$KEYCHAIN_NAME" \
+            -P "$CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security \
+            -T /usr/bin/productsign
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_NAME"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
+          security list-keychains -s "$KEYCHAIN_NAME"
+          security find-identity -v "$KEYCHAIN_NAME"
+
+          rm -f certificate.p12
+
+      - name: Get signing identity
         id: signing_identity
         run: |
-          # List all identities and find Developer ID Application
-          security find-identity -v build.keychain
-          IDENTITY=$(security find-identity -v build.keychain | grep "Developer ID Application" | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          set -euo pipefail
+
+          security find-identity -v "$KEYCHAIN_NAME"
+
+          IDENTITY=$(security find-identity -v "$KEYCHAIN_NAME" | grep "Developer ID Application" | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
           if [ -z "$IDENTITY" ]; then
-            echo "No Developer ID Application certificate found!"
+            echo "No Developer ID Application certificate found"
             exit 1
           fi
-          echo "identity=$IDENTITY" >> $GITHUB_OUTPUT
+
+          echo "identity=$IDENTITY" >> "$GITHUB_OUTPUT"
           echo "Found identity: $IDENTITY"
 
-      # Update tauri.conf.json with the signing identity
-      - name: Update Signing Identity in Config
+      - name: Update tauri.conf.json with signing identity
         env:
           IDENTITY: ${{ steps.signing_identity.outputs.identity }}
+        shell: python3 {0}
         run: |
           import json, os
-          with open('src-tauri/tauri.conf.json', 'r', encoding='utf-8') as f:
-              config = json.load(f)
-          config['bundle']['macOS']['signingIdentity'] = os.environ['IDENTITY']
-          with open('src-tauri/tauri.conf.json', 'w', encoding='utf-8') as f:
-              json.dump(config, f, indent='  ')
-        shell: python3 {0}
 
-      # Build for ARM64
+          path = "src-tauri/tauri.conf.json"
+          with open(path, "r", encoding="utf-8") as f:
+              config = json.load(f)
+
+          config.setdefault("bundle", {}).setdefault("macOS", {})
+          config["bundle"]["macOS"]["signingIdentity"] = os.environ["IDENTITY"]
+
+          with open(path, "w", encoding="utf-8") as f:
+              json.dump(config, f, indent=2)
+              f.write("\n")
+
+      - name: Create macOS signing helper script
+        run: |
+          cat > sign_and_verify_macos.sh <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          APP_PATH="$1"
+          IDENTITY="$2"
+          ENTITLEMENTS="$3"
+          KEYCHAIN_NAME="$4"
+          KEYCHAIN_PASSWORD="$5"
+
+          if [ ! -d "$APP_PATH" ]; then
+            echo "App not found: $APP_PATH"
+            exit 1
+          fi
+
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
+
+          echo "=== Signing nested bundles for: $APP_PATH ==="
+
+          while IFS= read -r item; do
+            echo "Signing nested app: $item"
+            codesign --force --timestamp --options runtime --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$item"
+          done < <(find "$APP_PATH" -type d -name "*.app" ! -path "$APP_PATH" | sort -r)
+
+          while IFS= read -r item; do
+            echo "Signing XPC: $item"
+            codesign --force --timestamp --options runtime --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$item"
+          done < <(find "$APP_PATH" -type d -name "*.xpc" | sort -r)
+
+          while IFS= read -r item; do
+            echo "Signing app extension: $item"
+            codesign --force --timestamp --options runtime --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$item"
+          done < <(find "$APP_PATH" -type d -name "*.appex" | sort -r)
+
+          while IFS= read -r item; do
+            echo "Signing framework bundle: $item"
+            codesign --force --timestamp --options runtime --sign "$IDENTITY" "$item"
+          done < <(find "$APP_PATH" -type d -name "*.framework" | sort -r)
+
+          while IFS= read -r item; do
+            echo "Signing dylib: $item"
+            codesign --force --timestamp --sign "$IDENTITY" "$item"
+          done < <(find "$APP_PATH" -type f -name "*.dylib" | sort)
+
+          while IFS= read -r item; do
+            echo "Signing executable Mach-O: $item"
+            codesign --force --timestamp --sign "$IDENTITY" "$item"
+          done < <(
+            find "$APP_PATH" -type f \
+              ! -name "*.dylib" \
+              ! -path "*/Contents/_CodeSignature/*" \
+              -print0 | while IFS= read -r -d '' f; do
+                if file "$f" | grep -q "Mach-O"; then
+                  printf '%s\n' "$f"
+                fi
+              done | sort
+          )
+
+          echo "Signing main app bundle: $APP_PATH"
+          codesign --force --timestamp --options runtime --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$APP_PATH"
+
+          echo "=== Verifying signature ==="
+          codesign -dv --verbose=4 "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          spctl -a -t exec -vvv "$APP_PATH"
+          EOF
+
+          chmod +x sign_and_verify_macos.sh
+
+      - name: Create macOS notarization helper script
+        run: |
+          cat > notarize_and_staple.sh <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          FILE_TO_NOTARIZE="$1"
+          APPLE_ID="$2"
+          APPLE_PASSWORD="$3"
+          APPLE_TEAM_ID="$4"
+
+          echo "Submitting for notarization: $FILE_TO_NOTARIZE"
+
+          SUBMISSION_OUTPUT=$(xcrun notarytool submit "$FILE_TO_NOTARIZE" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait \
+            --output-format json)
+
+          echo "$SUBMISSION_OUTPUT"
+
+          STATUS=$(echo "$SUBMISSION_OUTPUT" | python3 -c 'import sys, json; print(json.load(sys.stdin)["status"])')
+
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "Notarization failed with status: $STATUS"
+            exit 1
+          fi
+
+          echo "Stapling: $FILE_TO_NOTARIZE"
+          xcrun stapler staple "$FILE_TO_NOTARIZE"
+          xcrun stapler validate "$FILE_TO_NOTARIZE"
+          EOF
+
+          chmod +x notarize_and_staple.sh
+
       - name: Build ARM64
         run: npm run tauri build -- --target aarch64-apple-darwin
 
-      # Build for x64
       - name: Build x64
         run: npm run tauri build -- --target x86_64-apple-darwin
 
-      # Verify and re-sign ARM64 app
-      - name: Verify and Re-sign ARM64
+      - name: Sign and verify ARM64 app
         env:
           IDENTITY: ${{ steps.signing_identity.outputs.identity }}
         run: |
-          APP_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/CAMPP.app"
+          set -euo pipefail
+          APP_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/${APP_NAME}.app"
           ENTITLEMENTS="$PWD/src-tauri/entitlements.plist"
-          # Unlock keychain before signing
-          security unlock-keychain -p actions build.keychain
-          # Verify current signature
-          codesign -dv "$APP_PATH" 2>&1 || true
-          # Find and sign all nested binaries and frameworks first
-          find "$APP_PATH" -type f -name "*.dylib" -exec codesign --force --sign "$IDENTITY" {} \;
-          find "$APP_PATH" -type f -exec file {} \; | grep "Mach-O" | while read line; do
-            BINARY=$(echo "$line" | cut -d: -f1 | xargs)
-            codesign --force --sign "$IDENTITY" "$BINARY" 2>/dev/null || true
-          done
-          # Re-sign the main app with hardened runtime and entitlements
-          codesign --force --options runtime --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$APP_PATH"
-          # Verify signature again
-          codesign -vvv "$APP_PATH"
 
-      # Notarize and create DMG for ARM64
-      - name: Notarize and Create DMG for ARM64
+          ./sign_and_verify_macos.sh "$APP_PATH" "$IDENTITY" "$ENTITLEMENTS" "$KEYCHAIN_NAME" "$KEYCHAIN_PASSWORD"
+
+      - name: Create ARM64 DMG
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.get_version.outputs.version }}"
+          APP_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/${APP_NAME}.app"
+          DMG_DIR="src-tauri/target/aarch64-apple-darwin/release/bundle/dmg"
+          DMG_PATH="${DMG_DIR}/${APP_NAME}-${VERSION}-arm64.dmg"
+
+          mkdir -p "$DMG_DIR"
+          rm -f "$DMG_PATH"
+
+          hdiutil create \
+            -volname "$APP_NAME" \
+            -srcfolder "$APP_PATH" \
+            -ov \
+            -format UDZO \
+            "$DMG_PATH"
+
+          echo "dmg_path=$DMG_PATH" >> "$GITHUB_OUTPUT"
+        id: arm64_dmg
+
+      - name: Notarize and staple ARM64 DMG
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          APP_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/CAMPP.app"
+          set -euo pipefail
+          ./notarize_and_staple.sh "${{ steps.arm64_dmg.outputs.dmg_path }}" "$APPLE_ID" "$APPLE_PASSWORD" "$APPLE_TEAM_ID"
 
-          # Create ZIP for notarization using ditto (more reliable for macOS bundles)
-          ditto -c -k --keepParent "$APP_PATH" CAMPP-arm64.zip
-
-          # Submit for notarization (no wait - returns submission ID)
-          SUBMISSION_OUTPUT=$(xcrun notarytool submit CAMPP-arm64.zip \
-            --apple-id "$APPLE_ID" \
-            --password "$APPLE_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" \
-            --output-format json)
-
-          echo "$SUBMISSION_OUTPUT"
-          SUBMISSION_ID=$(echo "$SUBMISSION_OUTPUT" | python3 -c 'import sys, json; print(json.load(sys.stdin)["id"])')
-          echo "Submission ID: $SUBMISSION_ID"
-
-          # Poll for notarization completion with timeout
-          echo "Waiting for notarization to complete..."
-          MAX_WAIT=1800  # 30 minutes max wait (notarization can take 15-20 min)
-          ELAPSED=0
-          INTERVAL=30
-
-          while [ $ELAPSED -lt $MAX_WAIT ]; do
-            STATUS_OUTPUT=$(xcrun notarytool info "$SUBMISSION_ID" \
-              --apple-id "$APPLE_ID" \
-              --password "$APPLE_PASSWORD" \
-              --team-id "$APPLE_TEAM_ID" \
-              --output-format json 2>&1)
-
-            STATUS=$(echo "$STATUS_OUTPUT" | python3 -c 'import sys, json; print(json.load(sys.stdin)["status"])')
-            echo "Current status: $STATUS (elapsed: ${ELAPSED}s)"
-
-            if [ "$STATUS" = "Accepted" ]; then
-              echo "Notarization successful!"
-              break
-            elif [ "$STATUS" = "Invalid" ] || [ "$STATUS" = "Rejected" ]; then
-              echo "Notarization failed!"
-              echo "$STATUS_OUTPUT"
-              exit 1
-            fi
-
-            sleep $INTERVAL
-            ELAPSED=$((ELAPSED + INTERVAL))
-          done
-
-          if [ $ELAPSED -ge $MAX_WAIT ]; then
-            echo "Notarization timed out after ${MAX_WAIT}s"
-            echo "Check status manually with: xcrun notarytool info $SUBMISSION_ID"
-            exit 1
-          fi
-
-          # Staple the ticket
-          xcrun stapler staple "$APP_PATH"
-
-          # Create DMG
-          VERSION="${{ steps.get_version.outputs.version }}"
-          DMG_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/CAMPP-${VERSION}-arm64.dmg"
-          mkdir -p "$(dirname "$DMG_PATH")"
-          hdiutil create -volname "CAMPP" \
-            -srcfolder "$APP_PATH" \
-            -ov -format UDZO \
-            "$DMG_PATH"
-
-      # Verify and re-sign x64 app
-      - name: Verify and Re-sign x64
+      - name: Sign and verify x64 app
         env:
           IDENTITY: ${{ steps.signing_identity.outputs.identity }}
         run: |
-          APP_PATH="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/CAMPP.app"
+          set -euo pipefail
+          APP_PATH="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/${APP_NAME}.app"
           ENTITLEMENTS="$PWD/src-tauri/entitlements.plist"
-          # Unlock keychain before signing
-          security unlock-keychain -p actions build.keychain
-          # Verify current signature
-          codesign -dv "$APP_PATH" 2>&1 || true
-          # Find and sign all nested binaries and frameworks first
-          find "$APP_PATH" -type f -name "*.dylib" -exec codesign --force --sign "$IDENTITY" {} \;
-          find "$APP_PATH" -type f -exec file {} \; | grep "Mach-O" | while read line; do
-            BINARY=$(echo "$line" | cut -d: -f1 | xargs)
-            codesign --force --sign "$IDENTITY" "$BINARY" 2>/dev/null || true
-          done
-          # Re-sign the main app with hardened runtime and entitlements
-          codesign --force --options runtime --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$APP_PATH"
-          # Verify signature again
-          codesign -vvv "$APP_PATH"
 
-      # Notarize and create DMG for x64
-      - name: Notarize and Create DMG for x64
+          ./sign_and_verify_macos.sh "$APP_PATH" "$IDENTITY" "$ENTITLEMENTS" "$KEYCHAIN_NAME" "$KEYCHAIN_PASSWORD"
+
+      - name: Create x64 DMG
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.get_version.outputs.version }}"
+          APP_PATH="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/${APP_NAME}.app"
+          DMG_DIR="src-tauri/target/x86_64-apple-darwin/release/bundle/dmg"
+          DMG_PATH="${DMG_DIR}/${APP_NAME}-${VERSION}-x64.dmg"
+
+          mkdir -p "$DMG_DIR"
+          rm -f "$DMG_PATH"
+
+          hdiutil create \
+            -volname "$APP_NAME" \
+            -srcfolder "$APP_PATH" \
+            -ov \
+            -format UDZO \
+            "$DMG_PATH"
+
+          echo "dmg_path=$DMG_PATH" >> "$GITHUB_OUTPUT"
+        id: x64_dmg
+
+      - name: Notarize and staple x64 DMG
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          APP_PATH="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/CAMPP.app"
+          set -euo pipefail
+          ./notarize_and_staple.sh "${{ steps.x64_dmg.outputs.dmg_path }}" "$APPLE_ID" "$APPLE_PASSWORD" "$APPLE_TEAM_ID"
 
-          # Create ZIP for notarization using ditto (more reliable for macOS bundles)
-          ditto -c -k --keepParent "$APP_PATH" CAMPP-x64.zip
-
-          # Submit for notarization (no wait - returns submission ID)
-          SUBMISSION_OUTPUT=$(xcrun notarytool submit CAMPP-x64.zip \
-            --apple-id "$APPLE_ID" \
-            --password "$APPLE_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" \
-            --output-format json)
-
-          echo "$SUBMISSION_OUTPUT"
-          SUBMISSION_ID=$(echo "$SUBMISSION_OUTPUT" | python3 -c 'import sys, json; print(json.load(sys.stdin)["id"])')
-          echo "Submission ID: $SUBMISSION_ID"
-
-          # Poll for notarization completion with timeout
-          echo "Waiting for notarization to complete..."
-          MAX_WAIT=1800  # 30 minutes max wait (notarization can take 15-20 min)
-          ELAPSED=0
-          INTERVAL=30
-
-          while [ $ELAPSED -lt $MAX_WAIT ]; do
-            STATUS_OUTPUT=$(xcrun notarytool info "$SUBMISSION_ID" \
-              --apple-id "$APPLE_ID" \
-              --password "$APPLE_PASSWORD" \
-              --team-id "$APPLE_TEAM_ID" \
-              --output-format json 2>&1)
-
-            STATUS=$(echo "$STATUS_OUTPUT" | python3 -c 'import sys, json; print(json.load(sys.stdin)["status"])')
-            echo "Current status: $STATUS (elapsed: ${ELAPSED}s)"
-
-            if [ "$STATUS" = "Accepted" ]; then
-              echo "Notarization successful!"
-              break
-            elif [ "$STATUS" = "Invalid" ] || [ "$STATUS" = "Rejected" ]; then
-              echo "Notarization failed!"
-              echo "$STATUS_OUTPUT"
-              exit 1
-            fi
-
-            sleep $INTERVAL
-            ELAPSED=$((ELAPSED + INTERVAL))
-          done
-
-          if [ $ELAPSED -ge $MAX_WAIT ]; then
-            echo "Notarization timed out after ${MAX_WAIT}s"
-            echo "Check status manually with: xcrun notarytool info $SUBMISSION_ID"
-            exit 1
-          fi
-
-          # Staple the ticket
-          xcrun stapler staple "$APP_PATH"
-
-          # Create DMG
-          VERSION="${{ steps.get_version.outputs.version }}"
-          DMG_PATH="src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/CAMPP-${VERSION}-x64.dmg"
-          mkdir -p "$(dirname "$DMG_PATH")"
-          hdiutil create -volname "CAMPP" \
-            -srcfolder "$APP_PATH" \
-            -ov -format UDZO \
-            "$DMG_PATH"
-
-      # Create Universal Binary
-      - name: Create Universal Binary
-        env:
-          IDENTITY: ${{ steps.signing_identity.outputs.identity }}
+      - name: Create universal binary
         run: |
-          ARM64_APP="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/CAMPP.app"
-          X64_APP="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/CAMPP.app"
-          UNIVERSAL_APP="src-tauri/target/universal-apple-darwin/release/bundle/macos/CAMPP.app"
-          ENTITLEMENTS="$PWD/src-tauri/entitlements.plist"
+          set -euo pipefail
 
+          ARM64_APP="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/${APP_NAME}.app"
+          X64_APP="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/${APP_NAME}.app"
+          UNIVERSAL_APP="src-tauri/target/universal-apple-darwin/release/bundle/macos/${APP_NAME}.app"
+
+          rm -rf "$UNIVERSAL_APP"
           mkdir -p "$(dirname "$UNIVERSAL_APP")"
 
-          # Copy ARM64 app as base
           ditto "$ARM64_APP" "$UNIVERSAL_APP"
 
-          # Find and merge all binaries using lipo
-          find "$X64_APP/Contents" -type f -exec file {} \; | grep "Mach-O" | while read line; do
-            X64_BINARY=$(echo "$line" | cut -d: -f1 | xargs)
-            REL_PATH="${X64_BINARY#$X64_APP/}"
-            UNIVERSAL_BINARY="$UNIVERSAL_APP/$REL_PATH"
-            ARM64_BINARY="$ARM64_APP/$REL_PATH"
+          while IFS= read -r x64_file; do
+            rel_path="${x64_file#$X64_APP/}"
+            arm64_file="$ARM64_APP/$rel_path"
+            universal_file="$UNIVERSAL_APP/$rel_path"
 
-            if [ -f "$ARM64_BINARY" ]; then
-              echo "Merging: $REL_PATH"
-              mkdir -p "$(dirname "$UNIVERSAL_BINARY")"
-              lipo -create -output "$UNIVERSAL_BINARY" "$ARM64_BINARY" "$X64_BINARY"
+            if [ -f "$arm64_file" ] && file "$x64_file" | grep -q "Mach-O"; then
+              if file "$arm64_file" | grep -q "Mach-O"; then
+                echo "Creating universal binary for: $rel_path"
+                rm -f "$universal_file"
+                mkdir -p "$(dirname "$universal_file")"
+                lipo -create -output "$universal_file" "$arm64_file" "$x64_file"
+              fi
             fi
-          done
+          done < <(find "$X64_APP/Contents" -type f | sort)
 
-          # Re-sign the universal app - first sign all nested binaries
-          security unlock-keychain -p actions build.keychain
-          # Sign all dylibs and Mach-O binaries individually
-          find "$UNIVERSAL_APP" -type f -name "*.dylib" -exec codesign --force --sign "$IDENTITY" {} \;
-          find "$UNIVERSAL_APP" -type f -exec file {} \; | grep "Mach-O" | while read line; do
-            BINARY=$(echo "$line" | cut -d: -f1 | xargs)
-            codesign --force --sign "$IDENTITY" "$BINARY" 2>/dev/null || true
-          done
-          # Finally sign the main app bundle with hardened runtime and entitlements
-          codesign --force --options runtime --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$UNIVERSAL_APP"
-          codesign -vvv "$UNIVERSAL_APP"
+      - name: Verify universal main binary architectures
+        run: |
+          set -euo pipefail
+          UNIVERSAL_MAIN_BIN="src-tauri/target/universal-apple-darwin/release/bundle/macos/${APP_NAME}.app/Contents/MacOS/campp"
+          file "$UNIVERSAL_MAIN_BIN"
+          lipo -info "$UNIVERSAL_MAIN_BIN"
 
-          # Verify universal binary
-          echo "Verifying universal binary:"
-          file "$UNIVERSAL_APP/Contents/MacOS/campp"
-          lipo -info "$UNIVERSAL_APP/Contents/MacOS/campp"
+      - name: Sign and verify universal app
+        env:
+          IDENTITY: ${{ steps.signing_identity.outputs.identity }}
+        run: |
+          set -euo pipefail
+          APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/${APP_NAME}.app"
+          ENTITLEMENTS="$PWD/src-tauri/entitlements.plist"
 
-      # Notarize and Create DMG for Universal
-      - name: Notarize and Create DMG for Universal
+          ./sign_and_verify_macos.sh "$APP_PATH" "$IDENTITY" "$ENTITLEMENTS" "$KEYCHAIN_NAME" "$KEYCHAIN_PASSWORD"
+
+      - name: Create universal DMG
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.get_version.outputs.version }}"
+          APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/${APP_NAME}.app"
+          DMG_DIR="src-tauri/target/universal-apple-darwin/release/bundle/dmg"
+          DMG_PATH="${DMG_DIR}/${APP_NAME}-${VERSION}-universal.dmg"
+
+          mkdir -p "$DMG_DIR"
+          rm -f "$DMG_PATH"
+
+          hdiutil create \
+            -volname "$APP_NAME" \
+            -srcfolder "$APP_PATH" \
+            -ov \
+            -format UDZO \
+            "$DMG_PATH"
+
+          echo "dmg_path=$DMG_PATH" >> "$GITHUB_OUTPUT"
+        id: universal_dmg
+
+      - name: Notarize and staple universal DMG
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/CAMPP.app"
+          set -euo pipefail
+          ./notarize_and_staple.sh "${{ steps.universal_dmg.outputs.dmg_path }}" "$APPLE_ID" "$APPLE_PASSWORD" "$APPLE_TEAM_ID"
 
-          # Create ZIP for notarization using ditto
-          ditto -c -k --keepParent "$APP_PATH" CAMPP-universal.zip
+      - name: List macOS artifacts
+        run: |
+          echo "=== macOS artifacts ==="
+          find src-tauri/target -type f \( -name "*.app" -o -name "*.dmg" \) | sort
 
-          # Submit for notarization
-          SUBMISSION_OUTPUT=$(xcrun notarytool submit CAMPP-universal.zip \
-            --apple-id "$APPLE_ID" \
-            --password "$APPLE_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" \
-            --output-format json)
-
-          echo "$SUBMISSION_OUTPUT"
-          SUBMISSION_ID=$(echo "$SUBMISSION_OUTPUT" | python3 -c 'import sys, json; print(json.load(sys.stdin)["id"])')
-          echo "Submission ID: $SUBMISSION_ID"
-
-          # Poll for notarization completion
-          echo "Waiting for notarization to complete..."
-          MAX_WAIT=1800
-          ELAPSED=0
-          INTERVAL=30
-
-          while [ $ELAPSED -lt $MAX_WAIT ]; do
-            STATUS_OUTPUT=$(xcrun notarytool info "$SUBMISSION_ID" \
-              --apple-id "$APPLE_ID" \
-              --password "$APPLE_PASSWORD" \
-              --team-id "$APPLE_TEAM_ID" \
-              --output-format json 2>&1)
-
-            STATUS=$(echo "$STATUS_OUTPUT" | python3 -c 'import sys, json; print(json.load(sys.stdin)["status"])')
-            echo "Current status: $STATUS (elapsed: ${ELAPSED}s)"
-
-            if [ "$STATUS" = "Accepted" ]; then
-              echo "Notarization successful!"
-              break
-            elif [ "$STATUS" = "Invalid" ] || [ "$STATUS" = "Rejected" ]; then
-              echo "Notarization failed!"
-              echo "$STATUS_OUTPUT"
-              exit 1
-            fi
-
-            sleep $INTERVAL
-            ELAPSED=$((ELAPSED + INTERVAL))
-          done
-
-          if [ $ELAPSED -ge $MAX_WAIT ]; then
-            echo "Notarization timed out after ${MAX_WAIT}s"
-            exit 1
-          fi
-
-          # Staple the ticket
-          xcrun stapler staple "$APP_PATH"
-
-          # Create DMG
-          VERSION="${{ steps.get_version.outputs.version }}"
-          DMG_PATH="src-tauri/target/universal-apple-darwin/release/bundle/dmg/CAMPP-${VERSION}-universal.dmg"
-          mkdir -p "$(dirname "$DMG_PATH")"
-          hdiutil create -volname "CAMPP" \
-            -srcfolder "$APP_PATH" \
-            -ov -format UDZO \
-            "$DMG_PATH"
-
-      # Upload artifacts - only upload DMGs with our new naming pattern
-      - name: Upload macOS Artifacts
+      - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
           name: CAMPP-macOS
@@ -407,13 +391,6 @@ jobs:
             src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/CAMPP-*.dmg
             src-tauri/target/universal-apple-darwin/release/bundle/dmg/CAMPP-*.dmg
           if-no-files-found: error
-
-      # List uploaded artifacts for debugging
-      - name: List macOS Artifacts
-        run: |
-          echo "=== macOS DMG files ==="
-          find src-tauri/target -name "*.dmg" -type f || echo "No DMG files found"
-          ls -lah src-tauri/target/*/release/bundle/dmg/ || true
 
   build-windows:
     runs-on: windows-latest
@@ -432,15 +409,15 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install frontend dependencies
-        run: npm install
+        run: npm ci
 
       - name: Get version from package.json
         id: get_version
+        shell: pwsh
         run: |
           $VERSION = (node -p "require('./package.json').version")
           echo "version=$VERSION" >> $env:GITHUB_OUTPUT
           Write-Host "Building version: $VERSION"
-        shell: pwsh
 
       - name: Build Tauri app
         run: npm run tauri build
@@ -450,26 +427,27 @@ jobs:
         run: |
           $version = "${{ steps.get_version.outputs.version }}"
           Write-Host "Renaming artifacts to include version: $version"
+
           Get-ChildItem -Path "src-tauri/target/release/bundle" -Recurse -File | ForEach-Object {
             $filename = $_.Name
             $ext = [System.IO.Path]::GetExtension($_.FullName)
-            # Extract architecture from filename (e.g., "x64" from "CAMPP_0.1.7_x64-setup.nsis")
-            if ($filename -match '_x64[-_]') {
-              $newName = "CAMPP-$version-x64$ext"
-            } elseif ($filename -match '_ia32[-_]') {
-              $newName = "CAMPP-$version-ia32$ext"
-            } elseif ($filename -match '_arm64[-_]') {
-              $newName = "CAMPP-$version-arm64$ext"
+
+            if ($filename -match '_x64[-_]' -or $filename -match 'x64') {
+              $arch = "x64"
+            } elseif ($filename -match '_ia32[-_]' -or $filename -match 'ia32') {
+              $arch = "ia32"
+            } elseif ($filename -match '_arm64[-_]' -or $filename -match 'arm64') {
+              $arch = "arm64"
             } else {
-              # Default to x64 for Windows (most common)
-              $newName = "CAMPP-$version-x64$ext"
+              $arch = "x64"
             }
+
+            $newName = "CAMPP-$version-$arch$ext"
             Write-Host "Renaming: $filename -> $newName"
-            Rename-Item -Path $_.FullName -NewName (Join-Path $_.DirectoryName $newName)
+            Rename-Item -Path $_.FullName -NewName (Join-Path $_.DirectoryName $newName) -Force
           }
 
-      # Upload all Windows bundle formats
-      - name: Upload Windows Artifacts
+      - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: CAMPP-Windows
@@ -478,15 +456,11 @@ jobs:
             src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
 
-      # List uploaded artifacts for debugging
-      - name: List Windows Artifacts
+      - name: List Windows artifacts
         shell: pwsh
         run: |
           Write-Host "=== Windows bundle files ==="
           Get-ChildItem -Path src-tauri/target/release/bundle -Recurse -File | ForEach-Object { Write-Host $_.FullName }
-          Write-Host ""
-          Write-Host "=== Bundle directory listing ==="
-          Get-ChildItem -Path src-tauri/target/release/bundle -Recurse | Format-Table -AutoSize
 
   build-linux:
     runs-on: ubuntu-22.04
@@ -507,16 +481,20 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
 
       - name: Install frontend dependencies
-        run: npm install
+        run: npm ci
 
       - name: Get version from package.json
         id: get_version
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Building version: $VERSION"
 
       - name: Build Tauri app
@@ -524,37 +502,37 @@ jobs:
 
       - name: Rename Linux artifacts with version
         run: |
+          set -euo pipefail
           VERSION="${{ steps.get_version.outputs.version }}"
           echo "Renaming artifacts to include version: $VERSION"
-          # Rename only the actual bundle artifacts, not internal package files
-          for filepath in src-tauri/target/release/bundle/deb/*.deb \
-                         src-tauri/target/release/bundle/appimage/*.AppImage \
-                         src-tauri/target/release/bundle/rpm/*.rpm; do
+
+          for filepath in \
+            src-tauri/target/release/bundle/deb/*.deb \
+            src-tauri/target/release/bundle/appimage/*.AppImage \
+            src-tauri/target/release/bundle/rpm/*.rpm; do
+
             [ -f "$filepath" ] || continue
+
             dir=$(dirname "$filepath")
             filename=$(basename "$filepath")
             ext="${filename##*.}"
 
-            # Extract architecture from filename
-            # Examples: CAMPP_0.1.7_amd64.deb, CAMPP-0.1.7-1.x86_64.rpm
-            if [[ "$filename" =~ _amd64|_x86_64|x86_64 ]]; then
+            if [[ "$filename" =~ amd64|x86_64 ]]; then
               arch="amd64"
-            elif [[ "$filename" =~ _arm64|aarch64 ]]; then
+            elif [[ "$filename" =~ arm64|aarch64 ]]; then
               arch="arm64"
-            elif [[ "$filename" =~ _i386|_i686 ]]; then
+            elif [[ "$filename" =~ i386|i686 ]]; then
               arch="i386"
             else
-              # Default to amd64
               arch="amd64"
             fi
 
             newname="CAMPP-${VERSION}-${arch}.${ext}"
             echo "Renaming: $filename -> $newname"
-            mv "$filepath" "$dir/$newname"
+            mv -f "$filepath" "$dir/$newname"
           done
 
-      # Upload all Linux bundle formats
-      - name: Upload Linux Artifacts
+      - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
           name: CAMPP-Linux
@@ -564,14 +542,11 @@ jobs:
             src-tauri/target/release/bundle/rpm/*.rpm
           if-no-files-found: warn
 
-      # List uploaded artifacts for debugging
-      - name: List Linux Artifacts
+      - name: List Linux artifacts
         run: |
           echo "=== Linux bundle files ==="
-          find src-tauri/target/release/bundle -type f || echo "No bundle files found"
-          ls -R src-tauri/target/release/bundle/ || true
+          find src-tauri/target/release/bundle -type f | sort || true
 
-  # Create release with all artifacts
   create-release:
     needs: [build-macos, build-windows, build-linux]
     if: |
@@ -593,17 +568,13 @@ jobs:
         run: |
           echo "=== Downloaded artifact structure ==="
           find artifacts -type f | sort
-          echo ""
-          echo "=== Artifact directory listing ==="
-          ls -laR artifacts/
 
       - name: Prepare release assets
         run: |
-          echo "=== Preparing release assets ==="
-          # Create a flat directory structure for release assets
+          set -euo pipefail
           mkdir -p release-assets
           find artifacts -type f -exec cp {} release-assets/ \;
-          echo "=== Release assets to upload ==="
+          echo "=== Release assets ==="
           ls -la release-assets/
 
       - name: Create Release
@@ -614,5 +585,6 @@ jobs:
           draft: true
           prerelease: false
           generate_release_notes: true
-          files: release-assets/*
+          files: |
+            release-assets/*
           fail_on_unmatched_files: false
