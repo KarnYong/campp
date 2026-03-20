@@ -137,7 +137,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
         version,
         displayName: name === "caddy" ? "Caddy" :
                       name === "php" ? "PHP" :
-                      name === "mysql" ? "MySQL" :
+                      name === "mysql" ? "MariaDB" :
                       name === "phpmyadmin" ? "phpMyAdmin" : name,
       }));
 
@@ -339,7 +339,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
           {step === "welcome" && (
             <div>
               <p style={{ fontSize: "0.875rem", lineHeight: 1.5, color: "var(--text-primary)", marginBottom: "0.75rem" }}>
-                CAMPP requires runtime binaries (Caddy, PHP-FPM, MySQL, and phpMyAdmin)
+                CAMPP requires runtime binaries (Caddy, PHP-FPM, MariaDB, and phpMyAdmin)
                 to be installed on your system.
               </p>
               {hasExistingOnWelcome ? (
@@ -395,7 +395,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
           {step === "packages" && (
             <div>
               <p style={{ fontSize: "0.875rem", marginBottom: "0.75rem" }}>
-                Select the versions of PHP, MySQL, and phpMyAdmin.
+                Select the versions of PHP, MariaDB, and phpMyAdmin.
               </p>
               <PackageSelector
                 onSelectionChange={handlePackageChange}
@@ -693,7 +693,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
                 {[
                   { name: "Caddy", version: "2.8.4" },
                   { name: "PHP", version: packages.php.find(p => p.id === packageSelection.php)?.version || "8.5.1" },
-                  { name: "MySQL", version: packages.mysql.find(p => p.id === packageSelection.mysql)?.version || "8.4.0" },
+                  { name: "MariaDB", version: packages.mysql.find(p => p.id === packageSelection.mysql)?.version || "8.4.0" },
                   { name: "phpMyAdmin", version: packages.phpmyadmin.find(p => p.id === packageSelection.phpmyadmin)?.version || "5.2.2" },
                 ].map((pkg) => (
                   <div

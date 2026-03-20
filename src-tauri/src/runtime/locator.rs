@@ -326,13 +326,32 @@ fn detect_php_ext_dir(runtime_dir: &Path) -> Result<PathBuf, String> {
     }
 }
 
-/// Detect MySQL server binary based on platform
+/// Detect MySQL/MariaDB server binary based on platform
+///
+/// **IMPORTANT Platform Differences:**
+///
+/// **Linux:**
+/// - Uses MariaDB 12.x (binary name: mariadbd)
+/// - Extracted from: mariadb-XX.X.X-linux-systemd-x86_64.tar.gz
+/// - Directory: mariadb-XX.X.X-linux-systemd-x86_64/bin/mariadbd
+///
+/// **Windows/macOS:**
+/// - Uses MySQL 8.x (binary name: mysqld)
+/// - Extracted from platform-specific archives
+/// - Directory: mysql-X.X.X/bin/mysqld
 fn detect_mysql_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
     #[cfg(target_os = "windows")]
     {
-        // Windows MySQL structure:
-        // - runtime/mysql/bin/mysqld.exe
-        // - runtime/mysql-VERSION/bin/mysqld.exe (versioned directory)
+        // ============================================================
+        // WINDOWS: MySQL Binary Detection
+        // ============================================================
+        // Binary: mysqld.exe
+        // Source: https://dev.mysql.com/downloads/mysql/
+        // Archive: mysql-VERSION-winx64.zip
+        // Extracts to: mysql-VERSION/
+        // Binary path: .../bin/mysqld.exe
+        // ============================================================
+
         // Look for any directory starting with "mysql"
         if let Ok(entries) = fs::read_dir(runtime_dir) {
             for entry in entries.flatten() {
@@ -363,7 +382,16 @@ fn detect_mysql_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
 
     #[cfg(target_os = "macos")]
     {
-        // macOS MySQL structure
+        // ============================================================
+        // MACOS: MySQL Binary Detection
+        // ============================================================
+        // Binary: mysqld
+        // Source: https://dev.mysql.com/downloads/mysql/
+        // Archive: mysql-VERSION-macos14-x86_64.tar.gz
+        // Extracts to: mysql-VERSION/
+        // Binary path: .../bin/mysqld
+        // ============================================================
+
         if let Ok(entries) = fs::read_dir(runtime_dir) {
             for entry in entries.flatten() {
                 if let Ok(name) = entry.file_name().into_string() {
@@ -393,11 +421,31 @@ fn detect_mysql_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
 
     #[cfg(target_os = "linux")]
     {
-        // Linux MySQL structure
+        // ============================================================
+        // LINUX: MariaDB Binary Detection
+        // ============================================================
+        // Binary: mariadbd (MariaDB 10.2+)
+        // Source: https://archive.mariadb.org/
+        // Archive: mariadb-XX.X.X-linux-systemd-x86_64.tar.gz
+        // Extracts to: mariadb-XX.X.X-linux-systemd-x86_64/
+        // Binary path: .../bin/mariadbd
+        //
+        // Note: Older MariaDB versions (< 10.2) used mysqld,
+        // so we check for both as a fallback.
+        // ============================================================
+
+        // First, look for MariaDB directories
         if let Ok(entries) = fs::read_dir(runtime_dir) {
             for entry in entries.flatten() {
                 if let Ok(name) = entry.file_name().into_string() {
-                    if name.starts_with("mysql") && entry.path().is_dir() {
+                    // Check for MariaDB directories (mariadb-XX.X.X-*)
+                    if name.starts_with("mariadb") && entry.path().is_dir() {
+                        // Try mariadbd first (MariaDB 10.2+)
+                        let mariadbd_path = entry.path().join("bin").join("mariadbd");
+                        if mariadbd_path.exists() {
+                            return Ok(mariadbd_path);
+                        }
+                        // Fallback to mysqld for older MariaDB versions
                         let mysqld_path = entry.path().join("bin").join("mysqld");
                         if mysqld_path.exists() {
                             return Ok(mysqld_path);
@@ -407,11 +455,12 @@ fn detect_mysql_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
             }
         }
 
+        // Fallback paths - check both mariadbd and mysqld
         let paths_to_check = vec![
-            runtime_dir.join("mysql").join("bin").join("mysqld"),
-            runtime_dir.join("mysql").join("bin").join("mysqld"),
-            runtime_dir.join("bin").join("mysqld"),
-            runtime_dir.join("mysqld"),
+            runtime_dir.join("mariadb").join("bin").join("mariadbd"),
+            runtime_dir.join("bin").join("mariadbd"),
+            runtime_dir.join("mariadbd"),
+            runtime_dir.join("mysqld"),  // Fallback for older versions
         ];
 
         for path in paths_to_check {
@@ -422,7 +471,7 @@ fn detect_mysql_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
     }
 
     Err(format!(
-        "MySQL binary not found in {}. Please ensure runtime binaries are downloaded.",
+        "MariaDB binary not found in {}. Please ensure runtime binaries are downloaded.",
         runtime_dir.display()
     ))
 }
@@ -493,7 +542,7 @@ pub fn verify_runtime_binaries() -> Result<RuntimePaths, String> {
     }
 
     if !is_valid_binary(&paths.mysql) {
-        return Err(format!("MySQL binary not found or not executable: {}", paths.mysql.display()));
+        return Err(format!("MariaDB binary not found or not executable: {}", paths.mysql.display()));
     }
 
     Ok(paths)

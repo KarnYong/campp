@@ -52,13 +52,13 @@
           "id": "mysql-8.4",
           "version": "8.4.0",
           "selected": true,
-          "display_name": "MySQL 8.4.0 LTS (Recommended)",
+          "display_name": "MariaDB 8.4.0 LTS (Recommended)",
           "eol": false,
           "lts": true,
           "checksums": {
             "windowsX64": "fb1f0c6cce229be4b3208bec8a605576bb47eabb00512bccbcc4396af332c25c",
             "windowsArm64": "fb1f0c6cce229be4b3208bec8a605576bb47eabb00512bccbcc4396af332c25c",
-            "linuxX64": "377666d81b81efd2510c1e12794a088a98412ede4a01f0b94110fa1549734ae3",
+            "linuxX64": "7a5bb527b7821c570b7aec6a20e3c0266b3d4bd5ca7cbde32e043b52a6a27433",
             "macOSX64": "adbb8b7e261547768a548d97938a5f1b66cf85daee09db28ac4bb657aa7d4192",
             "macOSArm64": "b4ad74a78aa4378df00e1164c9979dd660ea09bf47e05f6ef8324f4ea1418618"
           },

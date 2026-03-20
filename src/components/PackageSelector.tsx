@@ -90,10 +90,10 @@ export function PackageSelector({ onSelectionChange, initialSelection }: Package
         </select>
       </div>
 
-      {/* MySQL Version Selector */}
+      {/* MariaDB Version Selector */}
       <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
         <label style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--text-primary)" }}>
-          MySQL Version
+          MariaDB Version
         </label>
         <select
           value={selection.mysql}
@@ -134,7 +134,7 @@ export function PackageSelector({ onSelectionChange, initialSelection }: Package
       {/* Package Info Box */}
       <div className="info-box" style={{ padding: "0.5rem", fontSize: "0.875rem" }}>
         <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", margin: "0 0 0.375rem 0" }}>
-          <strong>Recommended:</strong> PHP 8.5, MySQL 8.4 (LTS), phpMyAdmin 5.2
+          <strong>Recommended:</strong> PHP 8.5, MariaDB 8.4 (LTS), phpMyAdmin 5.2
         </p>
         <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", margin: 0 }}>
           <strong>Note:</strong> EOL versions may have security vulnerabilities.

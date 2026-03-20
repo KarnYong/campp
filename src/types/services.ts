@@ -106,7 +106,7 @@ export const DEFAULT_PORTS = {
 export const SERVICE_DISPLAY_NAMES = {
   [ServiceType.Caddy]: "Caddy",
   [ServiceType.PhpFpm]: "PHP-FPM",
-  [ServiceType.MySQL]: "MySQL",
+  [ServiceType.MySQL]: "MariaDB",
 } as const;
 
 export const SERVICE_DESCRIPTIONS = {
