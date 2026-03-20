@@ -109,7 +109,13 @@ jobs:
           security unlock-keychain -p actions build.keychain
           # Verify current signature
           codesign -dv "$APP_PATH" 2>&1 || true
-          # Re-sign with hardened runtime (removed deprecated --deep flag)
+          # Find and sign all nested binaries and frameworks first
+          find "$APP_PATH" -type f -name "*.dylib" -exec codesign --force --sign "$IDENTITY" {} \;
+          find "$APP_PATH" -type f -exec file {} \; | grep "Mach-O" | while read line; do
+            BINARY=$(echo "$line" | cut -d: -f1 | xargs)
+            codesign --force --sign "$IDENTITY" "$BINARY" 2>/dev/null || true
+          done
+          # Re-sign the main app with hardened runtime and entitlements
           codesign --force --options runtime --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$APP_PATH"
           # Verify signature again
           codesign -vvv "$APP_PATH"
@@ -195,7 +201,13 @@ jobs:
           security unlock-keychain -p actions build.keychain
           # Verify current signature
           codesign -dv "$APP_PATH" 2>&1 || true
-          # Re-sign with hardened runtime (removed deprecated --deep flag)
+          # Find and sign all nested binaries and frameworks first
+          find "$APP_PATH" -type f -name "*.dylib" -exec codesign --force --sign "$IDENTITY" {} \;
+          find "$APP_PATH" -type f -exec file {} \; | grep "Mach-O" | while read line; do
+            BINARY=$(echo "$line" | cut -d: -f1 | xargs)
+            codesign --force --sign "$IDENTITY" "$BINARY" 2>/dev/null || true
+          done
+          # Re-sign the main app with hardened runtime and entitlements
           codesign --force --options runtime --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$APP_PATH"
           # Verify signature again
           codesign -vvv "$APP_PATH"
@@ -299,8 +311,15 @@ jobs:
             fi
           done
 
-          # Re-sign the universal app
+          # Re-sign the universal app - first sign all nested binaries
           security unlock-keychain -p actions build.keychain
+          # Sign all dylibs and Mach-O binaries individually
+          find "$UNIVERSAL_APP" -type f -name "*.dylib" -exec codesign --force --sign "$IDENTITY" {} \;
+          find "$UNIVERSAL_APP" -type f -exec file {} \; | grep "Mach-O" | while read line; do
+            BINARY=$(echo "$line" | cut -d: -f1 | xargs)
+            codesign --force --sign "$IDENTITY" "$BINARY" 2>/dev/null || true
+          done
+          # Finally sign the main app bundle with hardened runtime and entitlements
           codesign --force --options runtime --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$UNIVERSAL_APP"
           codesign -vvv "$UNIVERSAL_APP"
 
