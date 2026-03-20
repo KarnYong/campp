@@ -5,8 +5,17 @@ import {
   DownloadProgress as DownloadProgressType,
   PackageSelection,
   DependencyCheckResult,
+  getDatabaseDisplayName,
 } from "../types/services";
 import { PackageSelector } from "./PackageSelector";
+
+// Helper to detect platform
+const detectPlatform = (): string => {
+  const userAgent = window.navigator.userAgent.toLowerCase();
+  if (userAgent.includes("win")) return "windows";
+  if (userAgent.includes("mac")) return "darwin";
+  return "linux";
+};
 
 interface FirstRunWizardProps {
   onComplete: () => void;
@@ -19,6 +28,7 @@ interface ExistingComponent {
   name: string;
   version: string;
   displayName: string;
+  isExisting: boolean;
 }
 
 // Package versions for display
@@ -40,6 +50,7 @@ const packages = {
 
 export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
   const [step, setStep] = useState<WizardStep>("welcome");
+  const [currentPlatform, setCurrentPlatform] = useState<string>("linux");
   const [progress, setProgress] = useState<DownloadProgressType>({
     step: "downloading",
     percent: 0,
@@ -77,6 +88,11 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
       checkExisting();
     }
   }, [step]);
+
+  // Detect platform on mount
+  useEffect(() => {
+    setCurrentPlatform(detectPlatform());
+  }, []);
 
   // Listen for download progress events
   useEffect(() => {
@@ -131,21 +147,37 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
     try {
       const existing = await invoke<Record<string, string>>("check_existing_components");
 
-      // Convert to array of ExistingComponent
-      const existingList: ExistingComponent[] = Object.entries(existing).map(([name, version]) => ({
-        name,
-        version,
-        displayName: name === "caddy" ? "Caddy" :
-                      name === "php" ? "PHP" :
-                      name === "mysql" ? "MariaDB" :
-                      name === "phpmyadmin" ? "phpMyAdmin" : name,
-      }));
+      // All components that should be shown
+      const allComponents: ExistingComponent[] = [
+        {
+          name: "caddy",
+          version: existing.caddy || "",
+          displayName: "Caddy",
+          isExisting: !!existing.caddy,
+        },
+        {
+          name: "php",
+          version: existing.php || "",
+          displayName: "PHP",
+          isExisting: !!existing.php,
+        },
+        {
+          name: "mysql",
+          version: existing.mysql || "",
+          displayName: getDatabaseDisplayName(currentPlatform),
+          isExisting: !!existing.mysql,
+        },
+        {
+          name: "phpmyadmin",
+          version: existing.phpmyadmin || "",
+          displayName: "phpMyAdmin",
+          isExisting: !!existing.phpmyadmin,
+        },
+      ];
 
-      if (existingList.length > 0) {
-        setExistingComponents(existingList);
-        setStep("confirm");
-        return;
-      }
+      setExistingComponents(allComponents);
+      setStep("confirm");
+      return;
     } catch (err) {
       console.error("Failed to check existing components:", err);
     }
@@ -184,7 +216,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
   };
 
   const handleSkipExisting = () => {
-    const skipList = existingComponents.map(c => c.name);
+    const skipList = existingComponents.filter(c => c.isExisting).map(c => c.name);
     proceedWithDownload(skipList);
   };
 
@@ -339,7 +371,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
           {step === "welcome" && (
             <div>
               <p style={{ fontSize: "0.875rem", lineHeight: 1.5, color: "var(--text-primary)", marginBottom: "0.75rem" }}>
-                CAMPP requires runtime binaries (Caddy, PHP-FPM, MariaDB, and phpMyAdmin)
+                CAMPP requires runtime binaries (Caddy, PHP-FPM, {getDatabaseDisplayName(currentPlatform)}, and phpMyAdmin)
                 to be installed on your system.
               </p>
               {hasExistingOnWelcome ? (
@@ -395,7 +427,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
           {step === "packages" && (
             <div>
               <p style={{ fontSize: "0.875rem", marginBottom: "0.75rem" }}>
-                Select the versions of PHP, MariaDB, and phpMyAdmin.
+                Select the versions of PHP, {getDatabaseDisplayName(currentPlatform)}, and phpMyAdmin.
               </p>
               <PackageSelector
                 onSelectionChange={handlePackageChange}
@@ -497,7 +529,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
           {step === "confirm" && (
             <div>
               <p style={{ fontSize: "0.875rem", marginBottom: "0.5rem" }}>
-                Components already installed:
+                Installation summary:
               </p>
               <div
                 style={{
@@ -533,17 +565,33 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
                         backgroundColor: "var(--bg-card)",
                         borderRadius: "0.25rem",
                         fontSize: "0.875rem",
+                        border: component.isExisting ? "1px solid var(--color-warning)" : "1px solid transparent",
                       }}
                     >
-                      <span style={{ fontWeight: 500 }}>{component.displayName}</span>
+                      <span style={{ fontWeight: 500 }}>
+                        {component.displayName}
+                        {!component.isExisting && (
+                          <span style={{ fontSize: "0.7rem", color: "var(--color-success)", marginLeft: "0.375rem", fontWeight: 400 }}>
+                            (New)
+                          </span>
+                        )}
+                      </span>
                       <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-                        <span style={{ fontSize: "0.75rem", color: "var(--color-error)", textDecoration: "line-through" }}>
-                          {component.version}
-                        </span>
-                        <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>→</span>
-                        <span style={{ fontSize: "0.75rem", color: "var(--color-success)", fontWeight: 500 }}>
-                          {newVersion || "Unknown"}
-                        </span>
+                        {component.isExisting ? (
+                          <>
+                            <span style={{ fontSize: "0.75rem", color: "var(--color-error)", textDecoration: "line-through" }}>
+                              {component.version}
+                            </span>
+                            <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>→</span>
+                            <span style={{ fontSize: "0.75rem", color: "var(--color-success)", fontWeight: 500 }}>
+                              {newVersion || "Unknown"}
+                            </span>
+                          </>
+                        ) : (
+                          <span style={{ fontSize: "0.75rem", color: "var(--color-success)", fontWeight: 500 }}>
+                            {newVersion || "Unknown"}
+                          </span>
+                        )}
                       </div>
                     </div>
                   );
@@ -578,10 +626,10 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
                   Use Existing
                 </button>
                 <button onClick={handleSkipExisting} className="btn-secondary" style={{ fontSize: "0.875rem", padding: "0.5rem 0.75rem" }}>
-                  Skip & Update
+                  Keep & Install
                 </button>
                 <button onClick={handleOverwriteAll} className="btn-primary" style={{ fontSize: "0.875rem", padding: "0.5rem 1rem" }}>
-                  Overwrite All
+                  Install All
                 </button>
               </div>
             </div>
@@ -693,7 +741,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
                 {[
                   { name: "Caddy", version: "2.8.4" },
                   { name: "PHP", version: packages.php.find(p => p.id === packageSelection.php)?.version || "8.5.1" },
-                  { name: "MariaDB", version: packages.mysql.find(p => p.id === packageSelection.mysql)?.version || "8.4.0" },
+                  { name: getDatabaseDisplayName(currentPlatform), version: packages.mysql.find(p => p.id === packageSelection.mysql)?.version || "8.4.0" },
                   { name: "phpMyAdmin", version: packages.phpmyadmin.find(p => p.id === packageSelection.phpmyadmin)?.version || "5.2.2" },
                 ].map((pkg) => (
                   <div

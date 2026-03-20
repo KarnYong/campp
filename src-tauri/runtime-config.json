@@ -52,7 +52,7 @@
           "id": "mysql-8.4",
           "version": "8.4.0",
           "selected": true,
-          "display_name": "MariaDB 8.4.0 LTS (Recommended)",
+          "display_name": "MySQL 8.4.0 LTS (Recommended)",
           "eol": false,
           "lts": true,
           "checksums": {

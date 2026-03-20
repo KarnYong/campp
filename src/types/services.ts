@@ -109,6 +109,15 @@ export const SERVICE_DISPLAY_NAMES = {
   [ServiceType.MySQL]: "MariaDB",
 } as const;
 
+// Platform-specific display name for MySQL/MariaDB
+export const getDatabaseDisplayName = (platform?: string): string => {
+  // Show "MySQL" for Windows and macOS, "MariaDB" for Linux
+  if (platform === "windows" || platform === "darwin") {
+    return "MySQL";
+  }
+  return "MariaDB";
+};
+
 export const SERVICE_DESCRIPTIONS = {
   [ServiceType.Caddy]: "Web Server",
   [ServiceType.PhpFpm]: "PHP Runtime",
