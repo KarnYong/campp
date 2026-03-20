@@ -235,6 +235,19 @@ pub fn load_runtime_config_from_file() -> Option<RuntimeConfig> {
     None
 }
 
+/// Get the platform-appropriate database display name
+fn get_database_display_name(display_name: &str) -> String {
+    // On Linux, show "MariaDB", on Windows/macOS show "MySQL"
+    #[cfg(target_os = "linux")]
+    {
+        display_name.replace("MySQL", "MariaDB")
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        display_name.replace("MariaDB", "MySQL")
+    }
+}
+
 /// Get all available packages from config file or defaults
 pub fn get_available_packages() -> PackagesConfig {
     let config = RUNTIME_CONFIG.get_or_init(|| load_runtime_config_from_file());
@@ -259,7 +272,7 @@ pub fn get_available_packages() -> PackagesConfig {
             mysql: cfg.binaries.mysql.versions.iter().map(|v| MySQLPackage {
                 id: v.id.clone(),
                 version: v.version.clone(),
-                display_name: v.display_name.clone(),
+                display_name: get_database_display_name(&v.display_name),
                 windows_x64: v.urls.windows_x64.clone().unwrap_or_default(),
                 windows_arm64: v.urls.windows_arm64.clone().unwrap_or_default(),
                 linux_x64: v.urls.linux_x64.clone().unwrap_or_default(),
