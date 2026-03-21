@@ -43,6 +43,22 @@
             "macOSX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.4.18-fpm-macos-x86_64.tar.gz",
             "macOSArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.4.18-fpm-macos-aarch64.tar.gz"
           }
+        },
+        {
+          "id": "php-7.4",
+          "version": "7.4.33",
+          "selected": false,
+          "display_name": "PHP 7.4.33 (Legacy)",
+          "eol": true,
+          "lts": false,
+          "checksums": {
+            "windowsX64": "cdbb85b45f38f282f05764ca08648b5f92db99c75b2fb3848eb4a559f6553b48",
+            "windowsX86": "6adcf02c02634f258f6b6b2bb666f22916c9bd986db2ccae05acb9868a35f847"
+          },
+          "urls": {
+            "windowsX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-7.4.33/php-7.4.33-Win32-vc15-x64.zip",
+            "windowsX86": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-7.4.33/php-7.4.33-Win32-vc15-x86.zip"
+          }
         }
       ]
     },

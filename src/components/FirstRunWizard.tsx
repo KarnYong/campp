@@ -38,6 +38,7 @@ const packages = {
     { id: "php-8.4", version: "8.4.16" },
     { id: "php-8.3", version: "8.3.29" },
     { id: "php-8.2", version: "8.2.30" },
+    { id: "php-7.4", version: "7.4.33" },
   ],
   mysql: [
     { id: "mysql-8.4", version: "8.4.0" },

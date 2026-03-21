@@ -704,7 +704,7 @@ impl RuntimeDownloader {
     }
 
     /// Get the expected checksum for a component based on current platform
-    fn get_expected_checksum(&self, component: &BinaryComponent, url: &str) -> Option<String> {
+    fn get_expected_checksum(&self, component: &BinaryComponent, _url: &str) -> Option<String> {
         use crate::runtime::packages::get_config;
 
         let config = get_config()?;
@@ -719,8 +719,31 @@ impl RuntimeDownloader {
                     _ => return None,
                 };
 
+                // Determine which version ID to look for based on package selection
+                let target_id = if let Some(ref selection) = self.package_selection {
+                    match component {
+                        BinaryComponent::Php => Some(selection.php.as_str()),
+                        BinaryComponent::MySQL => Some(selection.mysql.as_str()),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+
                 for version in version_info {
-                    if version.selected {
+                    if target_id.is_some() && version.id == target_id.unwrap() {
+                        // Use the package selection
+                        return match platform_key.as_str() {
+                            "windowsX64" => version.checksums.windows_x64.clone(),
+                            "windowsArm64" => version.checksums.windows_arm64.clone(),
+                            "linuxX64" => version.checksums.linux_x64.clone(),
+                            "linuxArm64" => version.checksums.linux_arm64.clone(),
+                            "macOSX64" => version.checksums.macos_x64.clone(),
+                            "macOSArm64" => version.checksums.macos_arm64.clone(),
+                            _ => None,
+                        };
+                    } else if target_id.is_none() && version.selected {
+                        // Fall back to selected flag
                         return match platform_key.as_str() {
                             "windowsX64" => version.checksums.windows_x64.clone(),
                             "windowsArm64" => version.checksums.windows_arm64.clone(),
