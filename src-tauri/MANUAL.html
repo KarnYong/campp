@@ -164,15 +164,15 @@
 </head>
 <body>
   <h1>CAMPP User Manual</h1>
-  <p><strong>Version 0.1.1</strong> | Local Web Development Stack</p>
+  <p><strong>Version 0.1.7</strong> | Local Web Development Stack</p>
 
   <h2 id="overview">Overview</h2>
   <p>CAMPP is a cross-platform local web development stack that bundles everything you need to run PHP websites locally:</p>
   <ul>
-    <li><strong>Caddy</strong> - Modern web server with automatic HTTPS</li>
-    <li><strong>PHP-FPM 8.4</strong> - Fast PHP runtime</li>
-    <li><strong>MariaDB</strong> - MySQL-compatible database server</li>
-    <li><strong>phpMyAdmin</strong> - Web-based database management</li>
+    <li><strong>Caddy 2.8.4</strong> - Modern web server with automatic HTTPS</li>
+    <li><strong>PHP-FPM 8.5.1</strong> - Fast PHP runtime</li>
+    <li><strong>Database</strong> - MySQL 8.4.0 on Windows/macOS, MariaDB 12.3.1 on Linux</li>
+    <li><strong>phpMyAdmin 5.2.2</strong> - Web-based database management</li>
   </ul>
 
   <h2 id="installation">Installation</h2>
@@ -231,7 +231,7 @@
       <td>Internal only (FastCGI)</td>
     </tr>
     <tr>
-      <td>MariaDB</td>
+      <td>Database (MySQL/MariaDB)</td>
       <td>3307</td>
       <td>localhost:3307</td>
     </tr>
@@ -244,6 +244,10 @@
 
   <div class="tip">
     <strong>Tip:</strong> These ports are chosen to avoid conflicts with system services. You can change them in Settings.
+  </div>
+
+  <div class="note">
+    <strong>Note:</strong> CAMPP uses MySQL 8.4.0 on Windows and macOS, and MariaDB 12.3.1 on Linux. Both are MySQL-compatible and work identically for PHP applications.
   </div>
 
   <h2 id="database">Database Connection</h2>
@@ -312,7 +316,7 @@ $pdo = new PDO(
   <ul>
     <li>Web Server Port (default: 8080)</li>
     <li>PHP-FPM Port (default: 9000)</li>
-    <li>MariaDB Port (default: 3307)</li>
+    <li>Database Port (default: 3307)</li>
   </ul>
 
   <div class="warning">
@@ -342,8 +346,8 @@ $pdo = new PDO(
 
   <h3>phpMyAdmin shows errors</h3>
   <ul>
-    <li>Make sure MariaDB is running first</li>
-    <li>Try restarting the MariaDB service</li>
+    <li>Make sure the database service (MySQL/MariaDB) is running first</li>
+    <li>Try restarting the database service</li>
   </ul>
 
   <h3>Reset everything</h3>
@@ -382,7 +386,7 @@ $pdo = new PDO(
     </tr>
     <tr>
       <td>Database Data</td>
-      <td><code>C:\Users\&lt;User&gt;\AppData\Local\campp\mysql\</code></td>
+      <td><code>C:\Users\&lt;User&gt;\AppData\Local\campp\database\</code></td>
     </tr>
     <tr>
       <td>Logs</td>
@@ -398,7 +402,7 @@ $pdo = new PDO(
 
   <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--color-border);">
   <p style="text-align: center; color: #666;">
-    <small>CAMPP v0.1.1 | MIT License | &copy; 2024 CAMPP Project</small>
+    <small>CAMPP v0.1.7 | MIT License | &copy; 2024 CAMPP Project</small>
   </p>
 
   <a href="#overview" class="back-to-top">Back to Top</a>
