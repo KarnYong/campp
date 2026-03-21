@@ -27,9 +27,23 @@ Download the latest release from [GitHub Releases](https://github.com/KarnYong/c
 | Component | Version | Description |
 |-----------|---------|-------------|
 | Caddy | 2.8.4 | Modern web server with automatic HTTPS |
-| PHP-FPM | 8.3.x | Fast and reliable PHP runtime |
-| MariaDB | 11.4.x | Drop-in replacement for MySQL |
-| phpMyAdmin | 5.2.x | Web-based MySQL administration interface |
+| PHP-FPM | 8.5.1 | Fast and reliable PHP runtime |
+| MySQL | 8.4.0 LTS | Enterprise-grade database (MariaDB on Linux) |
+| phpMyAdmin | 5.2.2 | Web-based MySQL administration interface |
+
+### Runtime Sources
+
+Runtime binaries are downloaded from the following sources:
+
+| Component | Platform | Source |
+|-----------|----------|--------|
+| Caddy | All | [caddyserver/caddy releases](https://github.com/caddyserver/caddy/releases/) |
+| PHP-FPM | Windows/macOS/Linux | [campp-runtime-binaries](https://github.com/KarnYong/campp-runtime-binaries) (built from [PHP for Windows](https://downloads.php.net/~windows/releases/) and [static-php-cli](https://dl.static-php.dev/static-php-cli/bulk/)) |
+| MySQL | Windows/macOS | [campp-runtime-binaries](https://github.com/KarnYong/campp-runtime-binaries) (built from [MySQL Downloads](https://dev.mysql.com/downloads/mysql/)) |
+| MariaDB | Linux | [MariaDB Archive](https://archive.mariadb.org/) |
+| phpMyAdmin | All | [campp-runtime-binaries](https://github.com/KarnYong/campp-runtime-binaries) (built from [phpMyAdmin](https://www.phpmyadmin.net/)) |
+
+> **Note**: The `campp-runtime-binaries` repository contains pre-compiled binaries packaged for CAMPP's specific requirements.
 
 ## Default Configuration
 
@@ -112,13 +126,6 @@ See [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) for the full implementation roa
 - **Windows**: Windows 10/11 x64, WebView2 runtime (usually pre-installed)
 - **Linux**: Ubuntu 22.04+ or similar distributions with webkit2gtk dependencies
 - **macOS**: macOS 11+ (Big Sur or later), Apple Silicon or Intel
-
-### Linux Dependencies
-
-On Ubuntu/Debian, install required dependencies:
-```bash
-sudo apt-get install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-```
 
 ## License
 
