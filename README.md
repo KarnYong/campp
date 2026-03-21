@@ -21,13 +21,14 @@ Download the latest release from [GitHub Releases](https://github.com/KarnYong/c
 - **Service Management**: Start, stop, and restart services individually or all at once
 - **Port Configuration**: Customize ports for each service via Settings panel
 - **Quick Actions**: Open project folder, phpMyAdmin, or logs with one click
+- **PHP Version Choice**: Select PHP 8.3 or PHP 7.4.33 (Windows) for legacy application support
 
 ## Included Components
 
 | Component | Version | Description |
 |-----------|---------|-------------|
 | Caddy | 2.8.4 | Modern web server with automatic HTTPS |
-| PHP-FPM | 8.5.1 | Fast and reliable PHP runtime |
+| PHP-FPM | 8.3, 7.4.33 (Windows) | Fast and reliable PHP runtime with legacy support |
 | MySQL | 8.4.0 LTS | Enterprise-grade database (MariaDB on Linux) |
 | phpMyAdmin | 5.2.2 | Web-based MySQL administration interface |
 
