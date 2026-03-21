@@ -1,4 +1,5 @@
 import { ServiceMap } from "../types/services";
+import pkg from "../../package.json";
 
 interface StatusBarProps {
   services: Partial<ServiceMap>;
@@ -32,7 +33,7 @@ export function StatusBar({ services, ...props }: StatusBarProps) {
         <span style={{ display: "flex", alignItems: "center" }}>
           <kbd className="kbd">Ctrl</kbd>+<kbd className="kbd">Shift</kbd>+<kbd className="kbd">D</kbd> Debug
         </span>
-        <span>CAMPP v0.1.7</span>
+        <span>CAMPP v{pkg.version}</span>
       </div>
     </div>
   );

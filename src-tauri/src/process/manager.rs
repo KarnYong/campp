@@ -212,22 +212,41 @@ impl ProcessManager {
 
         service_process.state = ServiceState::Stopping;
 
+        // For MySQL/MariaDB on Windows, use taskkill to ensure the process is terminated
+        // This is necessary because mysqld may spawn additional processes or the
+        // child handle may not properly refer to the actual mysqld.exe process
+        #[cfg(target_os = "windows")]
+        if service == ServiceType::MySQL {
+            use std::io::ErrorKind;
+            let _ = Command::new("taskkill")
+                .args(["/F", "/IM", "mysqld.exe"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .output();
+
+            // Give the process time to terminate
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+
         // Terminate the child process if it exists
         if let Some(ref mut child) = service_process.child {
             #[cfg(unix)]
             {
-                // On Unix, send SIGTERM first
+                // On Unix, send SIGTERM
                 use std::os::unix::process::CommandExt;
                 let _ = child.kill();
             }
 
             #[cfg(windows)]
             {
-                // On Windows, just kill the process
-                let _ = child.kill();
+                // On Windows (for non-MySQL services), kill the process
+                // For MySQL, we already used taskkill above
+                if service != ServiceType::MySQL {
+                    let _ = child.kill();
+                }
             }
 
-            // Wait for the process to exit
+            // Wait for the process to exit (with timeout for safety)
             let _ = child.wait();
         }
 
