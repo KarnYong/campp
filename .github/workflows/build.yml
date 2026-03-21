@@ -175,7 +175,8 @@ jobs:
           echo "=== Verifying signature ==="
           codesign -dv --verbose=4 "$APP_PATH"
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
-          spctl -a -t exec -vvv "$APP_PATH"
+          # Note: spctl check is skipped here because app is not yet notarized
+          # It will be checked after stapling in the notarization step
           EOF
 
           chmod +x sign_and_verify_macos.sh
