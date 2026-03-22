@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   build-macos:
-    runs-on: macos-latest
+    runs-on: macos-14
     timeout-minutes: 180
 
     env:
@@ -80,8 +80,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          security find-identity -v "$KEYCHAIN_NAME"
-
           IDENTITY=$(security find-identity -v "$KEYCHAIN_NAME" | grep "Developer ID Application" | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
           if [ -z "$IDENTITY" ]; then
             echo "No Developer ID Application certificate found"
@@ -128,35 +126,27 @@ jobs:
 
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
 
-          echo "=== Signing nested bundles for: $APP_PATH ==="
-
           while IFS= read -r item; do
-            echo "Signing nested app: $item"
             codesign --force --timestamp --options runtime --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$item"
           done < <(find "$APP_PATH" -type d -name "*.app" ! -path "$APP_PATH" | sort -r)
 
           while IFS= read -r item; do
-            echo "Signing XPC: $item"
             codesign --force --timestamp --options runtime --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$item"
           done < <(find "$APP_PATH" -type d -name "*.xpc" | sort -r)
 
           while IFS= read -r item; do
-            echo "Signing app extension: $item"
             codesign --force --timestamp --options runtime --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$item"
           done < <(find "$APP_PATH" -type d -name "*.appex" | sort -r)
 
           while IFS= read -r item; do
-            echo "Signing framework bundle: $item"
-            codesign --force --timestamp --options runtime --sign "$IDENTITY" "$item"
+            codesign --force --timestamp --sign "$IDENTITY" "$item"
           done < <(find "$APP_PATH" -type d -name "*.framework" | sort -r)
 
           while IFS= read -r item; do
-            echo "Signing dylib: $item"
             codesign --force --timestamp --sign "$IDENTITY" "$item"
           done < <(find "$APP_PATH" -type f -name "*.dylib" | sort)
 
           while IFS= read -r item; do
-            echo "Signing executable Mach-O: $item"
             codesign --force --timestamp --sign "$IDENTITY" "$item"
           done < <(
             find "$APP_PATH" -type f \
@@ -169,14 +159,9 @@ jobs:
               done | sort
           )
 
-          echo "Signing main app bundle: $APP_PATH"
           codesign --force --timestamp --options runtime --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$APP_PATH"
 
-          echo "=== Verifying signature ==="
-          codesign -dv --verbose=4 "$APP_PATH"
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
-          # Note: spctl check is skipped here because app is not yet notarized
-          # It will be checked after stapling in the notarization step
           EOF
 
           chmod +x sign_and_verify_macos.sh
@@ -191,8 +176,6 @@ jobs:
           APPLE_ID="$2"
           APPLE_PASSWORD="$3"
           APPLE_TEAM_ID="$4"
-
-          echo "Submitting for notarization: $FILE_TO_NOTARIZE"
 
           SUBMISSION_OUTPUT=$(xcrun notarytool submit "$FILE_TO_NOTARIZE" \
             --apple-id "$APPLE_ID" \
@@ -210,7 +193,6 @@ jobs:
             exit 1
           fi
 
-          echo "Stapling: $FILE_TO_NOTARIZE"
           xcrun stapler staple "$FILE_TO_NOTARIZE"
           xcrun stapler validate "$FILE_TO_NOTARIZE"
           EOF
@@ -223,19 +205,17 @@ jobs:
       - name: Build x64
         run: npm run tauri build -- --target x86_64-apple-darwin
 
-      - name: Sign and verify ARM64 app
+      - name: Sign ARM64 app
         env:
           IDENTITY: ${{ steps.signing_identity.outputs.identity }}
         run: |
-          set -euo pipefail
           APP_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/${APP_NAME}.app"
           ENTITLEMENTS="$PWD/src-tauri/entitlements.plist"
-
           ./sign_and_verify_macos.sh "$APP_PATH" "$IDENTITY" "$ENTITLEMENTS" "$KEYCHAIN_NAME" "$KEYCHAIN_PASSWORD"
 
       - name: Create ARM64 DMG
+        id: arm64_dmg
         run: |
-          set -euo pipefail
           VERSION="${{ steps.get_version.outputs.version }}"
           APP_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/${APP_NAME}.app"
           DMG_DIR="src-tauri/target/aarch64-apple-darwin/release/bundle/dmg"
@@ -252,30 +232,26 @@ jobs:
             "$DMG_PATH"
 
           echo "dmg_path=$DMG_PATH" >> "$GITHUB_OUTPUT"
-        id: arm64_dmg
 
-      - name: Notarize and staple ARM64 DMG
+      - name: Notarize ARM64 DMG
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          set -euo pipefail
           ./notarize_and_staple.sh "${{ steps.arm64_dmg.outputs.dmg_path }}" "$APPLE_ID" "$APPLE_PASSWORD" "$APPLE_TEAM_ID"
 
-      - name: Sign and verify x64 app
+      - name: Sign x64 app
         env:
           IDENTITY: ${{ steps.signing_identity.outputs.identity }}
         run: |
-          set -euo pipefail
           APP_PATH="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/${APP_NAME}.app"
           ENTITLEMENTS="$PWD/src-tauri/entitlements.plist"
-
           ./sign_and_verify_macos.sh "$APP_PATH" "$IDENTITY" "$ENTITLEMENTS" "$KEYCHAIN_NAME" "$KEYCHAIN_PASSWORD"
 
       - name: Create x64 DMG
+        id: x64_dmg
         run: |
-          set -euo pipefail
           VERSION="${{ steps.get_version.outputs.version }}"
           APP_PATH="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/${APP_NAME}.app"
           DMG_DIR="src-tauri/target/x86_64-apple-darwin/release/bundle/dmg"
@@ -292,18 +268,16 @@ jobs:
             "$DMG_PATH"
 
           echo "dmg_path=$DMG_PATH" >> "$GITHUB_OUTPUT"
-        id: x64_dmg
 
-      - name: Notarize and staple x64 DMG
+      - name: Notarize x64 DMG
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          set -euo pipefail
           ./notarize_and_staple.sh "${{ steps.x64_dmg.outputs.dmg_path }}" "$APPLE_ID" "$APPLE_PASSWORD" "$APPLE_TEAM_ID"
 
-      - name: Create universal binary
+      - name: Create universal app
         run: |
           set -euo pipefail
 
@@ -313,7 +287,6 @@ jobs:
 
           rm -rf "$UNIVERSAL_APP"
           mkdir -p "$(dirname "$UNIVERSAL_APP")"
-
           ditto "$ARM64_APP" "$UNIVERSAL_APP"
 
           while IFS= read -r x64_file; do
@@ -321,36 +294,32 @@ jobs:
             arm64_file="$ARM64_APP/$rel_path"
             universal_file="$UNIVERSAL_APP/$rel_path"
 
-            if [ -f "$arm64_file" ] && file "$x64_file" | grep -q "Mach-O"; then
-              if file "$arm64_file" | grep -q "Mach-O"; then
-                echo "Creating universal binary for: $rel_path"
-                rm -f "$universal_file"
-                mkdir -p "$(dirname "$universal_file")"
-                lipo -create -output "$universal_file" "$arm64_file" "$x64_file"
-              fi
+            if [ -f "$arm64_file" ] && file "$x64_file" | grep -q "Mach-O" && file "$arm64_file" | grep -q "Mach-O"; then
+              rm -f "$universal_file"
+              mkdir -p "$(dirname "$universal_file")"
+              lipo -create -output "$universal_file" "$arm64_file" "$x64_file"
             fi
           done < <(find "$X64_APP/Contents" -type f | sort)
 
-      - name: Verify universal main binary architectures
+      - name: Verify universal binary
         run: |
           set -euo pipefail
-          UNIVERSAL_MAIN_BIN="src-tauri/target/universal-apple-darwin/release/bundle/macos/${APP_NAME}.app/Contents/MacOS/campp"
-          file "$UNIVERSAL_MAIN_BIN"
-          lipo -info "$UNIVERSAL_MAIN_BIN"
+          APP_BIN=$(find "src-tauri/target/universal-apple-darwin/release/bundle/macos/${APP_NAME}.app/Contents/MacOS" -type f | head -1)
+          echo "Main binary: $APP_BIN"
+          file "$APP_BIN"
+          lipo -info "$APP_BIN"
 
-      - name: Sign and verify universal app
+      - name: Sign universal app
         env:
           IDENTITY: ${{ steps.signing_identity.outputs.identity }}
         run: |
-          set -euo pipefail
           APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/${APP_NAME}.app"
           ENTITLEMENTS="$PWD/src-tauri/entitlements.plist"
-
           ./sign_and_verify_macos.sh "$APP_PATH" "$IDENTITY" "$ENTITLEMENTS" "$KEYCHAIN_NAME" "$KEYCHAIN_PASSWORD"
 
       - name: Create universal DMG
+        id: universal_dmg
         run: |
-          set -euo pipefail
           VERSION="${{ steps.get_version.outputs.version }}"
           APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/${APP_NAME}.app"
           DMG_DIR="src-tauri/target/universal-apple-darwin/release/bundle/dmg"
@@ -367,21 +336,14 @@ jobs:
             "$DMG_PATH"
 
           echo "dmg_path=$DMG_PATH" >> "$GITHUB_OUTPUT"
-        id: universal_dmg
 
-      - name: Notarize and staple universal DMG
+      - name: Notarize universal DMG
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          set -euo pipefail
           ./notarize_and_staple.sh "${{ steps.universal_dmg.outputs.dmg_path }}" "$APPLE_ID" "$APPLE_PASSWORD" "$APPLE_TEAM_ID"
-
-      - name: List macOS artifacts
-        run: |
-          echo "=== macOS artifacts ==="
-          find src-tauri/target -type f \( -name "*.app" -o -name "*.dmg" \) | sort
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -392,7 +354,6 @@ jobs:
             src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/CAMPP-*.dmg
             src-tauri/target/universal-apple-darwin/release/bundle/dmg/CAMPP-*.dmg
           if-no-files-found: error
-
   build-windows:
     runs-on: windows-latest
 

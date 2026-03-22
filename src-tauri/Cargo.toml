@@ -1,6 +1,6 @@
 [package]
 name = "CAMPP"
-version = "0.1.8"
+version = "0.1.9-test"
 description = "CAMPP - Local Web Development Stack"
 authors = ["Karn Yong"]
 edition = "2021"
