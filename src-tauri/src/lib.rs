@@ -152,44 +152,14 @@ fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
 }
 
 fn setup_system_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    // Determine the icon file to use based on platform
+    // Embed the icon directly in the binary to ensure it's always available
     #[cfg(target_os = "windows")]
-    let icon_file = "icons/icon.ico";
+    let icon_bytes = include_bytes!("../icons/icon.ico");
     #[cfg(not(target_os = "windows"))]
-    let icon_file = "icons/32x32.png";
+    let icon_bytes = include_bytes!("../icons/32x32.png");
 
-    // Try to resolve the icon path using multiple methods
-    let icon_path = if let Ok(path) = std::env::current_exe() {
-        // Try relative to the executable first
-        let exe_dir = path.parent()
-            .ok_or("Cannot get exe directory")?;
-        let icon_path = exe_dir.join(icon_file);
-        if icon_path.exists() {
-            icon_path
-        } else {
-            // Fallback to resource directory
-            let resource_dir = exe_dir.join("resources");
-            let resource_icon = resource_dir.join(icon_file);
-            if resource_icon.exists() {
-                resource_icon
-            } else {
-                // Last resort - use current directory
-                std::path::PathBuf::from(icon_file)
-            }
-        }
-    } else {
-        std::path::PathBuf::from(icon_file)
-    };
-
-    // Only proceed if icon file exists
-    if !icon_path.exists() {
-        eprintln!("Warning: Tray icon not found at {:?}", icon_path);
-        // Continue without tray icon - the menu will still work
-        return Ok(());
-    }
-
-    // Load and decode the image
-    let img = image::open(&icon_path)?;
+    // Load and decode the embedded image
+    let img = image::load_from_memory(icon_bytes)?;
     let rgba = img.to_rgba8();
     let dimensions = rgba.dimensions();
     let raw_bytes = rgba.as_raw().to_vec();
