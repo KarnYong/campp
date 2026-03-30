@@ -164,7 +164,7 @@
 </head>
 <body>
   <h1>CAMPP User Manual</h1>
-  <p><strong>Version 0.1.7</strong> | Local Web Development Stack</p>
+  <p><strong>Version 0.2.1</strong> | Local Web Development Stack</p>
 
   <h2 id="overview">Overview</h2>
   <p>CAMPP is a cross-platform local web development stack that bundles everything you need to run PHP websites locally:</p>
@@ -176,15 +176,35 @@
   </ul>
 
   <h2 id="installation">Installation</h2>
+  <h3>Windows</h3>
   <ol>
     <li>Download the installer from <a href="https://github.com/KarnYong/campp/releases">GitHub Releases</a></li>
     <li>Run the installer (NSIS or MSI)</li>
+    <li>Choose your project folder location during installation (default: <code>%LOCALAPPDATA%\campp\projects</code>)</li>
     <li>If Windows SmartScreen shows a warning, click <strong>More info</strong> → <strong>Run anyway</strong></li>
     <li>Launch CAMPP from Start Menu or Desktop shortcut</li>
   </ol>
 
+  <h3>macOS</h3>
+  <ol>
+    <li>Download the <code>.dmg</code> file from <a href="https://github.com/KarnYong/campp/releases">GitHub Releases</a></li>
+    <li>Open the DMG and drag CAMPP to Applications</li>
+    <li>Launch CAMPP from Applications or Launchpad</li>
+  </ol>
+
+  <h3>Linux</h3>
+  <ol>
+    <li>Download the <code>.AppImage</code> file from <a href="https://github.com/KarnYong/campp/releases">GitHub Releases</a></li>
+    <li>Make the file executable: <code>chmod +x CAMPP-*.AppImage</code></li>
+    <li>Run the AppImage: <code>./CAMPP-*.AppImage</code></li>
+  </ol>
+
   <div class="note">
-    <strong>Note:</strong> The SmartScreen warning appears because the app is not code-signed. This is normal and safe. The source code is publicly available on GitHub.
+    <strong>Note:</strong> The Windows SmartScreen warning appears because the app is not code-signed. This is normal and safe. The source code is publicly available on GitHub.
+  </div>
+
+  <div class="tip">
+    <strong>Windows Installation:</strong> You can select a custom project folder location during installation. On macOS and Linux, the project folder uses the default location but can be changed later in Settings.
   </div>
 
   <h2 id="first-run">First Run</h2>
@@ -271,7 +291,7 @@
     </tr>
     <tr>
       <td>Password</td>
-      <td>root</td>
+      <td><em>(empty - leave blank)</em></td>
     </tr>
   </table>
 
@@ -280,12 +300,28 @@
 $pdo = new PDO(
     'mysql:host=localhost;port=3307;charset=utf8mb4',
     'root',
-    'root'
+    ''
 );</code></pre>
 
   <h2 id="project-folder">Project Folder</h2>
-  <p>Your website files should be placed in the project folder:</p>
+  <p>Your website files should be placed in the project folder. The default locations are:</p>
+
+  <h4>Windows</h4>
   <pre><code>C:\Users\&lt;YourUsername&gt;\AppData\Local\campp\projects</code></pre>
+
+  <h4>macOS</h4>
+  <pre><code>~/Library/Application Support/campp/projects</code></pre>
+
+  <h4>Linux</h4>
+  <pre><code>~/.local/share/campp/projects</code></pre>
+
+  <div class="tip">
+    <strong>Project Folder Location:</strong>
+    <ul style="margin-top: 0.5rem;">
+      <li><strong>Windows:</strong> Choose a custom location during installation.</li>
+      <li><strong>macOS/Linux:</strong> Uses the default location above.</li>
+    </ul>
+  </div>
 
   <p>To quickly access this folder:</p>
   <ol>
@@ -367,6 +403,8 @@ $pdo = new PDO(
   </ul>
 
   <h2 id="data-locations">Data Locations</h2>
+
+  <h4>Windows</h4>
   <table>
     <tr>
       <th>What</th>
@@ -374,25 +412,85 @@ $pdo = new PDO(
     </tr>
     <tr>
       <td>Runtime Binaries</td>
-      <td><code>C:\Users\&lt;User&gt;\AppData\Local\campp\runtime\</code></td>
+      <td><code>%LOCALAPPDATA%\campp\runtime\</code></td>
     </tr>
     <tr>
       <td>Project Files</td>
-      <td><code>C:\Users\&lt;User&gt;\AppData\Local\campp\projects\</code></td>
+      <td><code>%LOCALAPPDATA%\campp\projects\</code> <em>(configurable)</em></td>
     </tr>
     <tr>
       <td>Configuration</td>
-      <td><code>C:\Users\&lt;User&gt;\AppData\Local\campp\config\</code></td>
+      <td><code>%LOCALAPPDATA%\campp\config\</code></td>
     </tr>
     <tr>
       <td>Database Data</td>
-      <td><code>C:\Users\&lt;User&gt;\AppData\Local\campp\database\</code></td>
+      <td><code>%LOCALAPPDATA%\campp\mysql\data\</code></td>
     </tr>
     <tr>
       <td>Logs</td>
-      <td><code>C:\Users\&lt;User&gt;\AppData\Local\campp\logs\</code></td>
+      <td><code>%LOCALAPPDATA%\campp\logs\</code></td>
     </tr>
   </table>
+
+  <h4>macOS</h4>
+  <table>
+    <tr>
+      <th>What</th>
+      <th>Location</th>
+    </tr>
+    <tr>
+      <td>Runtime Binaries</td>
+      <td><code>~/Library/Application Support/campp/runtime/</code></td>
+    </tr>
+    <tr>
+      <td>Project Files</td>
+      <td><code>~/Library/Application Support/campp/projects/</code></td>
+    </tr>
+    <tr>
+      <td>Configuration</td>
+      <td><code>~/Library/Application Support/campp/config/</code></td>
+    </tr>
+    <tr>
+      <td>Database Data</td>
+      <td><code>~/Library/Application Support/campp/mysql/data/</code></td>
+    </tr>
+    <tr>
+      <td>Logs</td>
+      <td><code>~/Library/Application Support/campp/logs/</code></td>
+    </tr>
+  </table>
+
+  <h4>Linux</h4>
+  <table>
+    <tr>
+      <th>What</th>
+      <th>Location</th>
+    </tr>
+    <tr>
+      <td>Runtime Binaries</td>
+      <td><code>~/.local/share/campp/runtime/</code></td>
+    </tr>
+    <tr>
+      <td>Project Files</td>
+      <td><code>~/.local/share/campp/projects/</code></td>
+    </tr>
+    <tr>
+      <td>Configuration</td>
+      <td><code>~/.local/share/campp/config/</code></td>
+    </tr>
+    <tr>
+      <td>Database Data</td>
+      <td><code>~/.local/share/campp/mysql/data/</code></td>
+    </tr>
+    <tr>
+      <td>Logs</td>
+      <td><code>~/.local/share/campp/logs/</code></td>
+    </tr>
+  </table>
+
+  <div class="note">
+    <strong>Note:</strong> Check Settings to see your actual project folder location. On Windows, this may differ if you configured a custom path during installation.
+  </div>
 
   <h2 id="support">Support</h2>
   <ul>
@@ -402,7 +500,7 @@ $pdo = new PDO(
 
   <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--color-border);">
   <p style="text-align: center; color: #666;">
-    <small>CAMPP v0.1.7 | MIT License | &copy; 2024 CAMPP Project</small>
+    <small>CAMPP v0.2.1 | MIT License | &copy; 2024-2025 CAMPP Project</small>
   </p>
 
   <a href="#overview" class="back-to-top">Back to Top</a>
