@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useState, useEffect, useCallback } from "react";
-import { ServiceMap, ServiceType, ServiceState } from "../types/services";
+import { ServiceMap, ServiceType, ServiceState, getDatabaseDisplayName } from "../types/services";
 import { ServiceCard } from "./ServiceCard";
 import { StatusBar } from "./StatusBar";
 import { SettingsPanel } from "./SettingsPanel";
@@ -12,6 +12,15 @@ export function Dashboard() {
   const [projectRoot, setProjectRoot] = useState<string>("");
   const [installDir, setInstallDir] = useState<string>("");
   const [installedVersions, setInstalledVersions] = useState<Record<string, string>>({});
+
+  // Detect platform for database display name
+  const detectPlatform = (): string => {
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    if (userAgent.includes("win")) return "windows";
+    if (userAgent.includes("mac")) return "darwin";
+    return "linux";
+  };
+  const dbName = getDatabaseDisplayName(detectPlatform());
 
   // Get Caddy port from services
   const caddyPort = services[ServiceType.Caddy]?.port || 8080;
@@ -162,7 +171,7 @@ export function Dashboard() {
                   color: "var(--text-primary)",
                 }}
               >
-                CAMPP = Caddy + MySQL + PHP
+                CAMPP = Caddy + {dbName} + PHP
               </h1>
               <p
                 style={{
@@ -172,7 +181,7 @@ export function Dashboard() {
                   marginBottom: 0,
                 }}
               >
-                Development environment for apps using MySQL (PHP included)
+                Development environment for apps using {dbName} (PHP included)
               </p>
             </div>
 
@@ -309,7 +318,7 @@ export function Dashboard() {
                     border: "1px solid var(--border-color)",
                   }}
                 >
-                  MySQL {installedVersions.mysql}
+                  {dbName} {installedVersions.mysql}
                 </span>
               )}
               {installedVersions.phpmyadmin && (

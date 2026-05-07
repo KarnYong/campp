@@ -111,8 +111,15 @@ export const SERVICE_DISPLAY_NAMES = {
 
 // Platform-specific display name for MySQL/MariaDB
 export const getDatabaseDisplayName = (platform?: string): string => {
+  // Auto-detect platform if not provided
+  const p = platform || (() => {
+    const ua = window.navigator.userAgent.toLowerCase();
+    if (ua.includes("win")) return "windows";
+    if (ua.includes("mac")) return "darwin";
+    return "linux";
+  })();
   // Show "MySQL" for Windows and macOS, "MariaDB" for Linux
-  if (platform === "windows" || platform === "darwin") {
+  if (p === "windows" || p === "darwin") {
     return "MySQL";
   }
   return "MariaDB";

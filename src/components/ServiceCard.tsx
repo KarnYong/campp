@@ -1,4 +1,4 @@
-import { ServiceType, ServiceState, SERVICE_DISPLAY_NAMES, SERVICE_DESCRIPTIONS, DEFAULT_PORTS } from "../types/services";
+import { ServiceType, ServiceState, SERVICE_DISPLAY_NAMES, SERVICE_DESCRIPTIONS, DEFAULT_PORTS, getDatabaseDisplayName } from "../types/services";
 
 interface ServiceCardProps {
   serviceType: ServiceType;
@@ -21,7 +21,9 @@ export function ServiceCard({
   onRestart,
   ...props
 }: ServiceCardProps) {
-  const displayName = SERVICE_DISPLAY_NAMES[serviceType];
+  const displayName = serviceType === ServiceType.MySQL
+    ? getDatabaseDisplayName()
+    : SERVICE_DISPLAY_NAMES[serviceType];
   const description = SERVICE_DESCRIPTIONS[serviceType];
 
   const isRunning = state === ServiceState.Running;

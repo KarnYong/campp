@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useState, useEffect, useCallback } from "react";
-import { AppSettings } from "../types/services";
+import { AppSettings, getDatabaseDisplayName } from "../types/services";
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -240,7 +240,7 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
               onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
             >
               <label htmlFor="mysql-port" style={{ fontSize: "0.875rem", fontWeight: 500 }}>
-                MySQL Port
+                {getDatabaseDisplayName()} Port
               </label>
               <input
                 id="mysql-port"

@@ -128,6 +128,28 @@ See [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) for the full implementation roa
 - **Linux**: Ubuntu 22.04+ or similar distributions with webkit2gtk dependencies
 - **macOS**: macOS 11+ (Big Sur or later), Apple Silicon or Intel
 
+## Troubleshooting
+
+### MySQL/MariaDB fails to start after unclean shutdown
+
+If MySQL/MariaDB was not shut down properly (e.g., power failure, force quit), you may see an InnoDB error like:
+
+```
+[ERROR] [MY-012960] [InnoDB] Cannot create redo log files because data files are corrupt
+```
+
+CAMPP automatically handles this by starting MySQL with InnoDB recovery mode enabled (`--innodb-force-recovery=1`). This allows the database to start and recover automatically after unclean shutdowns.
+
+If you still encounter issues, you can manually reset the database:
+
+1. **Stop all services** in CAMPP
+2. **Delete the MySQL data directory**:
+   - Windows: Delete `C:\Users\<YourUsername>\.campp\mysql\data\`
+   - Linux/macOS: Delete `~/.campp/mysql/data/`
+3. **Restart CAMPP** - the database will be re-initialized automatically
+
+**Warning**: Deleting the data directory will destroy all your databases. Export your data first using phpMyAdmin if you need to preserve it.
+
 ## License
 
 MIT
