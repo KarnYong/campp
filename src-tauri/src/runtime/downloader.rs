@@ -2,177 +2,17 @@ use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
 
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 
 use crate::runtime::locator::get_app_data_paths;
-use crate::runtime::packages::{PackageSelection, get_php_package, get_mysql_package, get_phpmyadmin_package};
+use crate::runtime::packages::{PackageSelection, get_php_package, get_mysql_package, get_phpmyadmin_package, get_config};
 use sha2::{Digest, Sha256};
 
 /// Runtime configuration loaded from runtime-config.json (shared with packages.rs)
 pub use crate::runtime::packages::{
     RuntimeConfig, BinariesConfig, BinaryConfig, PhpMyAdminConfig, VersionInfo, VersionInfoSingleUrl, Urls, Checksums
 };
-
-/// Global runtime config (loaded once)
-static RUNTIME_CONFIG: OnceLock<RuntimeConfig> = OnceLock::new();
-
-/// Load runtime configuration from bundled resource or file
-pub fn load_runtime_config() -> RuntimeConfig {
-    // Try to load from various locations
-    let config_content = load_config_content();
-
-    match config_content {
-        Some(content) => {
-            match serde_json::from_str(&content) {
-                Ok(config) => {
-                    eprintln!("Loaded runtime configuration from file");
-                    config
-                }
-                Err(e) => {
-                    eprintln!("Failed to parse runtime-config.json: {}. Using defaults.", e);
-                    get_default_config()
-                }
-            }
-        }
-        None => {
-            eprintln!("runtime-config.json not found. Using default configuration.");
-            get_default_config()
-        }
-    }
-}
-
-/// Try to load config content from various locations
-fn load_config_content() -> Option<String> {
-    // 1. Try current directory (for development)
-    if let Ok(content) = fs::read_to_string("runtime-config.json") {
-        return Some(content);
-    }
-
-    // 2. Try src-tauri directory (for development)
-    if let Ok(content) = fs::read_to_string("src-tauri/runtime-config.json") {
-        return Some(content);
-    }
-
-    // 3. Try alongside the executable (for production)
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(exe_dir) = exe_path.parent() {
-            let config_path = exe_dir.join("runtime-config.json");
-            if let Ok(content) = fs::read_to_string(&config_path) {
-                return Some(content);
-            }
-        }
-    }
-
-    // 4. Try AppData/resources (Windows)
-    #[cfg(target_os = "windows")]
-    {
-        if let Some(local_app_data) = dirs::data_local_dir() {
-            // Check in the app installation directory
-            let config_path = local_app_data.join("campp").join("runtime-config.json");
-            if let Ok(content) = fs::read_to_string(&config_path) {
-                return Some(content);
-            }
-        }
-    }
-
-    None
-}
-
-/// Get the global runtime config (loads once, then caches)
-fn get_config() -> &'static RuntimeConfig {
-    RUNTIME_CONFIG.get_or_init(load_runtime_config)
-}
-
-/// Default hardcoded configuration (fallback when config file is not available)
-fn get_default_config() -> RuntimeConfig {
-    use crate::runtime::packages::VersionInfoSingleUrl;
-
-    RuntimeConfig {
-        version: "1.0".to_string(),
-        binaries: BinariesConfig {
-            caddy: BinaryConfig {
-                versions: vec![
-                    VersionInfo {
-                        id: "caddy-2.8".to_string(),
-                        version: "2.8.4".to_string(),
-                        selected: true,
-                        display_name: "Caddy 2.8.4".to_string(),
-                        eol: false,
-                        lts: false,
-                        checksums: Checksums::default(),
-                        urls: Urls {
-                            windows_x64: Some("https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_windows_amd64.zip".to_string()),
-                            windows_arm64: Some("https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_windows_arm64.zip".to_string()),
-                            linux_x64: Some("https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_linux_amd64.tar.gz".to_string()),
-                            linux_arm64: Some("https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_linux_arm64.tar.gz".to_string()),
-                            macos_x64: Some("https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_mac_amd64.tar.gz".to_string()),
-                            macos_arm64: Some("https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_mac_arm64.tar.gz".to_string()),
-                        },
-                    },
-                ],
-            },
-            php: BinaryConfig {
-                versions: vec![
-                    VersionInfo {
-                        id: "php-8.5".to_string(),
-                        version: "8.5.1".to_string(),
-                        selected: true,
-                        display_name: "PHP 8.5.1".to_string(),
-                        eol: false,
-                        lts: false,
-                        checksums: Checksums::default(),
-                        urls: Urls {
-                            windows_x64: Some("https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.5.1-Win32-vs17-x64.zip".to_string()),
-                            windows_arm64: Some("https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.5.1-Win32-vs17-x86.zip".to_string()),
-                            linux_x64: Some("https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.4.18-fpm-linux-x86_64.tar.gz".to_string()),
-                            linux_arm64: Some("https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.4.18-fpm-linux-aarch64.tar.gz".to_string()),
-                            macos_x64: Some("https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.4.18-fpm-macos-x86_64.tar.gz".to_string()),
-                            macos_arm64: Some("https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.4.18-fpm-macos-aarch64.tar.gz".to_string()),
-                        },
-                    },
-                ],
-            },
-            mysql: BinaryConfig {
-                versions: vec![
-                    VersionInfo {
-                        id: "mysql-8.4".to_string(),
-                        version: "8.4.0".to_string(),
-                        selected: true,
-                        display_name: "MySQL 8.4.0 LTS".to_string(),
-                        eol: false,
-                        lts: true,
-                        checksums: Checksums::default(),
-                        urls: Urls {
-                            windows_x64: Some("https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-winx64.zip".to_string()),
-                            windows_arm64: Some("https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-winx64.zip".to_string()),
-                            linux_x64: Some("https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-linux-glibc2.28-x86_64.tar.xz".to_string()),
-                            linux_arm64: Some("https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-linux-glibc2.28-aarch64.tar.xz".to_string()),
-                            macos_x64: Some("https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-macos14-x86_64.tar.gz".to_string()),
-                            macos_arm64: Some("https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-macos14-arm64.tar.gz".to_string()),
-                        },
-                    },
-                ],
-            },
-            phpmyadmin: PhpMyAdminConfig {
-                versions: vec![
-                    VersionInfoSingleUrl {
-                        id: "phpmyadmin-5.2".to_string(),
-                        version: "5.2.2".to_string(),
-                        selected: true,
-                        display_name: "phpMyAdmin 5.2.2".to_string(),
-                        eol: false,
-                        lts: false,
-                        checksum: None,
-                        url: "https://github.com/KarnYong/campp-runtime-binaries/releases/download/phpmyadmin-5.2.2/phpMyAdmin-5.2.2-all-languages.zip".to_string(),
-                    },
-                ],
-            },
-        },
-    }
-}
 
 /// Binary component types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -194,7 +34,10 @@ impl BinaryComponent {
     }
 
     pub fn version(&self) -> String {
-        let config = get_config();
+        let config = match get_config() {
+            Some(c) => c,
+            None => return String::new(),
+        };
         match self {
             BinaryComponent::Caddy => {
                 config.binaries.caddy.versions.iter()
@@ -450,7 +293,10 @@ impl RuntimeDownloader {
         }
 
         // Fall back to default config
-        let config = get_config();
+        let config = match get_config() {
+            Some(c) => c,
+            None => return String::new(),
+        };
 
         match component {
             BinaryComponent::Caddy => {
@@ -534,9 +380,9 @@ impl RuntimeDownloader {
         let url = self.get_binary_url(component);
         let extension = Self::get_extension_from_url(&url);
 
-        eprintln!("[DEBUG] Platform: {:?}", self.platform);
-        eprintln!("[DEBUG] Downloading {} from: {}", component.name(), url);
-        eprintln!("[DEBUG] Full URL ({} chars): {}", url.len(), url);
+        tracing::debug!("Platform: {:?}", self.platform);
+        tracing::info!("Downloading {} from: {}", component.name(), url);
+        tracing::debug!("Full URL ({} chars): {}", url.len(), url);
 
         // Set platform-appropriate User-Agent
         let user_agent = match self.platform {
@@ -574,7 +420,7 @@ impl RuntimeDownloader {
         // Get final URL after redirects
         let final_url = response.url().clone();
         if final_url.as_str() != url {
-            eprintln!("Redirected: {} -> {}", url, final_url);
+            tracing::info!("Redirected: {} -> {}", url, final_url);
         }
 
         // Check content type
@@ -654,7 +500,9 @@ impl RuntimeDownloader {
                     actual_checksum
                 ));
             }
-            eprintln!("Checksum verified for {}: {}", component.name(), actual_checksum);
+            tracing::info!("Checksum verified for {}: {}", component.name(), actual_checksum);
+        } else {
+            tracing::warn!("No checksum configured for {} — integrity not verified", component.name());
         }
 
         let percent = if total_bytes > 0 {
@@ -705,8 +553,6 @@ impl RuntimeDownloader {
 
     /// Get the expected checksum for a component based on current platform
     fn get_expected_checksum(&self, component: &BinaryComponent, _url: &str) -> Option<String> {
-        use crate::runtime::packages::get_config;
-
         let config = get_config()?;
         let platform_key = self.platform.url_key();
 
@@ -816,46 +662,14 @@ impl RuntimeDownloader {
         let decoder = GzDecoder::new(file);
         let mut archive = tar::Archive::new(decoder);
 
-        // Unpack the archive, ignoring the first directory level if needed
         archive
             .unpack(dest_dir)
             .map_err(|e| format!("Failed to extract {}: {}", archive_path.display(), e))?;
 
-        // Ensure executable permissions are set for binary files on Unix
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-
-            // Known binary paths that need execute permission
-            let binary_paths = [
-                dest_dir.join("caddy"),
-                dest_dir.join("php-fpm"),
-                dest_dir.join("php-cgi"),
-                dest_dir.join("buildroot/bin/php-fpm"),
-                dest_dir.join("buildroot/bin/php"),
-                dest_dir.join("mysql/bin/mysqld"),
-                dest_dir.join("bin/mysqld"),
-            ];
-
-            for path in &binary_paths {
-                if path.exists() {
-                    if let Ok(metadata) = fs::metadata(path) {
-                        let mut perms = metadata.permissions();
-                        let mode = perms.mode();
-                        // Add execute permission if not already set
-                        if mode & 0o111 == 0 {
-                            perms.set_mode(mode | 0o755);
-                            let _ = fs::set_permissions(path, perms);
-                        }
-                    }
-                }
-            }
-        }
-
+        Self::set_binary_permissions(dest_dir);
         Ok(())
     }
 
-    /// Extract a tar.xz archive
     fn extract_tar_xz(&self, archive_path: &Path, dest_dir: &Path) -> Result<(), String> {
         use xz2::read::XzDecoder;
 
@@ -863,17 +677,19 @@ impl RuntimeDownloader {
         let decoder = XzDecoder::new(file);
         let mut archive = tar::Archive::new(decoder);
 
-        // Unpack the archive, ignoring the first directory level if needed
         archive
             .unpack(dest_dir)
             .map_err(|e| format!("Failed to extract {}: {}", archive_path.display(), e))?;
 
-        // Ensure executable permissions are set for binary files on Unix
+        Self::set_binary_permissions(dest_dir);
+        Ok(())
+    }
+
+    fn set_binary_permissions(dest_dir: &Path) {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
 
-            // Known binary paths that need execute permission
             let binary_paths = [
                 dest_dir.join("caddy"),
                 dest_dir.join("php-fpm"),
@@ -889,7 +705,6 @@ impl RuntimeDownloader {
                     if let Ok(metadata) = fs::metadata(path) {
                         let mut perms = metadata.permissions();
                         let mode = perms.mode();
-                        // Set execute bits if not already set
                         if mode & 0o111 == 0 {
                             perms.set_mode(mode | 0o755);
                             let _ = fs::set_permissions(path, perms);
@@ -898,7 +713,6 @@ impl RuntimeDownloader {
                 }
             }
 
-            // Recursively set executable permission for all files in bin directories
             if let Ok(entries) = fs::read_dir(dest_dir) {
                 for entry in entries.flatten() {
                     let path = entry.path();
@@ -923,8 +737,6 @@ impl RuntimeDownloader {
                 }
             }
         }
-
-        Ok(())
     }
 
     /// Download and install all runtime binaries
@@ -932,135 +744,22 @@ impl RuntimeDownloader {
         &self,
         progress_cb: ProgressCallback,
     ) -> Result<Vec<PathBuf>, String> {
-        let components = [
-            BinaryComponent::Caddy,
-            BinaryComponent::Php,
-            BinaryComponent::MySQL,
-            BinaryComponent::PhpMyAdmin,
-        ];
-        let total = components.len() as u8;
-
-        // Create temp directory for downloads
-        let temp_dir = std::env::temp_dir().join("campp-download");
-        fs::create_dir_all(&temp_dir)
-            .map_err(|e| format!("Failed to create temp directory: {}", e))?;
-
-        let mut downloaded_files = Vec::new();
-
-        for (i, component) in components.iter().enumerate() {
-            let current = (i + 1) as u8;
-
-            // Download
-            let downloaded_path = self
-                .download_component(*component, &temp_dir, &progress_cb, current, total)
-                .await?;
-
-            // Verify checksum (TODO: add expected checksums)
-            // For now, skip checksum verification since we'd need to pre-calculate them
-            // In production, download from a trusted source with known checksums
-            progress_cb(DownloadProgress {
-                step: DownloadStep::Extracting,
-                percent: 0,
-                current_component: component.name().to_string(),
-                component_display: component.display_name(),
-                version: self.get_component_version(&component),
-                total_components: total,
-                downloaded_bytes: 0,
-                total_bytes: 0,
-            });
-
-            let runtime_dir = self.get_runtime_dir()?;
-            fs::create_dir_all(&runtime_dir)
-                .map_err(|e| format!("Failed to create runtime directory: {}", e))?;
-
-            // Determine extraction method based on file extension
-            let extension = downloaded_path
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("");
-
-            let is_tar_gz = downloaded_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .map(|n| n.ends_with(".tar.gz"))
-                .unwrap_or(false);
-
-            let is_tar_xz = downloaded_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .map(|n| n.ends_with(".tar.xz"))
-                .unwrap_or(false);
-
-            if is_tar_gz || extension == "gz" {
-                self.extract_tar_gz(&downloaded_path, &runtime_dir)?;
-            } else if is_tar_xz || extension == "xz" {
-                self.extract_tar_xz(&downloaded_path, &runtime_dir)?;
-            } else if extension == "zip" {
-                self.extract_zip(&downloaded_path, &runtime_dir)?;
-            } else if extension.is_empty() {
-                // Bare binary - copy directly to runtime directory
-                let binary_name = downloaded_path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .ok_or("Invalid binary name")?;
-
-                let dest_path = runtime_dir.join(binary_name);
-                fs::copy(&downloaded_path, &dest_path)
-                    .map_err(|e| format!("Failed to copy binary: {}", e))?;
-
-                // Set executable permission on Unix
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    let mut perms = fs::metadata(&dest_path)
-                        .map_err(|e| format!("Failed to get metadata: {}", e))?
-                        .permissions();
-                    perms.set_mode(0o755);
-                    fs::set_permissions(&dest_path, perms)
-                        .map_err(|e| format!("Failed to set permissions: {}", e))?;
-                }
-            } else {
-                return Err(format!("Unsupported archive format: {}", extension));
-            }
-
-            // Create marker file to indicate component was installed with version
-            let version = self.get_component_version(&component);
-            let marker_file = runtime_dir.join(format!("{}_installed.txt", component.binary_name()));
-            fs::write(&marker_file, format!("version={}\ninstalled_at={:?}", version, std::time::SystemTime::now()))
-                .map_err(|e| format!("Failed to create marker file: {}", e))?;
-
-            downloaded_files.push(downloaded_path);
-        }
-
-        // Create all application directories (config, logs, mysql/data, projects)
-        if let Ok(app_paths) = get_app_data_paths() {
-            if let Err(e) = app_paths.ensure_directories() {
-                eprintln!("Warning: Failed to create app directories: {}", e);
-            }
-        }
-
-        progress_cb(DownloadProgress {
-            step: DownloadStep::Complete,
-            percent: 100,
-            current_component: "All".to_string(),
-            component_display: "All Components".to_string(),
-            version: String::new(),
-            total_components: total,
-            downloaded_bytes: 0,
-            total_bytes: 0,
-        });
-
-        // Keep temp files for user to access if needed
-        // Uncomment to cleanup: let _ = fs::remove_dir_all(temp_dir);
-
-        Ok(downloaded_files)
+        self.download_all_impl(progress_cb, &[]).await
     }
 
     /// Download and install runtime binaries with option to skip existing components
     pub async fn download_all_with_skip(
         &self,
         progress_cb: ProgressCallback,
-        skip_list: &[&str], // Component names to skip (e.g., ["php", "mysql"])
+        skip_list: &[&str],
+    ) -> Result<Vec<PathBuf>, String> {
+        self.download_all_impl(progress_cb, skip_list).await
+    }
+
+    async fn download_all_impl(
+        &self,
+        progress_cb: ProgressCallback,
+        skip_list: &[&str],
     ) -> Result<Vec<PathBuf>, String> {
         let components = [
             BinaryComponent::Caddy,
@@ -1082,7 +781,7 @@ impl RuntimeDownloader {
 
             // Skip if component is in skip list
             if skip_list.contains(&component_name) {
-                eprintln!("Skipping {} (already installed)", component.name());
+                tracing::info!("Skipping {} (already installed)", component.name());
                 continue;
             }
 
@@ -1093,9 +792,7 @@ impl RuntimeDownloader {
                 .download_component(*component, &temp_dir, &progress_cb, current, total)
                 .await?;
 
-            // Verify checksum (TODO: add expected checksums)
-            // For now, skip checksum verification since we'd need to pre-calculate them
-            // In production, download from a trusted source with known checksums
+            // Checksum is verified during download_component
             progress_cb(DownloadProgress {
                 step: DownloadStep::Extracting,
                 percent: 0,
@@ -1173,7 +870,7 @@ impl RuntimeDownloader {
         // Create all application directories (config, logs, mysql/data, projects)
         if let Ok(app_paths) = get_app_data_paths() {
             if let Err(e) = app_paths.ensure_directories() {
-                eprintln!("Warning: Failed to create app directories: {}", e);
+                tracing::warn!("Failed to create app directories: {}", e);
             }
         }
 
@@ -1213,12 +910,6 @@ impl RuntimeDownloader {
         }
     }
 
-    /// Verify checksums
-    pub async fn verify_checksums(&self) -> Result<bool, String> {
-        // TODO: Implement checksum verification against a manifest
-        Ok(true)
-    }
-
     /// Check if runtime binaries are already installed
     pub fn is_installed(&self) -> bool {
         let runtime_dir = match self.get_runtime_dir() {
@@ -1232,14 +923,27 @@ impl RuntimeDownloader {
         let mysql_marker = runtime_dir.join("mysql_installed.txt");
         let phpmyadmin_marker = runtime_dir.join("phpmyadmin_installed.txt");
 
-        // Also check for actual binaries (for production use)
-        let caddy_exe = runtime_dir.join("caddy").join("caddy.exe");
-        let php_exe = runtime_dir.join("php").join("php.exe");
-        let mysql_exe = runtime_dir.join("mysql").join("bin").join("mysqld.exe");
+        // Also check for actual binaries
+        #[cfg(target_os = "windows")]
+        let bin_check = {
+            let caddy_exe = runtime_dir.join("caddy").join("caddy.exe");
+            let php_exe = runtime_dir.join("php").join("php.exe");
+            let mysql_exe = runtime_dir.join("mysql").join("bin").join("mysqld.exe");
+            caddy_exe.exists() || php_exe.exists() || mysql_exe.exists()
+        };
+        #[cfg(not(target_os = "windows"))]
+        let bin_check = {
+            let caddy_bin = runtime_dir.join("caddy");
+            let php_fpm = runtime_dir.join("php-fpm");
+            let php_cgi = runtime_dir.join("php-cgi");
+            let mysql_bin = runtime_dir.join("mysql").join("bin").join("mysqld");
+            let mariadbd_bin = runtime_dir.join("mariadb").join("bin").join("mariadbd");
+            caddy_bin.exists() || php_fpm.exists() || php_cgi.exists()
+                || mysql_bin.exists() || mariadbd_bin.exists()
+        };
 
         caddy_marker.exists() || php_marker.exists() || mysql_marker.exists()
-            || phpmyadmin_marker.exists() || caddy_exe.exists() || php_exe.exists()
-            || mysql_exe.exists()
+            || phpmyadmin_marker.exists() || bin_check
     }
 
     /// Check which components are already installed with their versions

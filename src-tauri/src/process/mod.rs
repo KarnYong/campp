@@ -1,3 +1,4 @@
+pub mod killer;
 pub mod manager;
 
 use serde::{Deserialize, Serialize};

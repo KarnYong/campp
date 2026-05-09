@@ -8,14 +8,7 @@ import {
   getDatabaseDisplayName,
 } from "../types/services";
 import { PackageSelector } from "./PackageSelector";
-
-// Helper to detect platform
-const detectPlatform = (): string => {
-  const userAgent = window.navigator.userAgent.toLowerCase();
-  if (userAgent.includes("win")) return "windows";
-  if (userAgent.includes("mac")) return "darwin";
-  return "linux";
-};
+import { detectPlatform } from "../utils/platform";
 
 interface FirstRunWizardProps {
   onComplete: () => void;

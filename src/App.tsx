@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Dashboard } from "./components/Dashboard";
 import { FirstRunWizard } from "./components/FirstRunWizard";
+import { DebugMenu } from "./components/DebugMenu";
 import "./App.css";
 
 function App() {
@@ -115,115 +116,13 @@ function App() {
   return (
     <>
       {showDebugMenu && (
-        <div
-          style={{
-            position: "fixed",
-            top: "0.625rem",
-            right: "0.625rem",
-            backgroundColor: "var(--bg-card)",
-            border: "1px solid var(--border-color)",
-            borderRadius: "0.5rem",
-            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-            zIndex: 9999,
-            minWidth: "12.5rem",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "0.5rem 1rem",
-              borderBottom: "1px solid var(--border-color)",
-              fontWeight: 500,
-            }}
-          >
-            <span>Debug Menu</span>
-            <button
-              onClick={() => setShowDebugMenu(false)}
-              style={{
-                background: "none",
-                border: "none",
-                fontSize: "1.25rem",
-                cursor: "pointer",
-                padding: 0,
-                lineHeight: 1,
-              }}
-            >
-              ×
-            </button>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", padding: "0.5rem", gap: "0.5rem" }}>
-            <button
-              onClick={handleOpenRuntimeFolder}
-              style={{
-                padding: "0.5rem 1rem",
-                borderRadius: "0.375rem",
-                border: "1px solid var(--border-color)",
-                backgroundColor: "var(--bg-card-secondary)",
-                cursor: "pointer",
-                textAlign: "left",
-                fontSize: "0.875rem",
-                color: "var(--text-primary)",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-secondary)"; }}
-            >
-              Open Runtime Folder
-            </button>
-            <button
-              onClick={handleOpenDownloadFolder}
-              style={{
-                padding: "0.5rem 1rem",
-                borderRadius: "0.375rem",
-                border: "1px solid var(--border-color)",
-                backgroundColor: "var(--bg-card-secondary)",
-                cursor: "pointer",
-                textAlign: "left",
-                fontSize: "0.875rem",
-                color: "var(--text-primary)",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-secondary)"; }}
-            >
-              View Download Folder
-            </button>
-            <button
-              onClick={handleResetInstallation}
-              style={{
-                padding: "0.5rem 1rem",
-                borderRadius: "0.375rem",
-                border: "1px solid var(--border-color)",
-                backgroundColor: "var(--bg-card-secondary)",
-                cursor: "pointer",
-                textAlign: "left",
-                fontSize: "0.875rem",
-                color: "var(--text-primary)",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-secondary)"; }}
-            >
-              Reset Installation
-            </button>
-            <button
-              onClick={() => setIsFirstRun(true)}
-              style={{
-                padding: "0.5rem 1rem",
-                borderRadius: "0.375rem",
-                border: "1px solid var(--border-color)",
-                backgroundColor: "var(--bg-card-secondary)",
-                cursor: "pointer",
-                textAlign: "left",
-                fontSize: "0.875rem",
-                color: "var(--text-primary)",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-secondary)"; }}
-            >
-              Show First-Run Wizard
-            </button>
-          </div>
-        </div>
+        <DebugMenu
+          onClose={() => setShowDebugMenu(false)}
+          onOpenRuntimeFolder={handleOpenRuntimeFolder}
+          onOpenDownloadFolder={handleOpenDownloadFolder}
+          onResetInstallation={handleResetInstallation}
+          onShowWizard={() => setIsFirstRun(true)}
+        />
       )}
       <Dashboard />
     </>

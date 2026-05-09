@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::sync::OnceLock;
+use std::sync::RwLock;
 
 /// Available package versions for each component
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -201,7 +201,7 @@ pub struct Urls {
 }
 
 /// Global runtime config cache
-static RUNTIME_CONFIG: OnceLock<Option<RuntimeConfig>> = OnceLock::new();
+static RUNTIME_CONFIG: RwLock<Option<RuntimeConfig>> = RwLock::new(None);
 
 /// Load runtime configuration from file
 pub fn load_runtime_config_from_file() -> Option<RuntimeConfig> {
@@ -222,11 +222,11 @@ pub fn load_runtime_config_from_file() -> Option<RuntimeConfig> {
         if let Ok(content) = fs::read_to_string(&path) {
             match serde_json::from_str::<RuntimeConfig>(&content) {
                 Ok(config) => {
-                    eprintln!("Loaded runtime configuration from {}", path);
+                    tracing::info!("Loaded runtime configuration from {}", path);
                     return Some(config);
                 }
                 Err(e) => {
-                    eprintln!("Failed to parse runtime-config.json from {}: {}", path, e);
+                    tracing::warn!("Failed to parse runtime-config.json from {}: {}", path, e);
                 }
             }
         }
@@ -250,9 +250,15 @@ fn get_database_display_name(display_name: &str) -> String {
 
 /// Get all available packages from config file or defaults
 pub fn get_available_packages() -> PackagesConfig {
-    let config = RUNTIME_CONFIG.get_or_init(|| load_runtime_config_from_file());
+    let config = {
+        let mut guard = RUNTIME_CONFIG.write().unwrap();
+        if guard.is_none() {
+            *guard = load_runtime_config_from_file();
+        }
+        guard.clone()
+    };
 
-    if let Some(cfg) = config {
+    if let Some(cfg) = &config {
         // Convert from config format to package format
         PackagesConfig {
             php: cfg.binaries.php.versions.iter().map(|v| PhpPackage {
@@ -295,16 +301,22 @@ pub fn get_available_packages() -> PackagesConfig {
         }
     } else {
         // Fallback to hardcoded defaults
-        eprintln!("Using default package configuration");
+        tracing::info!("Using default package configuration");
         get_default_packages()
     }
 }
 
 /// Get the selected package IDs from config
 pub fn get_selected_package_ids() -> PackageSelection {
-    let config = RUNTIME_CONFIG.get_or_init(|| load_runtime_config_from_file());
+    let config = {
+        let mut guard = RUNTIME_CONFIG.write().unwrap();
+        if guard.is_none() {
+            *guard = load_runtime_config_from_file();
+        }
+        guard.clone()
+    };
 
-    if let Some(cfg) = config {
+    if let Some(cfg) = &config {
         PackageSelection {
             php: cfg.binaries.php.versions.iter()
                 .find(|v| v.selected)
@@ -350,12 +362,17 @@ pub fn get_phpmyadmin_package(id: &str) -> Option<PhpMyAdminPackage> {
 
 /// Reload the runtime configuration (call after modifying the config file)
 pub fn reload_runtime_config() {
-    RUNTIME_CONFIG.set(load_runtime_config_from_file());
+    let mut guard = RUNTIME_CONFIG.write().unwrap();
+    *guard = load_runtime_config_from_file();
 }
 
 /// Get the runtime configuration
 pub fn get_config() -> Option<RuntimeConfig> {
-    RUNTIME_CONFIG.get_or_init(|| load_runtime_config_from_file()).clone()
+    let mut guard = RUNTIME_CONFIG.write().unwrap();
+    if guard.is_none() {
+        *guard = load_runtime_config_from_file();
+    }
+    guard.clone()
 }
 
 /// Get default hardcoded packages (fallback when config file is not available)

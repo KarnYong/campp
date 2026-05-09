@@ -5,6 +5,7 @@ import { ServiceMap, ServiceType, ServiceState, getDatabaseDisplayName } from ".
 import { ServiceCard } from "./ServiceCard";
 import { StatusBar } from "./StatusBar";
 import { SettingsPanel } from "./SettingsPanel";
+import { detectPlatform } from "../utils/platform";
 
 export function Dashboard() {
   const [services, setServices] = useState<Partial<ServiceMap>>({});
@@ -13,13 +14,6 @@ export function Dashboard() {
   const [installDir, setInstallDir] = useState<string>("");
   const [installedVersions, setInstalledVersions] = useState<Record<string, string>>({});
 
-  // Detect platform for database display name
-  const detectPlatform = (): string => {
-    const userAgent = window.navigator.userAgent.toLowerCase();
-    if (userAgent.includes("win")) return "windows";
-    if (userAgent.includes("mac")) return "darwin";
-    return "linux";
-  };
   const dbName = getDatabaseDisplayName(detectPlatform());
 
   // Get Caddy port from services

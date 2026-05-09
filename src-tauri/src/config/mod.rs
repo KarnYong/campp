@@ -2,7 +2,6 @@ pub mod generator;
 pub mod ports;
 pub mod settings;
 
-pub use generator::ConfigGenerator;
 pub use ports::{find_available_port, is_port_available, is_port_in_use};
 pub use settings::{AppSettings, DEFAULT_PORTS};
 

@@ -15,21 +15,42 @@ use tauri::State;
 
 /// Open a folder in the system's file explorer using tauri-plugin-opener
 ///
-/// This is a wrapper function that forwards to the plugin for cross-platform compatibility.
-/// The plugin handles platform-specific operations internally.
+/// Only allows opening known app directories (runtime, download, config, project root).
 #[tauri::command]
 pub async fn open_folder(path: String) -> Result<(), String> {
     use tauri_plugin_opener::reveal_item_in_dir;
 
-    // Ensure folder exists before opening
     let path_obj = std::path::Path::new(&path);
-    if !path_obj.exists() {
-        fs::create_dir_all(path_obj)
-            .map_err(|e| format!("Failed to create folder: {}", e))?;
+
+    // Build allowlist of known directories
+    let mut allowed_dirs = Vec::new();
+
+    let downloader = crate::runtime::downloader::RuntimeDownloader::new();
+    if let Ok(runtime_dir) = downloader.get_runtime_dir() {
+        allowed_dirs.push(runtime_dir);
+    }
+    allowed_dirs.push(std::env::temp_dir().join("campp-download"));
+
+    let settings = crate::config::AppSettings::load();
+    allowed_dirs.push(std::path::PathBuf::from(&settings.project_root));
+
+    if let Some(data_dir) = dirs::data_local_dir() {
+        allowed_dirs.push(data_dir.join("campp"));
     }
 
-    // Use tauri-plugin-opener for cross-platform folder opening
-    reveal_item_in_dir(&path)
+    // Canonicalize the requested path and check it's under an allowed directory
+    let canonical = path_obj.canonicalize()
+        .map_err(|e| format!("Path does not exist: {}", e))?;
+
+    let is_allowed = allowed_dirs.iter().any(|dir| {
+        dir.canonicalize().map(|d| canonical.starts_with(d)).unwrap_or(false)
+    });
+
+    if !is_allowed {
+        return Err(format!("Access denied: path is not within an allowed directory"));
+    }
+
+    reveal_item_in_dir(&canonical)
         .map_err(|e| format!("Failed to open folder: {}", e))?;
 
     Ok(())

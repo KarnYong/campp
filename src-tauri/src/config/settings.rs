@@ -69,13 +69,13 @@ impl AppSettings {
                 match serde_json::from_str(&content) {
                     Ok(settings) => settings,
                     Err(e) => {
-                        eprintln!("Failed to parse settings file: {}, using defaults", e);
+                        tracing::warn!("Failed to parse settings file: {}, using defaults", e);
                         Self::default()
                     }
                 }
             }
             Err(e) => {
-                eprintln!("Failed to read settings file: {}, using defaults", e);
+                tracing::warn!("Failed to read settings file: {}, using defaults", e);
                 Self::default()
             }
         }

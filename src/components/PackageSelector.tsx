@@ -1,14 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { PackagesConfig, PackageSelection, PhpPackage, MySQLPackage, PhpMyAdminPackage, getDatabaseDisplayName } from "../types/services";
-
-// Helper to detect platform
-const detectPlatform = (): string => {
-  const userAgent = window.navigator.userAgent.toLowerCase();
-  if (userAgent.includes("win")) return "windows";
-  if (userAgent.includes("mac")) return "darwin";
-  return "linux";
-};
+import { detectPlatform } from "../utils/platform";
 
 interface PackageSelectorProps {
   onSelectionChange: (selection: PackageSelection) => void;
