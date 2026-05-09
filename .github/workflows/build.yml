@@ -346,7 +346,7 @@ jobs:
           ./notarize_and_staple.sh "${{ steps.universal_dmg.outputs.dmg_path }}" "$APPLE_ID" "$APPLE_PASSWORD" "$APPLE_TEAM_ID"
 
       - name: Upload macOS artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: CAMPP-macOS
           path: |
@@ -410,7 +410,7 @@ jobs:
           }
 
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: CAMPP-Windows
           path: |
@@ -495,7 +495,7 @@ jobs:
           done
 
       - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: CAMPP-Linux
           path: |
@@ -520,7 +520,7 @@ jobs:
 
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
           pattern: CAMPP-*
