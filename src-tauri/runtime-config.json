@@ -74,16 +74,33 @@
           "checksums": {
             "windowsX64": "fb1f0c6cce229be4b3208bec8a605576bb47eabb00512bccbcc4396af332c25c",
             "windowsArm64": "fb1f0c6cce229be4b3208bec8a605576bb47eabb00512bccbcc4396af332c25c",
-            "linuxX64": "7a5bb527b7821c570b7aec6a20e3c0266b3d4bd5ca7cbde32e043b52a6a27433",
             "macOSX64": "adbb8b7e261547768a548d97938a5f1b66cf85daee09db28ac4bb657aa7d4192",
             "macOSArm64": "b4ad74a78aa4378df00e1164c9979dd660ea09bf47e05f6ef8324f4ea1418618"
           },
           "urls": {
             "windowsX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-winx64.zip",
             "windowsArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-winx64.zip",
-            "linuxX64": "https://archive.mariadb.org/mariadb-12.3.1/bintar-linux-systemd-x86_64/mariadb-12.3.1-linux-systemd-x86_64.tar.gz",
             "macOSX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-macos14-x86_64.tar.gz",
             "macOSArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-macos14-arm64.tar.gz"
+          }
+        }
+      ]
+    },
+    "mariadb": {
+      "versions": [
+        {
+          "id": "mariadb-12.3",
+          "version": "12.3.1",
+          "selected": true,
+          "display_name": "MariaDB 12.3.1 (Latest)",
+          "eol": false,
+          "lts": false,
+          "checksums": {
+            "linuxX64": "7a5bb527b7821c570b7aec6a20e3c0266b3d4bd5ca7cbde32e043b52a6a27433"
+          },
+          "urls": {
+            "linuxX64": "https://archive.mariadb.org/mariadb-12.3.1/bintar-linux-systemd-x86_64/mariadb-12.3.1-linux-systemd-x86_64.tar.gz",
+            "linuxArm64": "https://archive.mariadb.org/mariadb-12.3.1/bintar-linux-systemd-aarch64/mariadb-12.3.1-linux-systemd-aarch64.tar.gz"
           }
         }
       ]

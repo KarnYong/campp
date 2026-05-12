@@ -14,7 +14,8 @@ export function Dashboard() {
   const [installDir, setInstallDir] = useState<string>("");
   const [installedVersions, setInstalledVersions] = useState<Record<string, string>>({});
 
-  const dbName = getDatabaseDisplayName(detectPlatform());
+  const currentPlatform = detectPlatform();
+  const dbName = getDatabaseDisplayName(currentPlatform);
 
   // Get Caddy port from services
   const caddyPort = services[ServiceType.Caddy]?.port || 8080;
@@ -30,6 +31,15 @@ export function Dashboard() {
       setServices(statuses);
     } catch (error) {
       console.error("Failed to get service statuses:", error);
+    }
+  }, []);
+
+  const loadInstalledVersions = useCallback(async () => {
+    try {
+      const versions = await invoke<Record<string, string>>("get_installed_versions");
+      setInstalledVersions(versions);
+    } catch (error) {
+      console.error("Failed to load installed versions:", error);
     }
   }, []);
 
@@ -62,17 +72,8 @@ export function Dashboard() {
     };
     loadInstallDir();
 
-    // Load installed versions
-    const loadInstalledVersions = async () => {
-      try {
-        const versions = await invoke<Record<string, string>>("get_installed_versions");
-        setInstalledVersions(versions);
-      } catch (error) {
-        console.error("Failed to load installed versions:", error);
-      }
-    };
     loadInstalledVersions();
-  }, []);
+  }, [loadInstalledVersions]);
 
   const startService = async (serviceType: ServiceType) => {
     try {
@@ -202,8 +203,8 @@ export function Dashboard() {
               <button
                 className="btn-quick-action"
                 onClick={openPhpMyAdmin}
-                disabled={!isCaddyRunning}
-                title={isCaddyRunning ? `Open ${phpMyAdminUrl}` : "Start Caddy to enable"}
+                disabled={!isCaddyRunning || !installedVersions.phpmyadmin}
+                title={!installedVersions.phpmyadmin ? "phpMyAdmin not installed" : isCaddyRunning ? `Open ${phpMyAdminUrl}` : "Start Caddy to enable"}
               >
                 <span style={{ fontSize: "1rem" }}>🗄️</span>
                 phpMyAdmin
@@ -298,7 +299,7 @@ export function Dashboard() {
                   PHP {installedVersions.php}
                 </span>
               )}
-              {installedVersions.mysql && (
+              {(installedVersions.mysql || installedVersions.mariadb) && (
                 <span
                   style={{
                     display: "inline-flex",
@@ -312,7 +313,7 @@ export function Dashboard() {
                     border: "1px solid var(--border-color)",
                   }}
                 >
-                  {dbName} {installedVersions.mysql}
+                  {dbName} {installedVersions.mysql || installedVersions.mariadb}
                 </span>
               )}
               {installedVersions.phpmyadmin && (
@@ -356,6 +357,11 @@ export function Dashboard() {
             {[ServiceType.Caddy, ServiceType.PhpFpm, ServiceType.MySQL].map((serviceType) => {
               const service = services[serviceType];
               if (!service) return null;
+              let componentKey: string = serviceType === ServiceType.PhpFpm ? "php" : serviceType;
+              // For MySQL service, check platform-specific key (mysql or mariadb)
+              const isNotInstalled = serviceType === ServiceType.MySQL
+                ? !installedVersions.mysql && !installedVersions.mariadb
+                : !installedVersions[componentKey];
               return (
                 <ServiceCard
                   key={serviceType}
@@ -363,6 +369,7 @@ export function Dashboard() {
                   state={service.state as ServiceState}
                   port={service.port}
                   error={service.error_message}
+                  notInstalled={isNotInstalled}
                   onStart={() => startService(serviceType)}
                   onStop={() => stopService(serviceType)}
                   onRestart={() => restartService(serviceType)}
@@ -379,7 +386,10 @@ export function Dashboard() {
         {showSettings && (
           <SettingsPanel
             onClose={() => setShowSettings(false)}
-            onSettingsChanged={refreshStatuses}
+            onSettingsChanged={async () => {
+              await refreshStatuses();
+              await loadInstalledVersions();
+            }}
           />
         )}
       </div>

@@ -391,7 +391,7 @@ pub async fn get_installed_versions() -> Result<std::collections::HashMap<String
     let mut versions = std::collections::HashMap::new();
 
     // Read version from marker files
-    for component in ["caddy", "php", "mysql", "phpmyadmin"] {
+    for component in ["caddy", "php", "mysql", "mariadb", "phpmyadmin"] {
         let marker_file = runtime_dir.join(format!("{}_installed.txt", component));
         if let Ok(content) = fs::read_to_string(&marker_file) {
             // Parse version from format: "version=1.2.3\ninstalled_at=..."
@@ -402,11 +402,6 @@ pub async fn get_installed_versions() -> Result<std::collections::HashMap<String
                 }
             }
         }
-    }
-
-    // Add Caddy version from default config (not in packages)
-    if !versions.contains_key("caddy") {
-        versions.insert("caddy".to_string(), "2.8.4".to_string());
     }
 
     Ok(versions)
@@ -451,4 +446,35 @@ pub async fn download_runtime_with_skip(
 #[tauri::command]
 pub async fn check_system_dependencies() -> DependencyCheckResult {
     crate::runtime::deps::check_system_dependencies()
+}
+
+/// Uninstall a specific component (stops service if running, removes binary files)
+#[tauri::command]
+pub async fn uninstall_component(
+    component: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let valid_components = ["caddy", "php", "mysql", "mariadb", "phpmyadmin"];
+    if !valid_components.contains(&component.as_str()) {
+        return Err(format!("Invalid component: {}", component));
+    }
+
+    // Stop the corresponding service if it maps to one
+    let service_type = match component.as_str() {
+        "caddy" => Some(ServiceType::Caddy),
+        "php" => Some(ServiceType::PhpFpm),
+        "mysql" | "mariadb" => Some(ServiceType::MySQL),
+        _ => None,
+    };
+
+    if let Some(st) = service_type {
+        let mut manager = state.process_manager.lock()
+            .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+        let _ = manager.stop(st);
+    }
+
+    let downloader = RuntimeDownloader::new();
+    downloader.uninstall_component(&component)?;
+
+    Ok(())
 }

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use reqwest::Client;
 
 use crate::runtime::locator::get_app_data_paths;
-use crate::runtime::packages::{PackageSelection, get_php_package, get_mysql_package, get_phpmyadmin_package, get_config};
+use crate::runtime::packages::{PackageSelection, get_php_package, get_mysql_package, get_mariadb_package, get_phpmyadmin_package, get_config};
 use sha2::{Digest, Sha256};
 
 /// Runtime configuration loaded from runtime-config.json (shared with packages.rs)
@@ -20,6 +20,7 @@ pub enum BinaryComponent {
     Caddy,
     Php,
     MySQL,
+    MariaDB,
     PhpMyAdmin,
 }
 
@@ -29,6 +30,7 @@ impl BinaryComponent {
             BinaryComponent::Caddy => "Caddy",
             BinaryComponent::Php => "PHP",
             BinaryComponent::MySQL => "MySQL",
+            BinaryComponent::MariaDB => "MariaDB",
             BinaryComponent::PhpMyAdmin => "phpMyAdmin",
         }
     }
@@ -57,6 +59,12 @@ impl BinaryComponent {
                     .map(|v| v.version.clone())
                     .unwrap_or_else(|| config.binaries.mysql.versions.first().map(|v| v.version.clone()).unwrap_or_default())
             }
+            BinaryComponent::MariaDB => {
+                config.binaries.mariadb.as_ref()
+                    .and_then(|mc| mc.versions.iter().find(|v| v.selected).map(|v| v.version.clone()))
+                    .or_else(|| config.binaries.mariadb.as_ref().and_then(|mc| mc.versions.first().map(|v| v.version.clone())))
+                    .unwrap_or_default()
+            }
             BinaryComponent::PhpMyAdmin => {
                 config.binaries.phpmyadmin.versions.iter()
                     .find(|v| v.selected)
@@ -75,6 +83,7 @@ impl BinaryComponent {
             BinaryComponent::Caddy => "caddy",
             BinaryComponent::Php => "php",
             BinaryComponent::MySQL => "mysql",
+            BinaryComponent::MariaDB => "mariadb",
             BinaryComponent::PhpMyAdmin => "phpmyadmin",
         }
     }
@@ -92,6 +101,11 @@ impl RuntimeDownloader {
                 }
                 BinaryComponent::MySQL => {
                     if let Some(pkg) = get_mysql_package(&selection.mysql) {
+                        return pkg.version;
+                    }
+                }
+                BinaryComponent::MariaDB => {
+                    if let Some(pkg) = get_mariadb_package(&selection.mariadb) {
                         return pkg.version;
                     }
                 }
@@ -281,6 +295,18 @@ impl RuntimeDownloader {
                         };
                     }
                 }
+                BinaryComponent::MariaDB => {
+                    if let Some(pkg) = get_mariadb_package(&selection.mariadb) {
+                        return match self.platform {
+                            Platform::WindowsX64 => pkg.windows_x64,
+                            Platform::WindowsArm64 => pkg.windows_arm64,
+                            Platform::MacOSX64 => pkg.macos_x64,
+                            Platform::MacOSArm64 => pkg.macos_arm64,
+                            Platform::LinuxX64 => pkg.linux_x64,
+                            Platform::LinuxArm64 => pkg.linux_arm64,
+                        };
+                    }
+                }
                 BinaryComponent::PhpMyAdmin => {
                     if let Some(pkg) = get_phpmyadmin_package(&selection.phpmyadmin) {
                         return pkg.url;
@@ -339,6 +365,24 @@ impl RuntimeDownloader {
                     Platform::MacOSArm64 => version_info.urls.macos_arm64.clone().unwrap_or_default(),
                     Platform::LinuxX64 => version_info.urls.linux_x64.clone().unwrap_or_default(),
                     Platform::LinuxArm64 => version_info.urls.linux_arm64.clone().unwrap_or_default(),
+                }
+            }
+            BinaryComponent::MariaDB => {
+                if let Some(mc) = &config.binaries.mariadb {
+                    let version_info = mc.versions.iter()
+                        .find(|v| v.selected)
+                        .or_else(|| mc.versions.first())
+                        .unwrap();
+                    match self.platform {
+                        Platform::WindowsX64 => version_info.urls.windows_x64.clone().unwrap_or_default(),
+                        Platform::WindowsArm64 => version_info.urls.windows_arm64.clone().unwrap_or_default(),
+                        Platform::MacOSX64 => version_info.urls.macos_x64.clone().unwrap_or_default(),
+                        Platform::MacOSArm64 => version_info.urls.macos_arm64.clone().unwrap_or_default(),
+                        Platform::LinuxX64 => version_info.urls.linux_x64.clone().unwrap_or_default(),
+                        Platform::LinuxArm64 => version_info.urls.linux_arm64.clone().unwrap_or_default(),
+                    }
+                } else {
+                    String::new()
                 }
             }
             BinaryComponent::PhpMyAdmin => {
@@ -557,11 +601,17 @@ impl RuntimeDownloader {
         let platform_key = self.platform.url_key();
 
         match component {
-            BinaryComponent::Php | BinaryComponent::MySQL | BinaryComponent::Caddy => {
+            BinaryComponent::Php | BinaryComponent::MySQL | BinaryComponent::MariaDB | BinaryComponent::Caddy => {
                 let version_info = match component {
                     BinaryComponent::Caddy => config.binaries.caddy.versions.iter(),
                     BinaryComponent::Php => config.binaries.php.versions.iter(),
                     BinaryComponent::MySQL => config.binaries.mysql.versions.iter(),
+                    BinaryComponent::MariaDB => {
+                        match &config.binaries.mariadb {
+                            Some(mc) => mc.versions.iter(),
+                            None => return None,
+                        }
+                    }
                     _ => return None,
                 };
 
@@ -570,6 +620,7 @@ impl RuntimeDownloader {
                     match component {
                         BinaryComponent::Php => Some(selection.php.as_str()),
                         BinaryComponent::MySQL => Some(selection.mysql.as_str()),
+                        BinaryComponent::MariaDB => Some(selection.mariadb.as_str()),
                         _ => None,
                     }
                 } else {
@@ -761,10 +812,16 @@ impl RuntimeDownloader {
         progress_cb: ProgressCallback,
         skip_list: &[&str],
     ) -> Result<Vec<PathBuf>, String> {
+        // On Linux, use MariaDB instead of MySQL
+        let db_component = match self.platform {
+            Platform::LinuxX64 | Platform::LinuxArm64 => BinaryComponent::MariaDB,
+            _ => BinaryComponent::MySQL,
+        };
+
         let components = [
             BinaryComponent::Caddy,
             BinaryComponent::Php,
-            BinaryComponent::MySQL,
+            db_component,
             BinaryComponent::PhpMyAdmin,
         ];
         let total = components.len() as u8;
@@ -921,6 +978,7 @@ impl RuntimeDownloader {
         let caddy_marker = runtime_dir.join("caddy_installed.txt");
         let php_marker = runtime_dir.join("php_installed.txt");
         let mysql_marker = runtime_dir.join("mysql_installed.txt");
+        let mariadb_marker = runtime_dir.join("mariadb_installed.txt");
         let phpmyadmin_marker = runtime_dir.join("phpmyadmin_installed.txt");
 
         // Also check for actual binaries
@@ -943,7 +1001,7 @@ impl RuntimeDownloader {
         };
 
         caddy_marker.exists() || php_marker.exists() || mysql_marker.exists()
-            || phpmyadmin_marker.exists() || bin_check
+            || mariadb_marker.exists() || phpmyadmin_marker.exists() || bin_check
     }
 
     /// Check which components are already installed with their versions
@@ -954,7 +1012,7 @@ impl RuntimeDownloader {
             Err(_) => return installed,
         };
 
-        for component in ["caddy", "php", "mysql", "phpmyadmin"] {
+        for component in ["caddy", "php", "mysql", "mariadb", "phpmyadmin"] {
             let marker_file = runtime_dir.join(format!("{}_installed.txt", component));
             if let Ok(content) = fs::read_to_string(&marker_file) {
                 // Parse version from format: "version=1.2.3\ninstalled_at=..."
@@ -967,12 +1025,150 @@ impl RuntimeDownloader {
             }
         }
 
-        // Add Caddy version from default config (not in packages)
-        if !installed.contains_key("caddy") {
-            installed.insert("caddy".to_string(), "2.8.4".to_string());
+        installed
+    }
+
+    /// Uninstall a specific component by removing its marker file and binary files
+    pub fn uninstall_component(&self, component: &str) -> Result<(), String> {
+        let valid_components = ["caddy", "php", "mysql", "mariadb", "phpmyadmin"];
+        if !valid_components.contains(&component) {
+            return Err(format!("Invalid component: {}", component));
         }
 
-        installed
+        let runtime_dir = self.get_runtime_dir()?;
+
+        // Remove marker file
+        let marker = runtime_dir.join(format!("{}_installed.txt", component));
+        if marker.exists() {
+            fs::remove_file(&marker)
+                .map_err(|e| format!("Failed to remove marker file: {}", e))?;
+        }
+
+        // Remove binary files/directories
+        match component {
+            "caddy" => {
+                Self::remove_entries(&runtime_dir, &["caddy"])?;
+            }
+            "php" => {
+                // Versioned dirs (php-8.4.16-Win32-vs17-x64), buildroot, php/, standalone binaries
+                let mut removed = Self::remove_entries(&runtime_dir, &["php"])?;
+                removed |= Self::remove_versioned_dirs(&runtime_dir, "php-")?;
+                // Static-php buildroot
+                let buildroot = runtime_dir.join("buildroot");
+                if buildroot.exists() {
+                    fs::remove_dir_all(&buildroot)
+                        .map_err(|e| format!("Failed to remove buildroot: {}", e))?;
+                    removed = true;
+                }
+                // Standalone binaries
+                for name in ["php-fpm", "php-cgi", "php-fpm.exe", "php-cgi.exe", "php.exe"] {
+                    let p = runtime_dir.join(name);
+                    if p.exists() {
+                        let _ = fs::remove_file(&p);
+                    }
+                }
+                if !removed {
+                    // Also try php/ directory
+                    let php_dir = runtime_dir.join("php");
+                    if php_dir.exists() {
+                        fs::remove_dir_all(&php_dir)
+                            .map_err(|e| format!("Failed to remove php dir: {}", e))?;
+                    }
+                }
+            }
+            "mysql" => {
+                let mut removed = Self::remove_entries(&runtime_dir, &["mysql", "mariadb"])?;
+                removed |= Self::remove_versioned_dirs(&runtime_dir, "mysql-")?;
+                removed |= Self::remove_versioned_dirs(&runtime_dir, "mariadb-")?;
+                // Standalone binaries
+                for name in ["mysqld", "mysqld.exe", "mariadbd"] {
+                    let p = runtime_dir.join(name);
+                    if p.exists() {
+                        let _ = fs::remove_file(&p);
+                    }
+                }
+                if !removed {
+                    // Try mysql/ and mariadb/ directories
+                    for dir_name in ["mysql", "mariadb"] {
+                        let d = runtime_dir.join(dir_name);
+                        if d.exists() {
+                            fs::remove_dir_all(&d)
+                                .map_err(|e| format!("Failed to remove {} dir: {}", dir_name, e))?;
+                        }
+                    }
+                }
+            }
+            "phpmyadmin" => {
+                Self::remove_versioned_dirs(&runtime_dir, "phpMyAdmin")?;
+                // Also lowercase variants
+                let mut entries_to_remove = Vec::new();
+                if let Ok(entries) = fs::read_dir(&runtime_dir) {
+                    for entry in entries.flatten() {
+                        if let Ok(name) = entry.file_name().into_string() {
+                            let lower = name.to_lowercase();
+                            if lower.starts_with("phpmyadmin") && entry.path().is_dir() {
+                                entries_to_remove.push(entry.path());
+                            }
+                        }
+                    }
+                }
+                for path in entries_to_remove {
+                    fs::remove_dir_all(&path)
+                        .map_err(|e| format!("Failed to remove phpmyadmin dir: {}", e))?;
+                }
+                // Also phpmyadmin/ (lowercase, non-versioned)
+                let pma_dir = runtime_dir.join("phpmyadmin");
+                if pma_dir.exists() {
+                    fs::remove_dir_all(&pma_dir)
+                        .map_err(|e| format!("Failed to remove phpmyadmin dir: {}", e))?;
+                }
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    /// Remove entries (files or directories) in runtime_dir that match exact names
+    fn remove_entries(runtime_dir: &Path, names: &[&str]) -> Result<bool, String> {
+        let mut removed = false;
+        for name in names {
+            let path = runtime_dir.join(name);
+            if path.exists() {
+                if path.is_dir() {
+                    fs::remove_dir_all(&path)
+                        .map_err(|e| format!("Failed to remove {}: {}", name, e))?;
+                } else {
+                    fs::remove_file(&path)
+                        .map_err(|e| format!("Failed to remove {}: {}", name, e))?;
+                }
+                removed = true;
+            }
+            // Also check with .exe extension
+            let exe_path = runtime_dir.join(format!("{}.exe", name));
+            if exe_path.exists() {
+                let _ = fs::remove_file(&exe_path);
+                removed = true;
+            }
+        }
+        Ok(removed)
+    }
+
+    /// Remove directories in runtime_dir whose names start with a given prefix
+    fn remove_versioned_dirs(runtime_dir: &Path, prefix: &str) -> Result<bool, String> {
+        let mut removed = false;
+        if let Ok(entries) = fs::read_dir(runtime_dir) {
+            for entry in entries.flatten() {
+                if let Ok(name) = entry.file_name().into_string() {
+                    if name.starts_with(prefix) && entry.path().is_dir() {
+                        fs::remove_dir_all(&entry.path())
+                            .map_err(|e| format!("Failed to remove {}: {}", name, e))?;
+                        removed = true;
+                    }
+                }
+            }
+        }
+        Ok(removed)
     }
 }
 

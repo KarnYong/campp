@@ -22,7 +22,7 @@ pub fn generate_caddyfile(path: &PathBuf, paths: &RuntimePaths, port: u16, php_p
         .replace('\\', "/");
 
     let mut content = String::new();
-    content.push_str(&format!("127.0.0.1:{} {{\n", port));
+    content.push_str(&format!("http://localhost:{} {{\n", port));
     content.push_str("    # phpMyAdmin - must come before global directives\n");
     content.push_str("    # Redirect /phpmyadmin to /phpmyadmin/\n");
     content.push_str("    redir /phpmyadmin /phpmyadmin/\n");

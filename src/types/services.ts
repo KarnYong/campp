@@ -88,12 +88,14 @@ export interface PhpMyAdminPackage {
 export interface PackagesConfig {
   php: PhpPackage[];
   mysql: MySQLPackage[];
+  mariadb: MySQLPackage[];
   phpmyadmin: PhpMyAdminPackage[];
 }
 
 export interface PackageSelection {
   php: string;
   mysql: string;
+  mariadb: string;
   phpmyadmin: string;
 }
 
@@ -149,3 +151,11 @@ export interface DependencyCheckResult {
   all_satisfied: boolean;
   platform_notes: string;
 }
+
+export interface ComponentStatus {
+  installed: boolean;
+  version: string | null;
+  serviceRunning: boolean;
+}
+
+export type ComponentStatusMap = Record<string, ComponentStatus>;

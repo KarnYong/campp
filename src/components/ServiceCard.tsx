@@ -5,6 +5,7 @@ interface ServiceCardProps {
   state: ServiceState;
   port?: number;
   error?: string;
+  notInstalled?: boolean;
   onStart: () => void;
   onStop: () => void;
   onRestart: () => void;
@@ -16,6 +17,7 @@ export function ServiceCard({
   state,
   port = DEFAULT_PORTS[serviceType],
   error,
+  notInstalled = false,
   onStart,
   onStop,
   onRestart,
@@ -51,13 +53,14 @@ export function ServiceCard({
 
   return (
     <div
-      className="card-hover"
+      className={notInstalled ? "" : "card-hover"}
       style={{
         backgroundColor: isError ? "var(--error-box-bg)" : "var(--bg-card)",
         border: `1px solid ${isError ? "var(--error-box-border)" : "var(--border-color)"}`,
         borderRadius: "0.5rem",
         padding: "1rem",
         boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+        opacity: notInstalled ? 0.5 : 1,
       }}
       data-testid={`service-card-${serviceType}`}
       {...props}
@@ -72,12 +75,12 @@ export function ServiceCard({
             fontSize: "0.65rem",
             fontWeight: 600,
             textTransform: "uppercase",
-            backgroundColor: statusStyles.bg,
-            color: statusStyles.text,
+            backgroundColor: notInstalled ? "var(--bg-card-secondary)" : statusStyles.bg,
+            color: notInstalled ? "var(--text-secondary)" : statusStyles.text,
           }}
           data-testid={`service-state-${serviceType}`}
         >
-          {state}
+          {notInstalled ? "Not Installed" : state}
         </span>
       </div>
 
@@ -102,7 +105,7 @@ export function ServiceCard({
       </div>
 
       {/* Error Message */}
-      {isError && error && (
+      {!notInstalled && isError && error && (
         <div
           style={{
             marginTop: "0.5rem",
@@ -123,7 +126,11 @@ export function ServiceCard({
 
       {/* Action Buttons */}
       <div style={{ display: "flex", gap: "0.375rem", marginTop: "0.5rem" }}>
-        {!isRunning && (
+        {notInstalled ? (
+          <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontStyle: "italic" }}>
+            Install from Settings
+          </span>
+        ) : !isRunning ? (
           <button
             onClick={onStart}
             disabled={isTransitioning}
@@ -132,8 +139,7 @@ export function ServiceCard({
           >
             Start
           </button>
-        )}
-        {isRunning && (
+        ) : (
           <>
             <button
               onClick={onStop}

@@ -7,6 +7,8 @@ use std::sync::RwLock;
 pub struct PackagesConfig {
     pub php: Vec<PhpPackage>,
     pub mysql: Vec<MySQLPackage>,
+    #[serde(default)]
+    pub mariadb: Vec<MySQLPackage>,
     pub phpmyadmin: Vec<PhpMyAdminPackage>,
 }
 
@@ -81,9 +83,14 @@ pub struct PhpMyAdminPackage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PackageSelection {
     pub php: String,
-    #[serde(alias = "mariadb")]
     pub mysql: String,
+    #[serde(default = "default_mariadb")]
+    pub mariadb: String,
     pub phpmyadmin: String,
+}
+
+fn default_mariadb() -> String {
+    "mariadb-12.3".to_string()
 }
 
 impl Default for PackageSelection {
@@ -91,6 +98,7 @@ impl Default for PackageSelection {
         Self {
             php: "php-8.5".to_string(),
             mysql: "mysql-8.4".to_string(),
+            mariadb: "mariadb-12.3".to_string(),
             phpmyadmin: "phpmyadmin-5.2".to_string(),
         }
     }
@@ -111,6 +119,9 @@ pub struct BinariesConfig {
     pub php: BinaryConfig,
     #[serde(rename = "mysql")]
     pub mysql: BinaryConfig,
+    #[serde(default)]
+    #[serde(rename = "mariadb")]
+    pub mariadb: Option<BinaryConfig>,
     #[serde(rename = "phpmyadmin")]
     pub phpmyadmin: PhpMyAdminConfig,
 }
@@ -218,6 +229,14 @@ pub fn load_runtime_config_from_file() -> Option<RuntimeConfig> {
         }
     }
 
+    // Try from Cargo manifest dir (for dev mode)
+    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        paths_to_try.push(std::path::PathBuf::from(manifest_dir)
+            .join("runtime-config.json")
+            .to_string_lossy()
+            .to_string());
+    }
+
     for path in paths_to_try {
         if let Ok(content) = fs::read_to_string(&path) {
             match serde_json::from_str::<RuntimeConfig>(&content) {
@@ -232,6 +251,7 @@ pub fn load_runtime_config_from_file() -> Option<RuntimeConfig> {
         }
     }
 
+    tracing::warn!("runtime-config.json not found in any search path, using defaults");
     None
 }
 
@@ -278,7 +298,7 @@ pub fn get_available_packages() -> PackagesConfig {
             mysql: cfg.binaries.mysql.versions.iter().map(|v| MySQLPackage {
                 id: v.id.clone(),
                 version: v.version.clone(),
-                display_name: get_database_display_name(&v.display_name),
+                display_name: v.display_name.clone(),
                 windows_x64: v.urls.windows_x64.clone().unwrap_or_default(),
                 windows_arm64: v.urls.windows_arm64.clone().unwrap_or_default(),
                 linux_x64: v.urls.linux_x64.clone().unwrap_or_default(),
@@ -289,6 +309,20 @@ pub fn get_available_packages() -> PackagesConfig {
                 lts: v.lts,
                 recommended: v.selected,
             }).collect(),
+            mariadb: cfg.binaries.mariadb.as_ref().map(|mc| mc.versions.iter().map(|v| MySQLPackage {
+                id: v.id.clone(),
+                version: v.version.clone(),
+                display_name: v.display_name.clone(),
+                windows_x64: v.urls.windows_x64.clone().unwrap_or_default(),
+                windows_arm64: v.urls.windows_arm64.clone().unwrap_or_default(),
+                linux_x64: v.urls.linux_x64.clone().unwrap_or_default(),
+                linux_arm64: v.urls.linux_arm64.clone().unwrap_or_default(),
+                macos_x64: v.urls.macos_x64.clone().unwrap_or_default(),
+                macos_arm64: v.urls.macos_arm64.clone().unwrap_or_default(),
+                eol: v.eol,
+                lts: v.lts,
+                recommended: v.selected,
+            }).collect()).unwrap_or_default(),
             phpmyadmin: cfg.binaries.phpmyadmin.versions.iter().map(|v| PhpMyAdminPackage {
                 id: v.id.clone(),
                 version: v.version.clone(),
@@ -326,6 +360,9 @@ pub fn get_selected_package_ids() -> PackageSelection {
                 .find(|v| v.selected)
                 .map(|v| v.id.clone())
                 .unwrap_or_else(|| "mysql-8.4".to_string()),
+            mariadb: cfg.binaries.mariadb.as_ref()
+                .and_then(|mc| mc.versions.iter().find(|v| v.selected).map(|v| v.id.clone()))
+                .unwrap_or_else(|| "mariadb-12.3".to_string()),
             phpmyadmin: cfg.binaries.phpmyadmin.versions.iter()
                 .find(|v| v.selected)
                 .map(|v| v.id.clone())
@@ -348,6 +385,14 @@ pub fn get_php_package(id: &str) -> Option<PhpPackage> {
 pub fn get_mysql_package(id: &str) -> Option<MySQLPackage> {
     get_available_packages()
         .mysql
+        .into_iter()
+        .find(|p| p.id == id)
+}
+
+/// Get MariaDB package by ID
+pub fn get_mariadb_package(id: &str) -> Option<MySQLPackage> {
+    get_available_packages()
+        .mariadb
         .into_iter()
         .find(|p| p.id == id)
 }
@@ -401,12 +446,28 @@ fn get_default_packages() -> PackagesConfig {
                 display_name: "MySQL 8.4.0 LTS (Recommended)".to_string(),
                 windows_x64: "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-winx64.zip".to_string(),
                 windows_arm64: "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-winx64.zip".to_string(),
-                linux_x64: "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-linux-glibc2.28-x86_64.tar.xz".to_string(),
-                linux_arm64: "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-linux-glibc2.28-aarch64.tar.xz".to_string(),
+                linux_x64: String::new(),
+                linux_arm64: String::new(),
                 macos_x64: "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-macos14-x86_64.tar.gz".to_string(),
                 macos_arm64: "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-macos14-arm64.tar.gz".to_string(),
                 eol: false,
                 lts: true,
+                recommended: true,
+            },
+        ],
+        mariadb: vec![
+            MySQLPackage {
+                id: "mariadb-12.3".to_string(),
+                version: "12.3.1".to_string(),
+                display_name: "MariaDB 12.3.1 (Latest)".to_string(),
+                windows_x64: String::new(),
+                windows_arm64: String::new(),
+                linux_x64: "https://archive.mariadb.org/mariadb-12.3.1/bintar-linux-systemd-x86_64/mariadb-12.3.1-linux-systemd-x86_64.tar.gz".to_string(),
+                linux_arm64: "https://archive.mariadb.org/mariadb-12.3.1/bintar-linux-systemd-aarch64/mariadb-12.3.1-linux-systemd-aarch64.tar.gz".to_string(),
+                macos_x64: String::new(),
+                macos_arm64: String::new(),
+                eol: false,
+                lts: false,
                 recommended: true,
             },
         ],
