@@ -111,6 +111,7 @@ pub fn run() {
             commands::reset_installation,
             commands::cleanup_all_services,
             commands::uninstall_component,
+            commands::get_debug_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

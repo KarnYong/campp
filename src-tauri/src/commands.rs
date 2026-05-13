@@ -489,3 +489,45 @@ pub async fn uninstall_component(
 
     Ok(())
 }
+
+/// Get debug info for troubleshooting (version, paths, config status)
+#[tauri::command]
+pub async fn get_debug_info(app: tauri::AppHandle) -> serde_json::Value {
+    use serde_json::json;
+
+    let version = env!("CARGO_PKG_VERSION").to_string();
+
+    let resource_dir = app.path().resource_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|e| format!("ERROR: {}", e));
+    let config_in_resource = std::path::Path::new(&resource_dir).join("runtime-config.json").exists();
+
+    let exe_path = std::env::current_exe()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|e| format!("ERROR: {}", e));
+
+    let mut runtime_dir = "ERROR".to_string();
+    if let Ok(dl) = RuntimeDownloader::new() {
+        runtime_dir = dl.get_runtime_dir()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|e| e);
+    }
+
+    let config_loaded = crate::runtime::packages::get_config().is_some();
+
+    let resource_files: Vec<String> = std::fs::read_dir(&resource_dir)
+        .map(|entries| entries.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().to_string()).collect())
+        .unwrap_or_default();
+
+    json!({
+        "version": version,
+        "exePath": exe_path,
+        "resourceDir": resource_dir,
+        "configInResourceDir": config_in_resource,
+        "resourceDirFiles": resource_files,
+        "runtimeDir": runtime_dir,
+        "configLoaded": config_loaded,
+        "os": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+    })
+}
