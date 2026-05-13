@@ -455,6 +455,26 @@ pub fn reload_runtime_config() {
 pub fn load_config_from_resource_dir(resource_dir: &std::path::Path) {
     let config_path = resource_dir.join("runtime-config.json");
     tracing::info!("Trying to load runtime config from resource dir: {}", config_path.display());
+
+    if !config_path.exists() {
+        tracing::error!("runtime-config.json NOT FOUND at resource dir: {}", config_path.display());
+        // List files in resource dir to help debug
+        if let Ok(entries) = fs::read_dir(resource_dir) {
+            tracing::info!("Files in resource dir ({}):", resource_dir.display());
+            for entry in entries.flatten() {
+                tracing::info!("  {}", entry.path().display());
+            }
+        } else {
+            tracing::error!("Cannot read resource dir: {}", resource_dir.display());
+        }
+        // Don't return — try load_runtime_config_from_file as fallback
+        let mut guard = RUNTIME_CONFIG.write().unwrap();
+        if guard.is_none() {
+            *guard = load_runtime_config_from_file();
+        }
+        return;
+    }
+
     if let Ok(content) = fs::read_to_string(&config_path) {
         match serde_json::from_str::<RuntimeConfig>(&content) {
             Ok(config) => {
@@ -464,11 +484,16 @@ pub fn load_config_from_resource_dir(resource_dir: &std::path::Path) {
                 return;
             }
             Err(e) => {
-                tracing::warn!("Failed to parse runtime-config.json from {}: {}", config_path.display(), e);
+                tracing::error!("Failed to parse runtime-config.json from {}: {}", config_path.display(), e);
             }
         }
     }
-    tracing::warn!("Could not load runtime-config.json from resource dir: {}", config_path.display());
+    tracing::error!("Could not read runtime-config.json from resource dir: {}", config_path.display());
+    // Fallback
+    let mut guard = RUNTIME_CONFIG.write().unwrap();
+    if guard.is_none() {
+        *guard = load_runtime_config_from_file();
+    }
 }
 
 /// Get the runtime configuration

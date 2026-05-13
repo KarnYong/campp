@@ -45,6 +45,11 @@ pub fn run() {
         .manage(AppState::new())
         .on_menu_event(handle_menu_event)
         .setup(|app| {
+            // Load runtime config from Tauri's resource directory
+            if let Ok(resource_dir) = app.path().resource_dir() {
+                crate::runtime::packages::load_config_from_resource_dir(&resource_dir);
+            }
+
             #[cfg(debug_assertions)]
             {
                 use tauri::menu::{Menu, MenuItem, Submenu};
