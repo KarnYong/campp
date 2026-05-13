@@ -10,6 +10,9 @@ import {
 import { PackageSelector } from "./PackageSelector";
 import { detectPlatform } from "../utils/platform";
 
+// Version injected by Vite at build time from package.json
+const APP_VERSION = __APP_VERSION__;
+
 interface FirstRunWizardProps {
   onComplete: () => void;
   [key: string]: any; // Allow additional props like data-testid
@@ -59,9 +62,6 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
     totalBytes: 0,
   });
   const [error, setError] = useState<string | null>(null);
-  const [debugInfo, setDebugInfo] = useState<Record<string, unknown> | null>(null);
-  const [showDebug, setShowDebug] = useState(false);
-  const [appVersion, setAppVersion] = useState<string>("");
   const [packageSelection, setPackageSelection] = useState<PackageSelection>({
     php: "php-8.5",
     mysql: "mysql-8.4",
@@ -102,12 +102,9 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
     setCurrentPlatform(detectPlatform());
   }, []);
 
-  // Load app version
+  // Load debug info
   useEffect(() => {
-    invoke<Record<string, unknown>>("get_debug_info").then((info) => {
-      setAppVersion(info.version as string || "");
-      setDebugInfo(info);
-    }).catch(() => {});
+    invoke<Record<string, unknown>>("get_debug_info").catch(() => {});
   }, []);
 
   // Listen for download progress events
@@ -243,8 +240,6 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
     } catch (err) {
       console.error("Download error:", err);
       setError(err as string);
-      // Refresh debug info on error
-      invoke<Record<string, unknown>>("get_debug_info").then(setDebugInfo).catch(() => {});
       setStep("confirm");
     }
   };
@@ -370,8 +365,11 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: "1rem" }}>
           <h1 style={{ fontSize: "1.5rem", fontWeight: 600, marginBottom: "0.25rem" }}>
-            Welcome to CAMPP{appVersion ? ` v${appVersion}` : ""}
+            Welcome to CAMPP
           </h1>
+          <p style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: 0 }}>
+            v{APP_VERSION} &middot; {detectPlatform()}
+          </p>
           <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>
             Local Web Development Stack
           </p>
@@ -651,55 +649,23 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
               </div>
               {error && (
                 <div className="error-box" style={{ marginBottom: "0.5rem", padding: "0.5rem", fontSize: "0.875rem" }}>
-                  <p className="error-box-text" style={{ margin: "0 0 0.375rem 0", wordBreak: "break-word" }}>
+                  <p className="error-box-text" style={{ margin: "0 0 0.375rem 0", whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: "0.8125rem", lineHeight: 1.4 }}>
                     <strong>Error:</strong> {error}
                   </p>
-                  <div style={{ display: "flex", gap: "0.375rem", marginTop: "0.375rem" }}>
-                    <button
-                      onClick={() => setError(null)}
-                      style={{
-                        padding: "0.25rem 0.5rem",
-                        borderRadius: "0.25rem",
-                        border: "1px solid var(--color-error)",
-                        backgroundColor: "transparent",
-                        color: "var(--color-error)",
-                        fontSize: "0.75rem",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Dismiss
-                    </button>
-                    <button
-                      onClick={() => setShowDebug(!showDebug)}
-                      style={{
-                        padding: "0.25rem 0.5rem",
-                        borderRadius: "0.25rem",
-                        border: "1px solid var(--border-color)",
-                        backgroundColor: "transparent",
-                        color: "var(--text-secondary)",
-                        fontSize: "0.75rem",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {showDebug ? "Hide" : "Show"} Debug Info
-                    </button>
-                  </div>
-                  {showDebug && debugInfo && (
-                    <pre style={{
-                      marginTop: "0.5rem",
-                      padding: "0.5rem",
-                      backgroundColor: "var(--bg-card-secondary)",
+                  <button
+                    onClick={() => setError(null)}
+                    style={{
+                      padding: "0.25rem 0.5rem",
                       borderRadius: "0.25rem",
-                      fontSize: "0.7rem",
-                      overflow: "auto",
-                      maxHeight: "12rem",
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-all",
-                      border: "1px solid var(--border-color)",
-                    }}>
-                      {JSON.stringify(debugInfo, null, 2)}
-                    </pre>
-                  )}
+                      border: "1px solid var(--color-error)",
+                      backgroundColor: "transparent",
+                      color: "var(--color-error)",
+                      fontSize: "0.75rem",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Dismiss
+                  </button>
                 </div>
               )}
               <div style={{ display: "flex", justifyContent: "center", gap: "0.375rem", flexWrap: "wrap" }}>

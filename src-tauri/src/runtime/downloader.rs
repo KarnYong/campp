@@ -435,9 +435,21 @@ impl RuntimeDownloader {
         tracing::debug!("Full URL ({} chars): {}", url.len(), url);
 
         if url.is_empty() {
+            let config_loaded = crate::runtime::packages::get_config().is_some();
+            let runtime_dir = self.get_runtime_dir().map(|p| p.display().to_string()).unwrap_or_else(|e| e);
+            let exe_path = std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_else(|e| format!("ERROR: {}", e));
+            let version = env!("CARGO_PKG_VERSION");
             return Err(format!(
-                "No download URL configured for {} on platform {:?}. Check runtime-config.json.",
-                component.name(), self.platform
+                "No download URL configured for {} on platform {:?}.\n\
+                 App version: {}\n\
+                 Config loaded: {}\n\
+                 Exe path: {}\n\
+                 Runtime dir: {}\n\
+                 OS: {} / {}\n\
+                 \n\
+                 This usually means runtime-config.json was not found or failed to parse.",
+                component.name(), self.platform, version, config_loaded, exe_path, runtime_dir,
+                std::env::consts::OS, std::env::consts::ARCH
             ));
         }
 
