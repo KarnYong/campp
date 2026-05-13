@@ -150,51 +150,14 @@ campp/
 │   │   ├── runtime/       # Binary download system
 │   │   └── database/      # MariaDB integration
 │   └── templates/         # Service config templates
-└── DEVELOPMENT_PLAN.md    # Implementation roadmap
+└── DEVELOPMENT_PLAN.md    # (removed)
 ```
-
-## Roadmap
-
-See [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) for the full implementation roadmap.
-
-### Implemented Features
-
-- ✅ Phase 1: Project Foundation - Tauri + React setup
-- ✅ Phase 2: Runtime Download System - First-run binary download wizard
-- ✅ Phase 3: Process Manager - Service start/stop/restart
-- ✅ Phase 4: Configuration Generation - Dynamic config files
-- ✅ Phase 5: MariaDB Initialization - Database setup and credential management
-- ✅ Phase 6: Enhanced Dashboard UI - Service control interface
-- ✅ Phase 7: Settings Panel - Port configuration and project folder selection
-- ✅ Phase 8: Cross-platform Support - Windows, Linux, macOS installers
 
 ## System Requirements
 
 - **Windows**: Windows 10/11 x64, WebView2 runtime (usually pre-installed)
 - **Linux**: Ubuntu 22.04+ or similar distributions with webkit2gtk dependencies
-- **macOS**: macOS 11+ (Big Sur or later), Apple Silicon or Intel
-
-## Troubleshooting
-
-### MySQL/MariaDB fails to start after unclean shutdown
-
-If MySQL/MariaDB was not shut down properly (e.g., power failure, force quit), you may see an InnoDB error like:
-
-```
-[ERROR] [MY-012960] [InnoDB] Cannot create redo log files because data files are corrupt
-```
-
-CAMPP automatically handles this by starting MySQL with InnoDB recovery mode enabled (`--innodb-force-recovery=1`). This allows the database to start and recover automatically after unclean shutdowns.
-
-If you still encounter issues, you can manually reset the database:
-
-1. **Stop all services** in CAMPP
-2. **Delete the MySQL data directory**:
-   - Windows: Delete `C:\Users\<YourUsername>\.campp\mysql\data\`
-   - Linux/macOS: Delete `~/.campp/mysql/data/`
-3. **Restart CAMPP** - the database will be re-initialized automatically
-
-**Warning**: Deleting the data directory will destroy all your databases. Export your data first using phpMyAdmin if you need to preserve it.
+- **macOS**: macOS 13+ (Ventura or later), Apple Silicon or Intel
 
 ## License
 
@@ -202,6 +165,4 @@ MIT
 
 ## Contributing
 
-Contributions are welcome! Please read [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) for project architecture details.
-
-**macOS testers needed!** If you have a Mac and want to help test CAMPP, please download the latest release and report any issues you encounter.
+Contributions are welcome!
