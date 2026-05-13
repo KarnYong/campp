@@ -10,8 +10,7 @@ use crate::config::AppSettings;
 use crate::AppState;
 use std::fs;
 use std::sync::Mutex;
-use tauri::Emitter;
-use tauri::State;
+use tauri::{Emitter, Manager, State};
 
 /// Open a folder in the system's file explorer using tauri-plugin-opener
 ///
@@ -292,6 +291,10 @@ pub async fn get_download_dir() -> Result<String, String> {
 /// Download and install runtime binaries
 #[tauri::command]
 pub async fn download_runtime(app: tauri::AppHandle) -> Result<String, String> {
+    // Ensure config is loaded from Tauri's resource directory
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        crate::runtime::packages::load_config_from_resource_dir(&resource_dir);
+    }
     let downloader = RuntimeDownloader::new()?;
     let app_clone = app.clone();
 
@@ -333,6 +336,10 @@ pub async fn download_runtime_with_packages(
     package_selection: PackageSelection,
     app: tauri::AppHandle,
 ) -> Result<String, String> {
+    // Ensure config is loaded from Tauri's resource directory
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        crate::runtime::packages::load_config_from_resource_dir(&resource_dir);
+    }
     let downloader = RuntimeDownloader::with_packages(package_selection)?;
     let app_clone = app.clone();
 
@@ -421,6 +428,10 @@ pub async fn download_runtime_with_skip(
     skip_list: Vec<String>,
     app: tauri::AppHandle,
 ) -> Result<String, String> {
+    // Ensure config is loaded from Tauri's resource directory
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        crate::runtime::packages::load_config_from_resource_dir(&resource_dir);
+    }
     let downloader = RuntimeDownloader::with_packages(package_selection)?;
     let app_clone = app.clone();
 

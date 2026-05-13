@@ -226,6 +226,20 @@ pub fn load_runtime_config_from_file() -> Option<RuntimeConfig> {
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
             paths_to_try.push(exe_dir.join("runtime-config.json").to_string_lossy().to_string());
+
+            // Linux AppImage: resources are in the .data/lib/ or ../lib/ relative to binary
+            #[cfg(target_os = "linux")]
+            {
+                // AppImage extracts to a temporary mount point like /tmp/.mount_XXXX/usr/bin/
+                // Resources are at /tmp/.mount_XXXX/usr/lib/
+                if let Some(parent) = exe_dir.parent() {
+                    paths_to_try.push(parent.join("lib").join("runtime-config.json").to_string_lossy().to_string());
+                }
+                // Also try ../share/ which some packagers use
+                if let Some(parent) = exe_dir.parent() {
+                    paths_to_try.push(parent.join("share").join("runtime-config.json").to_string_lossy().to_string());
+                }
+            }
         }
     }
 
@@ -235,6 +249,32 @@ pub fn load_runtime_config_from_file() -> Option<RuntimeConfig> {
             .join("runtime-config.json")
             .to_string_lossy()
             .to_string());
+    }
+
+    // Try XDG data directories on Linux
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(data_home) = std::env::var_os("XDG_DATA_HOME") {
+            paths_to_try.push(std::path::PathBuf::from(data_home)
+                .join("campp")
+                .join("runtime-config.json")
+                .to_string_lossy()
+                .to_string());
+        }
+        if let Some(data_home) = std::env::var_os("HOME") {
+            paths_to_try.push(std::path::PathBuf::from(data_home)
+                .join(".local")
+                .join("share")
+                .join("campp")
+                .join("runtime-config.json")
+                .to_string_lossy()
+                .to_string());
+        }
+    }
+
+    tracing::debug!("Searching for runtime-config.json in {} paths", paths_to_try.len());
+    for path in &paths_to_try {
+        tracing::debug!("  Checking: {}", path);
     }
 
     for path in paths_to_try {
@@ -251,7 +291,7 @@ pub fn load_runtime_config_from_file() -> Option<RuntimeConfig> {
         }
     }
 
-    tracing::warn!("runtime-config.json not found in any search path, using defaults");
+    tracing::error!("runtime-config.json not found in any search path. Tried all known locations.");
     None
 }
 
@@ -409,6 +449,26 @@ pub fn get_phpmyadmin_package(id: &str) -> Option<PhpMyAdminPackage> {
 pub fn reload_runtime_config() {
     let mut guard = RUNTIME_CONFIG.write().unwrap();
     *guard = load_runtime_config_from_file();
+}
+
+/// Load runtime config from an explicit resource directory path (e.g. Tauri's resource_dir)
+pub fn load_config_from_resource_dir(resource_dir: &std::path::Path) {
+    let config_path = resource_dir.join("runtime-config.json");
+    tracing::info!("Trying to load runtime config from resource dir: {}", config_path.display());
+    if let Ok(content) = fs::read_to_string(&config_path) {
+        match serde_json::from_str::<RuntimeConfig>(&content) {
+            Ok(config) => {
+                tracing::info!("Loaded runtime configuration from {}", config_path.display());
+                let mut guard = RUNTIME_CONFIG.write().unwrap();
+                *guard = Some(config);
+                return;
+            }
+            Err(e) => {
+                tracing::warn!("Failed to parse runtime-config.json from {}: {}", config_path.display(), e);
+            }
+        }
+    }
+    tracing::warn!("Could not load runtime-config.json from resource dir: {}", config_path.display());
 }
 
 /// Get the runtime configuration

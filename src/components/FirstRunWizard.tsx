@@ -376,9 +376,9 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
                   justifyContent: "center",
                   fontSize: "0.625rem",
                   fontWeight: 500,
-                  color: currentStepNum >= stepNum ? "white" : "var(--text-secondary)",
-                  backgroundColor: currentStepNum > stepNum ? "var(--color-success)" : currentStepNum >= stepNum ? "var(--bg-card-secondary)" : "transparent",
-                  border: currentStepNum < stepNum ? "1px solid var(--border-color)" : "none",
+                  color: currentStepNum > stepNum ? "white" : currentStepNum === stepNum ? "var(--text-primary)" : "var(--text-secondary)",
+                  backgroundColor: currentStepNum > stepNum ? "var(--color-success)" : currentStepNum === stepNum ? "var(--bg-card-secondary)" : "transparent",
+                  border: currentStepNum <= stepNum ? "1px solid var(--border-color)" : "none",
                 }}>
                   {stepNum}
                 </div>
