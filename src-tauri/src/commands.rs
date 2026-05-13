@@ -25,7 +25,7 @@ pub async fn open_folder(path: String) -> Result<(), String> {
     // Build allowlist of known directories
     let mut allowed_dirs = Vec::new();
 
-    let downloader = crate::runtime::downloader::RuntimeDownloader::new();
+    let downloader = crate::runtime::downloader::RuntimeDownloader::new()?;
     if let Ok(runtime_dir) = downloader.get_runtime_dir() {
         allowed_dirs.push(runtime_dir);
     }
@@ -235,14 +235,14 @@ pub async fn check_ports(web_port: u16, php_port: u16, mysql_port: u16) -> serde
 /// Check if runtime binaries are already installed
 #[tauri::command]
 pub async fn check_runtime_installed() -> Result<bool, String> {
-    let downloader = RuntimeDownloader::new();
+    let downloader = RuntimeDownloader::new()?;
     Ok(downloader.is_installed())
 }
 
 /// Reset installation (for testing/debug - deletes runtime directory)
 #[tauri::command]
 pub async fn reset_installation() -> Result<String, String> {
-    let downloader = RuntimeDownloader::new();
+    let downloader = RuntimeDownloader::new()?;
     let runtime_dir = downloader.get_runtime_dir().map_err(|e| e.to_string())?;
 
     if runtime_dir.exists() {
@@ -256,7 +256,7 @@ pub async fn reset_installation() -> Result<String, String> {
 /// Get the runtime directory path
 #[tauri::command]
 pub async fn get_runtime_dir() -> Result<String, String> {
-    let downloader = RuntimeDownloader::new();
+    let downloader = RuntimeDownloader::new()?;
     downloader
         .get_runtime_dir()
         .map(|p| p.to_string_lossy().to_string())
@@ -292,7 +292,7 @@ pub async fn get_download_dir() -> Result<String, String> {
 /// Download and install runtime binaries
 #[tauri::command]
 pub async fn download_runtime(app: tauri::AppHandle) -> Result<String, String> {
-    let downloader = RuntimeDownloader::new();
+    let downloader = RuntimeDownloader::new()?;
     let app_clone = app.clone();
 
     // Emit progress updates via Tauri events
@@ -333,7 +333,7 @@ pub async fn download_runtime_with_packages(
     package_selection: PackageSelection,
     app: tauri::AppHandle,
 ) -> Result<String, String> {
-    let downloader = RuntimeDownloader::with_packages(package_selection);
+    let downloader = RuntimeDownloader::with_packages(package_selection)?;
     let app_clone = app.clone();
 
     // Emit progress updates via Tauri events
@@ -385,7 +385,7 @@ pub async fn reload_runtime_config() -> Result<String, String> {
 /// Get the installed runtime versions
 #[tauri::command]
 pub async fn get_installed_versions() -> Result<std::collections::HashMap<String, String>, String> {
-    let downloader = RuntimeDownloader::new();
+    let downloader = RuntimeDownloader::new()?;
     let runtime_dir = downloader.get_runtime_dir()?;
 
     let mut versions = std::collections::HashMap::new();
@@ -410,7 +410,7 @@ pub async fn get_installed_versions() -> Result<std::collections::HashMap<String
 /// Check for existing components before download
 #[tauri::command]
 pub async fn check_existing_components() -> Result<std::collections::HashMap<String, String>, String> {
-    let downloader = RuntimeDownloader::new();
+    let downloader = RuntimeDownloader::new()?;
     Ok(downloader.get_installed_components())
 }
 
@@ -421,7 +421,7 @@ pub async fn download_runtime_with_skip(
     skip_list: Vec<String>,
     app: tauri::AppHandle,
 ) -> Result<String, String> {
-    let downloader = RuntimeDownloader::with_packages(package_selection);
+    let downloader = RuntimeDownloader::with_packages(package_selection)?;
     let app_clone = app.clone();
 
     // Convert Vec<String> to Vec<&str> for the skip_list
@@ -473,7 +473,7 @@ pub async fn uninstall_component(
         let _ = manager.stop(st);
     }
 
-    let downloader = RuntimeDownloader::new();
+    let downloader = RuntimeDownloader::new()?;
     downloader.uninstall_component(&component)?;
 
     Ok(())

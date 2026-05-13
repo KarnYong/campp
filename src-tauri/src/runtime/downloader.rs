@@ -247,23 +247,29 @@ pub struct RuntimeDownloader {
 
 impl RuntimeDownloader {
     /// Create a new runtime downloader
-    pub fn new() -> Self {
-        Self {
+    pub fn new() -> Result<Self, String> {
+        let client = Client::builder()
+            .build()
+            .map_err(|e| format!("Failed to build HTTP client: {}. This usually means no TLS backend is available. Ensure the app was compiled with rustls-tls or native-tls enabled.", e))?;
+        Ok(Self {
             base_url: "https://github.com".to_string(),
             platform: Platform::current(),
-            client: Client::new(),
+            client,
             package_selection: None,
-        }
+        })
     }
 
     /// Create a new runtime downloader with custom package selection
-    pub fn with_packages(package_selection: PackageSelection) -> Self {
-        Self {
+    pub fn with_packages(package_selection: PackageSelection) -> Result<Self, String> {
+        let client = Client::builder()
+            .build()
+            .map_err(|e| format!("Failed to build HTTP client: {}. This usually means no TLS backend is available. Ensure the app was compiled with rustls-tls or native-tls enabled.", e))?;
+        Ok(Self {
             base_url: "https://github.com".to_string(),
             platform: Platform::current(),
-            client: Client::new(),
+            client,
             package_selection: Some(package_selection),
-        }
+        })
     }
 
     /// Get the URL for a binary component from config
@@ -428,6 +434,13 @@ impl RuntimeDownloader {
         tracing::info!("Downloading {} from: {}", component.name(), url);
         tracing::debug!("Full URL ({} chars): {}", url.len(), url);
 
+        if url.is_empty() {
+            return Err(format!(
+                "No download URL configured for {} on platform {:?}. Check runtime-config.json.",
+                component.name(), self.platform
+            ));
+        }
+
         // Set platform-appropriate User-Agent
         let user_agent = match self.platform {
             Platform::LinuxX64 | Platform::LinuxArm64 => "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -448,7 +461,25 @@ impl RuntimeDownloader {
         let response = request
             .send()
             .await
-            .map_err(|e| format!("Failed to fetch {}: {}", component.name(), e))?;
+            .map_err(|e| {
+                let is_tls = e.is_connect() || e.to_string().contains("tls") || e.to_string().contains("certificate") || e.to_string().contains("builder");
+                if is_tls {
+                    format!(
+                        "Failed to fetch {} (TLS/HTTPS error): {}\n\
+                         Platform: {:?}\n\
+                         URL: {}\n\
+                         \n\
+                         This is a TLS/HTTPS connection error. The app needs a TLS library to download binaries.\n\
+                         Ensure reqwest was compiled with the 'rustls-tls' or 'native-tls' feature enabled.",
+                        component.name(), e, self.platform, url
+                    )
+                } else {
+                    format!(
+                        "Failed to fetch {}: {}\nPlatform: {:?}\nURL: {}",
+                        component.name(), e, self.platform, url
+                    )
+                }
+            })?;
 
         // Check status code
         let status = response.status();
@@ -1174,7 +1205,7 @@ impl RuntimeDownloader {
 
 impl Default for RuntimeDownloader {
     fn default() -> Self {
-        Self::new()
+        Self::new().expect("Failed to create RuntimeDownloader: no TLS backend available")
     }
 }
 
