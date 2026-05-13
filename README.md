@@ -1,16 +1,60 @@
 # CAMPP
 
-A cross-platform local web development stack desktop application. CAMPP bundles Caddy (web server), PHP-FPM 8.3 (PHP runtime), MariaDB (database), and phpMyAdmin with no external dependencies after installation.
+A cross-platform local web development stack desktop application. CAMPP bundles Caddy (web server), PHP-FPM (PHP runtime), MySQL/MariaDB (database), and phpMyAdmin with no external dependencies after installation.
 
 ## Installation
 
-Download the latest release from [GitHub Releases](https://github.com/KarnYong/campp/releases):
+Download the latest release from [GitHub Releases](https://github.com/KarnYong/campp/releases).
 
-- **Windows**: Download `CAMPP_x64-setup.exe` (NSIS installer) or `CAMPP_x64_en-US.msi`
-- **Linux**: Download `CAMPP_amd64.AppImage` and make it executable: `chmod +x CAMPP_amd64.AppImage`
-- **macOS**: Download `CAMPP_aarch64.dmg` (Apple Silicon) or `CAMPP_x64.dmg` (Intel)
+### Windows
 
-> **Note**: macOS builds are available but need more testing volunteers. If you encounter any issues on macOS, please report them!
+1. Download `CAMPP-<version>-x64.exe` (NSIS installer) or `CAMPP-<version>-x64.msi`
+2. Run the installer — no admin permissions required
+3. Launch CAMPP from the Start Menu or desktop shortcut
+
+### Linux (Ubuntu/Debian)
+
+**Option A: DEB package (recommended)**
+```bash
+# Download the latest .deb
+wget https://github.com/KarnYong/campp/releases/latest/download/CAMPP-0.3.1-amd64.deb
+
+# Install
+sudo dpkg -i CAMPP-0.3.1-amd64.deb
+
+# If missing dependencies:
+sudo apt-get install -f
+
+# Run
+/opt/campp/CAMPP
+```
+
+**Option B: AppImage**
+```bash
+# Download the latest AppImage
+wget https://github.com/KarnYong/campp/releases/latest/download/CAMPP-0.3.1-amd64.AppImage
+
+# Make executable
+chmod +x CAMPP-0.3.1-amd64.AppImage
+
+# Run
+./CAMPP-0.3.1-amd64.AppImage
+```
+
+**To uninstall:**
+```bash
+sudo dpkg -r CAMPP
+rm -rf ~/.local/share/campp
+```
+
+### macOS
+
+1. Download `CAMPP-<version>-universal.dmg` (works on both Apple Silicon and Intel)
+   - Or `CAMPP-<version>-arm64.dmg` (Apple Silicon) / `CAMPP-<version>-x64.dmg` (Intel)
+2. Open the DMG and drag CAMPP to Applications
+3. On first launch, right-click the app and select Open (required for unsigned apps)
+
+> **Note**: macOS builds are signed and notarized. If you encounter gatekeeper issues, right-click the app and select Open.
 
 ## Features
 
@@ -21,16 +65,18 @@ Download the latest release from [GitHub Releases](https://github.com/KarnYong/c
 - **Service Management**: Start, stop, and restart services individually or all at once
 - **Port Configuration**: Customize ports for each service via Settings panel
 - **Quick Actions**: Open project folder, phpMyAdmin, or logs with one click
-- **PHP Version Choice**: Select PHP 8.3 or PHP 7.4.33 (Windows) for legacy application support
+- **PHP Version Choice**: Select PHP 8.5.1 or PHP 7.4.33 (Windows) for legacy application support
+- **Platform-Appropriate Database**: MySQL 8.4.0 LTS on Windows/macOS, MariaDB 12.3.1 on Linux
 
 ## Included Components
 
 | Component | Version | Description |
 |-----------|---------|-------------|
 | Caddy | 2.8.4 | Modern web server with automatic HTTPS |
-| PHP-FPM | 8.3, 7.4.33 (Windows) | Fast and reliable PHP runtime with legacy support |
-| MySQL | 8.4.0 LTS | Enterprise-grade database (MariaDB on Linux) |
-| phpMyAdmin | 5.2.2 | Web-based MySQL administration interface |
+| PHP-FPM | 8.5.1 (7.4.33 available on Windows) | Fast and reliable PHP runtime |
+| MySQL | 8.4.0 LTS | Enterprise-grade database (**Windows & macOS**) |
+| MariaDB | 12.3.1 | Community-developed database fork (**Linux**) |
+| phpMyAdmin | 5.2.2 | Web-based database administration interface |
 
 ### Runtime Sources
 
@@ -52,7 +98,7 @@ Runtime binaries are downloaded from the following sources:
 |---------|------|--------|
 | Web Server | 8080 | http://localhost:8080 |
 | PHP-FPM | 9000 | Internal (FastCGI) |
-| MariaDB | 3307 | localhost:3307 |
+| Database (MySQL/MariaDB) | 3307 | localhost:3307 |
 | phpMyAdmin | 8080 | http://localhost:8080/phpmyadmin |
 
 **Default Database Credentials**: `root` / (empty password)
