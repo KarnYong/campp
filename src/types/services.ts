@@ -96,6 +96,7 @@ export interface PackagesConfig {
   postgresql: MySQLPackage[];
   phpmyadmin: PhpMyAdminPackage[];
   adminer: PhpMyAdminPackage[];
+  pgvector: MySQLPackage[];
 }
 
 export interface PackageSelection {
@@ -105,6 +106,7 @@ export interface PackageSelection {
   phpmyadmin: string;
   postgresql: string;
   adminer: string;
+  pgvector: string;
 }
 
 export const DEFAULT_PORTS = {

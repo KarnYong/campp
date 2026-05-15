@@ -164,6 +164,32 @@
           "url": "https://github.com/vrana/adminer/releases/download/v5.4.2/adminer-5.4.2-en.php"
         }
       ]
+    },
+    "pgvector": {
+      "versions": [
+        {
+          "id": "pgvector-0.8.2",
+          "version": "0.8.2",
+          "selected": true,
+          "display_name": "pgvector 0.8.2 (Vector Database for PostgreSQL)",
+          "eol": false,
+          "lts": false,
+          "checksums": {
+            "windowsX64": "",
+            "macOSX64": "",
+            "macOSArm64": "",
+            "linuxX64": "",
+            "linuxArm64": ""
+          },
+          "urls": {
+            "windowsX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/pgvector-0.8.2/pgvector-0.8.2-windows-x64.zip",
+            "macOSX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/pgvector-0.8.2/pgvector-0.8.2-darwin-x86_64.tar.gz",
+            "macOSArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/pgvector-0.8.2/pgvector-0.8.2-darwin-aarch64.tar.gz",
+            "linuxX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/pgvector-0.8.2/pgvector-0.8.2-linux-x86_64.tar.gz",
+            "linuxArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/pgvector-0.8.2/pgvector-0.8.2-linux-aarch64.tar.gz"
+          }
+        }
+      ]
     }
   }
 }

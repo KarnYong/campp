@@ -26,6 +26,7 @@ export function PackageSelector({ onSelectionChange, initialSelection, initialEn
       phpmyadmin: "phpmyadmin-5.2",
       postgresql: "postgresql-18.3",
       adminer: "adminer-5.1",
+      pgvector: "pgvector-0.8.2",
     }
   );
   const [enabled, setEnabled] = useState<Record<string, boolean>>(
@@ -37,6 +38,7 @@ export function PackageSelector({ onSelectionChange, initialSelection, initialEn
       phpmyadmin: true,
       postgresql: false,
       adminer: false,
+      pgvector: false,
     }
   );
 
@@ -299,6 +301,37 @@ export function PackageSelector({ onSelectionChange, initialSelection, initialEn
           ))}
         </select>
       </div>
+
+      {/* pgvector (only shown when PostgreSQL is enabled) */}
+      {enabled.postgresql && packages.pgvector && packages.pgvector.length > 0 && (
+        <div style={rowStyle(enabled.pgvector)}>
+          <input
+            type="checkbox"
+            checked={enabled.pgvector}
+            onChange={(e) => handleToggle("pgvector", e.target.checked)}
+            style={checkboxStyle(false)}
+          />
+          <label style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--text-primary)" }}>
+            pgvector
+          </label>
+          <select
+            value={selection.pgvector}
+            onChange={(e) => setSelection({ ...selection, pgvector: e.target.value })}
+            disabled={!enabled.pgvector}
+            className="input"
+            style={selectStyle(enabled.pgvector)}
+          >
+            {packages.pgvector.map((pkg: MySQLPackage) => (
+              <option key={pkg.id} value={pkg.id}>
+                {pkg.display_name}{pkg.recommended && " ★"}
+              </option>
+            ))}
+          </select>
+          <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)", fontWeight: 400 }}>
+            (Ext)
+          </span>
+        </div>
+      )}
 
       {/* Package Info Box */}
       <div className="info-box" style={{ padding: "0.5rem", fontSize: "0.875rem" }}>

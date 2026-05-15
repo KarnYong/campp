@@ -52,6 +52,9 @@ const packages = {
   adminer: [
     { id: "adminer-5.1", version: "5.1.0" },
   ],
+  pgvector: [
+    { id: "pgvector-0.8.2", version: "0.8.2" },
+  ],
 };
 
 export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
@@ -75,6 +78,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
     phpmyadmin: "phpmyadmin-5.2",
     postgresql: "postgresql-18.3",
     adminer: "adminer-5.1",
+    pgvector: "pgvector-0.8.2",
   });
   const [existingComponents, setExistingComponents] = useState<ExistingComponent[]>([]);
   const [hasExistingOnWelcome, setHasExistingOnWelcome] = useState(false);
@@ -87,6 +91,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
     phpmyadmin: true,
     postgresql: false,
     adminer: false,
+    pgvector: false,
   });
   const [mysqlPassword, setMysqlPassword] = useState("");
   const [postgresPassword, setPostgresPassword] = useState("");
@@ -100,11 +105,12 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
         setHasExistingOnWelcome(hasExisting);
 
         // Auto-enable optional components if already installed
-        if (existing.postgresql || existing.adminer) {
+        if (existing.postgresql || existing.adminer || existing.pgvector) {
           setEnabledComponents((prev) => ({
             ...prev,
             postgresql: !!existing.postgresql || prev.postgresql,
             adminer: !!existing.adminer || prev.adminer,
+            pgvector: !!existing.pgvector || prev.pgvector,
           }));
         }
       } catch (err) {
@@ -221,6 +227,12 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
           version: existing.adminer || "",
           displayName: "Adminer",
           isExisting: !!existing.adminer,
+        },
+        {
+          name: "pgvector",
+          version: existing.pgvector || "",
+          displayName: "pgvector",
+          isExisting: !!existing.pgvector,
         },
       ];
 
@@ -637,6 +649,8 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
                     ? packages.postgresql.find(p => p.id === packageSelection.postgresql)?.version
                     : component.name === "adminer"
                     ? packages.adminer.find(p => p.id === packageSelection.adminer)?.version
+                    : component.name === "pgvector"
+                    ? packages.pgvector.find(p => p.id === packageSelection.pgvector)?.version
                     : component.name === "caddy"
                     ? "2.11.3"
                     : component.version;
@@ -858,6 +872,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
                     { name: "phpMyAdmin", version: packages.phpmyadmin.find(p => p.id === packageSelection.phpmyadmin)?.version || "5.2.2", key: "phpmyadmin" },
                     { name: "PostgreSQL", version: packages.postgresql.find(p => p.id === packageSelection.postgresql)?.version || "18.3.0", key: "postgresql" },
                     { name: "Adminer", version: packages.adminer.find(p => p.id === packageSelection.adminer)?.version || "5.1.0", key: "adminer" },
+                    { name: "pgvector", version: packages.pgvector.find(p => p.id === packageSelection.pgvector)?.version || "0.8.2", key: "pgvector" },
                   ];
                 })()
                   .filter((pkg) => enabledComponents[pkg.key] !== false)

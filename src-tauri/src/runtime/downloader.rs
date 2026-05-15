@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use reqwest::Client;
 
 use crate::runtime::locator::get_app_data_paths;
-use crate::runtime::packages::{PackageSelection, get_php_package, get_mysql_package, get_mariadb_package, get_phpmyadmin_package, get_postgresql_package, get_adminer_package, get_config};
+use crate::runtime::packages::{PackageSelection, get_php_package, get_mysql_package, get_mariadb_package, get_phpmyadmin_package, get_postgresql_package, get_adminer_package, get_pgvector_package, get_config};
 use sha2::{Digest, Sha256};
 
 /// Runtime configuration loaded from runtime-config.json (shared with packages.rs)
@@ -24,6 +24,7 @@ pub enum BinaryComponent {
     PhpMyAdmin,
     PostgreSQL,
     Adminer,
+    Pgvector,
 }
 
 impl BinaryComponent {
@@ -36,6 +37,7 @@ impl BinaryComponent {
             BinaryComponent::PhpMyAdmin => "phpMyAdmin",
             BinaryComponent::PostgreSQL => "PostgreSQL",
             BinaryComponent::Adminer => "Adminer",
+            BinaryComponent::Pgvector => "pgvector",
         }
     }
 
@@ -87,6 +89,12 @@ impl BinaryComponent {
                     .or_else(|| config.binaries.adminer.as_ref().and_then(|ac| ac.versions.first().map(|v| v.version.clone())))
                     .unwrap_or_default()
             }
+            BinaryComponent::Pgvector => {
+                config.binaries.pgvector.as_ref()
+                    .and_then(|pc| pc.versions.iter().find(|v| v.selected).map(|v| v.version.clone()))
+                    .or_else(|| config.binaries.pgvector.as_ref().and_then(|pc| pc.versions.first().map(|v| v.version.clone())))
+                    .unwrap_or_default()
+            }
         }
     }
 
@@ -103,6 +111,7 @@ impl BinaryComponent {
             BinaryComponent::PhpMyAdmin => "phpmyadmin",
             BinaryComponent::PostgreSQL => "postgresql",
             BinaryComponent::Adminer => "adminer",
+            BinaryComponent::Pgvector => "pgvector",
         }
     }
 }
@@ -139,6 +148,11 @@ impl RuntimeDownloader {
                 }
                 BinaryComponent::Adminer => {
                     if let Some(pkg) = get_adminer_package(&selection.adminer) {
+                        return pkg.version;
+                    }
+                }
+                BinaryComponent::Pgvector => {
+                    if let Some(pkg) = get_pgvector_package(&selection.pgvector) {
                         return pkg.version;
                     }
                 }
@@ -363,6 +377,18 @@ impl RuntimeDownloader {
                         return pkg.url;
                     }
                 }
+                BinaryComponent::Pgvector => {
+                    if let Some(pkg) = get_pgvector_package(&selection.pgvector) {
+                        return match self.platform {
+                            Platform::WindowsX64 => pkg.windows_x64,
+                            Platform::WindowsArm64 => pkg.windows_arm64,
+                            Platform::MacOSX64 => pkg.macos_x64,
+                            Platform::MacOSArm64 => pkg.macos_arm64,
+                            Platform::LinuxX64 => pkg.linux_x64,
+                            Platform::LinuxArm64 => pkg.linux_arm64,
+                        };
+                    }
+                }
                 BinaryComponent::Caddy => {
                     // Caddy doesn't have package selection, use default
                 }
@@ -468,6 +494,24 @@ impl RuntimeDownloader {
                         .or_else(|| ac.versions.first())
                         .unwrap();
                     version_info.url.clone()
+                } else {
+                    String::new()
+                }
+            }
+            BinaryComponent::Pgvector => {
+                if let Some(pc) = &config.binaries.pgvector {
+                    let version_info = pc.versions.iter()
+                        .find(|v| v.selected)
+                        .or_else(|| pc.versions.first())
+                        .unwrap();
+                    match self.platform {
+                        Platform::WindowsX64 => version_info.urls.windows_x64.clone().unwrap_or_default(),
+                        Platform::WindowsArm64 => version_info.urls.windows_arm64.clone().unwrap_or_default(),
+                        Platform::MacOSX64 => version_info.urls.macos_x64.clone().unwrap_or_default(),
+                        Platform::MacOSArm64 => version_info.urls.macos_arm64.clone().unwrap_or_default(),
+                        Platform::LinuxX64 => version_info.urls.linux_x64.clone().unwrap_or_default(),
+                        Platform::LinuxArm64 => version_info.urls.linux_arm64.clone().unwrap_or_default(),
+                    }
                 } else {
                     String::new()
                 }
@@ -792,6 +836,24 @@ impl RuntimeDownloader {
                     None
                 }
             }
+            BinaryComponent::Pgvector => {
+                if let Some(pc) = &config.binaries.pgvector {
+                    let version = pc.versions.iter()
+                        .find(|v| v.selected)?;
+                    let platform_key = self.platform.url_key();
+                    match platform_key.as_str() {
+                        "windowsX64" => version.checksums.windows_x64.clone(),
+                        "windowsArm64" => version.checksums.windows_arm64.clone(),
+                        "linuxX64" => version.checksums.linux_x64.clone(),
+                        "linuxArm64" => version.checksums.linux_arm64.clone(),
+                        "macOSX64" => version.checksums.macos_x64.clone(),
+                        "macOSArm64" => version.checksums.macos_arm64.clone(),
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            }
         }
     }
 
@@ -966,6 +1028,9 @@ impl RuntimeDownloader {
         if !skip_list.contains(&"adminer") {
             components.push(BinaryComponent::Adminer);
         }
+        if !skip_list.contains(&"pgvector") && !skip_list.contains(&"postgresql") {
+            components.push(BinaryComponent::Pgvector);
+        }
 
         let total = components.len() as u8;
 
@@ -1071,6 +1136,39 @@ impl RuntimeDownloader {
                 return Err(format!("Unsupported archive format: {}", extension));
             }
 
+            // Special handling: copy pgvector files into PostgreSQL directory
+            if *component == BinaryComponent::Pgvector {
+                let pgvector_dir = runtime_dir.join("pgvector");
+                if let Some(pgsql_dir) = find_postgresql_directory(&runtime_dir) {
+                    if pgvector_dir.exists() {
+                        // Copy lib/* into pgsql/lib/
+                        let src_lib = pgvector_dir.join("lib");
+                        let dst_lib = pgsql_dir.join("lib");
+                        if src_lib.exists() {
+                            fs::create_dir_all(&dst_lib)
+                                .map_err(|e| format!("Failed to create pgsql lib dir: {}", e))?;
+                            copy_dir_contents(&src_lib, &dst_lib)?;
+                        }
+
+                        // Copy share/extension/* into pgsql/share/extension/
+                        let src_ext = pgvector_dir.join("share").join("extension");
+                        let dst_ext = pgsql_dir.join("share").join("extension");
+                        if src_ext.exists() {
+                            fs::create_dir_all(&dst_ext)
+                                .map_err(|e| format!("Failed to create pgsql extension dir: {}", e))?;
+                            copy_dir_contents(&src_ext, &dst_ext)?;
+                        }
+
+                        tracing::info!("pgvector extension installed into PostgreSQL at {:?}", pgsql_dir);
+
+                        // Clean up the temp pgvector directory
+                        let _ = fs::remove_dir_all(&pgvector_dir);
+                    }
+                } else {
+                    tracing::warn!("PostgreSQL directory not found, pgvector files left in runtime/pgvector/");
+                }
+            }
+
             // Create marker file to indicate component was installed with version
             let version = self.get_component_version(&component);
             let marker_file = runtime_dir.join(format!("{}_installed.txt", component.binary_name()));
@@ -1168,7 +1266,7 @@ impl RuntimeDownloader {
             Err(_) => return installed,
         };
 
-        for component in ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer"] {
+        for component in ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer", "pgvector"] {
             let marker_file = runtime_dir.join(format!("{}_installed.txt", component));
             if let Ok(content) = fs::read_to_string(&marker_file) {
                 // Parse version from format: "version=1.2.3\ninstalled_at=..."
@@ -1186,7 +1284,7 @@ impl RuntimeDownloader {
 
     /// Uninstall a specific component by removing its marker file and binary files
     pub fn uninstall_component(&self, component: &str) -> Result<(), String> {
-        let valid_components = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer"];
+        let valid_components = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer", "pgvector"];
         if !valid_components.contains(&component) {
             return Err(format!("Invalid component: {}", component));
         }
@@ -1301,6 +1399,34 @@ impl RuntimeDownloader {
                     }
                 }
             }
+            "pgvector" => {
+                // Remove pgvector files from PostgreSQL directories
+                if let Some(pgsql_dir) = find_postgresql_directory(&runtime_dir) {
+                    // Remove shared library
+                    #[cfg(target_os = "windows")]
+                    { let _ = fs::remove_file(pgsql_dir.join("lib").join("vector.dll")); }
+                    #[cfg(target_os = "macos")]
+                    { let _ = fs::remove_file(pgsql_dir.join("lib").join("vector.dylib")); }
+                    #[cfg(target_os = "linux")]
+                    { let _ = fs::remove_file(pgsql_dir.join("lib").join("vector.so")); }
+                    // Remove extension files
+                    let ext_dir = pgsql_dir.join("share").join("extension");
+                    if let Ok(entries) = fs::read_dir(&ext_dir) {
+                        for entry in entries.flatten() {
+                            if let Ok(name) = entry.file_name().into_string() {
+                                if name.starts_with("vector") {
+                                    let _ = fs::remove_file(entry.path());
+                                }
+                            }
+                        }
+                    }
+                }
+                // Remove pgvector temp directory if it exists
+                let pgvector_dir = runtime_dir.join("pgvector");
+                if pgvector_dir.exists() {
+                    let _ = fs::remove_dir_all(&pgvector_dir);
+                }
+            }
             _ => {}
         }
 
@@ -1348,6 +1474,44 @@ impl RuntimeDownloader {
         }
         Ok(removed)
     }
+}
+
+/// Find the PostgreSQL installation directory in the runtime dir
+fn find_postgresql_directory(runtime_dir: &Path) -> Option<PathBuf> {
+    // Look for versioned directories (e.g., postgresql-18.3.0-x86_64-pc-windows-msvc)
+    if let Ok(entries) = fs::read_dir(runtime_dir) {
+        for entry in entries.flatten() {
+            if let Ok(name) = entry.file_name().into_string() {
+                if name.starts_with("postgresql-") && entry.path().is_dir() {
+                    let bin_dir = entry.path().join("bin");
+                    if bin_dir.exists() {
+                        return Some(entry.path());
+                    }
+                }
+            }
+        }
+    }
+    // Fallback: plain postgresql/ directory
+    let fallback = runtime_dir.join("postgresql");
+    if fallback.join("bin").exists() {
+        Some(fallback)
+    } else {
+        None
+    }
+}
+
+/// Copy all files from src_dir into dst_dir
+fn copy_dir_contents(src_dir: &Path, dst_dir: &Path) -> Result<(), String> {
+    if let Ok(entries) = fs::read_dir(src_dir) {
+        for entry in entries.flatten() {
+            let src = entry.path();
+            let file_name = src.file_name().unwrap_or_default();
+            let dst = dst_dir.join(file_name);
+            fs::copy(&src, &dst)
+                .map_err(|e| format!("Failed to copy {:?} to {:?}: {}", src, dst, e))?;
+        }
+    }
+    Ok(())
 }
 
 impl Default for RuntimeDownloader {

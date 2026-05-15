@@ -26,6 +26,7 @@ const COMPONENT_ORDER: { key: string; getDisplayName: () => string }[] = (() => 
     { key: "phpmyadmin", getDisplayName: () => "phpMyAdmin" },
     { key: "postgresql", getDisplayName: () => "PostgreSQL" },
     { key: "adminer", getDisplayName: () => "Adminer" },
+    { key: "pgvector", getDisplayName: () => "pgvector" },
   ];
 })();
 
@@ -145,10 +146,11 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
         phpmyadmin: "phpmyadmin-5.2",
         postgresql: "postgresql-18.3",
         adminer: "adminer-5.1",
+        pgvector: "pgvector-0.8.2",
       };
 
       // Download only this component by skipping all others
-      const allComponents = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer"];
+      const allComponents = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer", "pgvector"];
       const skipList = allComponents.filter(c => c !== componentKey);
 
       await invoke("download_runtime_with_skip", {
