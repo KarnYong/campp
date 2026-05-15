@@ -9,7 +9,11 @@ pub struct PackagesConfig {
     pub mysql: Vec<MySQLPackage>,
     #[serde(default)]
     pub mariadb: Vec<MySQLPackage>,
+    #[serde(default)]
+    pub postgresql: Vec<MySQLPackage>,
     pub phpmyadmin: Vec<PhpMyAdminPackage>,
+    #[serde(default)]
+    pub adminer: Vec<PhpMyAdminPackage>,
 }
 
 /// PHP package with version and download URLs
@@ -87,10 +91,22 @@ pub struct PackageSelection {
     #[serde(default = "default_mariadb")]
     pub mariadb: String,
     pub phpmyadmin: String,
+    #[serde(default = "default_postgresql")]
+    pub postgresql: String,
+    #[serde(default = "default_adminer")]
+    pub adminer: String,
 }
 
 fn default_mariadb() -> String {
     "mariadb-12.3".to_string()
+}
+
+fn default_postgresql() -> String {
+    "postgresql-18.3".to_string()
+}
+
+fn default_adminer() -> String {
+    "adminer-5.1".to_string()
 }
 
 impl Default for PackageSelection {
@@ -100,6 +116,8 @@ impl Default for PackageSelection {
             mysql: "mysql-8.4".to_string(),
             mariadb: "mariadb-12.3".to_string(),
             phpmyadmin: "phpmyadmin-5.2".to_string(),
+            postgresql: "postgresql-18.3".to_string(),
+            adminer: "adminer-5.1".to_string(),
         }
     }
 }
@@ -124,6 +142,12 @@ pub struct BinariesConfig {
     pub mariadb: Option<BinaryConfig>,
     #[serde(rename = "phpmyadmin")]
     pub phpmyadmin: PhpMyAdminConfig,
+    #[serde(default)]
+    #[serde(rename = "postgresql")]
+    pub postgresql: Option<BinaryConfig>,
+    #[serde(default)]
+    #[serde(rename = "adminer")]
+    pub adminer: Option<PhpMyAdminConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -372,6 +396,29 @@ pub fn get_available_packages() -> PackagesConfig {
                 lts: v.lts,
                 recommended: v.selected,
             }).collect(),
+            postgresql: cfg.binaries.postgresql.as_ref().map(|pc| pc.versions.iter().map(|v| MySQLPackage {
+                id: v.id.clone(),
+                version: v.version.clone(),
+                display_name: v.display_name.clone(),
+                windows_x64: v.urls.windows_x64.clone().unwrap_or_default(),
+                windows_arm64: v.urls.windows_arm64.clone().unwrap_or_default(),
+                linux_x64: v.urls.linux_x64.clone().unwrap_or_default(),
+                linux_arm64: v.urls.linux_arm64.clone().unwrap_or_default(),
+                macos_x64: v.urls.macos_x64.clone().unwrap_or_default(),
+                macos_arm64: v.urls.macos_arm64.clone().unwrap_or_default(),
+                eol: v.eol,
+                lts: v.lts,
+                recommended: v.selected,
+            }).collect()).unwrap_or_default(),
+            adminer: cfg.binaries.adminer.as_ref().map(|ac| ac.versions.iter().map(|v| PhpMyAdminPackage {
+                id: v.id.clone(),
+                version: v.version.clone(),
+                display_name: v.display_name.clone(),
+                url: v.url.clone(),
+                eol: v.eol,
+                lts: v.lts,
+                recommended: v.selected,
+            }).collect()).unwrap_or_default(),
         }
     } else {
         // Fallback to hardcoded defaults
@@ -407,6 +454,12 @@ pub fn get_selected_package_ids() -> PackageSelection {
                 .find(|v| v.selected)
                 .map(|v| v.id.clone())
                 .unwrap_or_else(|| "phpmyadmin-5.2".to_string()),
+            postgresql: cfg.binaries.postgresql.as_ref()
+                .and_then(|pc| pc.versions.iter().find(|v| v.selected).map(|v| v.id.clone()))
+                .unwrap_or_else(|| "postgresql-18.3".to_string()),
+            adminer: cfg.binaries.adminer.as_ref()
+                .and_then(|ac| ac.versions.iter().find(|v| v.selected).map(|v| v.id.clone()))
+                .unwrap_or_else(|| "adminer-5.1".to_string()),
         }
     } else {
         PackageSelection::default()
@@ -441,6 +494,22 @@ pub fn get_mariadb_package(id: &str) -> Option<MySQLPackage> {
 pub fn get_phpmyadmin_package(id: &str) -> Option<PhpMyAdminPackage> {
     get_available_packages()
         .phpmyadmin
+        .into_iter()
+        .find(|p| p.id == id)
+}
+
+/// Get PostgreSQL package by ID
+pub fn get_postgresql_package(id: &str) -> Option<MySQLPackage> {
+    get_available_packages()
+        .postgresql
+        .into_iter()
+        .find(|p| p.id == id)
+}
+
+/// Get Adminer package by ID
+pub fn get_adminer_package(id: &str) -> Option<PhpMyAdminPackage> {
+    get_available_packages()
+        .adminer
         .into_iter()
         .find(|p| p.id == id)
 }
@@ -562,6 +631,33 @@ fn get_default_packages() -> PackagesConfig {
                 version: "5.2.2".to_string(),
                 display_name: "phpMyAdmin 5.2.2 (Latest)".to_string(),
                 url: "https://github.com/KarnYong/campp-runtime-binaries/releases/download/phpmyadmin-5.2.2/phpMyAdmin-5.2.2-all-languages.zip".to_string(),
+                eol: false,
+                lts: false,
+                recommended: true,
+            },
+        ],
+        postgresql: vec![
+            MySQLPackage {
+                id: "postgresql-18.3".to_string(),
+                version: "18.3.0".to_string(),
+                display_name: "PostgreSQL 18.3.0 (Latest)".to_string(),
+                windows_x64: "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.3.0/postgresql-18.3.0-x86_64-pc-windows-msvc.zip".to_string(),
+                windows_arm64: String::new(),
+                linux_x64: "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.3.0/postgresql-18.3.0-x86_64-unknown-linux-gnu.tar.gz".to_string(),
+                linux_arm64: "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.3.0/postgresql-18.3.0-aarch64-unknown-linux-gnu.tar.gz".to_string(),
+                macos_x64: "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.3.0/postgresql-18.3.0-x86_64-apple-darwin.tar.gz".to_string(),
+                macos_arm64: "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.3.0/postgresql-18.3.0-aarch64-apple-darwin.tar.gz".to_string(),
+                eol: false,
+                lts: false,
+                recommended: true,
+            },
+        ],
+        adminer: vec![
+            PhpMyAdminPackage {
+                id: "adminer-5.1".to_string(),
+                version: "5.1.0".to_string(),
+                display_name: "Adminer 5.1.0 (Latest)".to_string(),
+                url: "https://github.com/vrana/adminer/releases/download/v5.1.0/adminer-5.1.0-mysql.php".to_string(),
                 eol: false,
                 lts: false,
                 recommended: true,

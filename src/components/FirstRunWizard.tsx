@@ -46,6 +46,12 @@ const packages = {
   phpmyadmin: [
     { id: "phpmyadmin-5.2", version: "5.2.2" },
   ],
+  postgresql: [
+    { id: "postgresql-18.3", version: "18.3.0" },
+  ],
+  adminer: [
+    { id: "adminer-5.1", version: "5.1.0" },
+  ],
 };
 
 export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
@@ -67,6 +73,8 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
     mysql: "mysql-8.4",
     mariadb: "mariadb-12.3",
     phpmyadmin: "phpmyadmin-5.2",
+    postgresql: "postgresql-18.3",
+    adminer: "adminer-5.1",
   });
   const [existingComponents, setExistingComponents] = useState<ExistingComponent[]>([]);
   const [hasExistingOnWelcome, setHasExistingOnWelcome] = useState(false);
@@ -77,7 +85,11 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
     mysql: true,
     mariadb: true,
     phpmyadmin: true,
+    postgresql: false,
+    adminer: false,
   });
+  const [mysqlPassword, setMysqlPassword] = useState("");
+  const [postgresPassword, setPostgresPassword] = useState("");
 
   // Check for existing components when welcome step loads
   useEffect(() => {
@@ -86,6 +98,15 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
         const existing = await invoke<Record<string, string>>("check_existing_components");
         const hasExisting = Object.keys(existing).length > 0;
         setHasExistingOnWelcome(hasExisting);
+
+        // Auto-enable optional components if already installed
+        if (existing.postgresql || existing.adminer) {
+          setEnabledComponents((prev) => ({
+            ...prev,
+            postgresql: !!existing.postgresql || prev.postgresql,
+            adminer: !!existing.adminer || prev.adminer,
+          }));
+        }
       } catch (err) {
         console.error("Failed to check existing components:", err);
         setHasExistingOnWelcome(false);
@@ -189,6 +210,18 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
           displayName: "phpMyAdmin",
           isExisting: !!existing.phpmyadmin,
         },
+        {
+          name: "postgresql",
+          version: existing.postgresql || "",
+          displayName: "PostgreSQL",
+          isExisting: !!existing.postgresql,
+        },
+        {
+          name: "adminer",
+          version: existing.adminer || "",
+          displayName: "Adminer",
+          isExisting: !!existing.adminer,
+        },
       ];
 
       const hasAnyExisting = allComponents.some((c) => c.isExisting);
@@ -224,8 +257,12 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
     const skipList = [...new Set([...existingSkipList, ...disabled])];
 
     try {
-      // Save the package selection to settings
+      // Save the package selection and database passwords to settings
       await invoke("update_package_selection", { packageSelection });
+      await invoke("update_db_passwords", {
+        mysqlPassword,
+        postgresPassword,
+      });
 
       if (skipList.length > 0) {
         const result = await invoke<string>("download_runtime_with_skip", {
@@ -468,8 +505,14 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
               <PackageSelector
                 onSelectionChange={handlePackageChange}
                 initialSelection={packageSelection}
+                initialEnabled={enabledComponents}
                 onEnabledChange={setEnabledComponents}
+                mysqlPassword={mysqlPassword}
+                onMysqlPasswordChange={setMysqlPassword}
+                postgresPassword={postgresPassword}
+                onPostgresPasswordChange={setPostgresPassword}
               />
+
               <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem" }}>
                 <button onClick={handleBack} className="btn-secondary" style={{ fontSize: "0.875rem", padding: "0.5rem 1rem" }}>
                   Back
@@ -590,8 +633,12 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
                     ? packages.mariadb.find(p => p.id === packageSelection.mariadb)?.version
                     : component.name === "phpmyadmin"
                     ? packages.phpmyadmin.find(p => p.id === packageSelection.phpmyadmin)?.version
+                    : component.name === "postgresql"
+                    ? packages.postgresql.find(p => p.id === packageSelection.postgresql)?.version
+                    : component.name === "adminer"
+                    ? packages.adminer.find(p => p.id === packageSelection.adminer)?.version
                     : component.name === "caddy"
-                    ? "2.8.4"
+                    ? "2.11.3"
                     : component.version;
 
                   return (
@@ -805,10 +852,12 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
                     ? packages.mariadb.find(p => p.id === packageSelection.mariadb)?.version || "12.3.1"
                     : packages.mysql.find(p => p.id === packageSelection.mysql)?.version || "8.4.0";
                   return [
-                    { name: "Caddy", version: "2.8.4", key: "caddy" },
+                    { name: "Caddy", version: "2.11.3", key: "caddy" },
                     { name: "PHP", version: packages.php.find(p => p.id === packageSelection.php)?.version || "8.5.1", key: "php" },
                     { name: getDatabaseDisplayName(currentPlatform), version: dbVersion, key: dbKey },
                     { name: "phpMyAdmin", version: packages.phpmyadmin.find(p => p.id === packageSelection.phpmyadmin)?.version || "5.2.2", key: "phpmyadmin" },
+                    { name: "PostgreSQL", version: packages.postgresql.find(p => p.id === packageSelection.postgresql)?.version || "18.3.0", key: "postgresql" },
+                    { name: "Adminer", version: packages.adminer.find(p => p.id === packageSelection.adminer)?.version || "5.1.0", key: "adminer" },
                   ];
                 })()
                   .filter((pkg) => enabledComponents[pkg.key] !== false)

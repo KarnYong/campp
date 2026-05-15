@@ -21,6 +21,7 @@ export function Dashboard() {
   const caddyPort = services[ServiceType.Caddy]?.port || 8080;
   const webServerUrl = `http://localhost:${caddyPort}`;
   const phpMyAdminUrl = `${webServerUrl}/phpmyadmin`;
+  const adminerUrl = `${webServerUrl}/adminer/`;
 
   // Check if Caddy is running
   const isCaddyRunning = services[ServiceType.Caddy]?.state === ServiceState.Running;
@@ -211,6 +212,15 @@ export function Dashboard() {
               </button>
               <button
                 className="btn-quick-action"
+                onClick={async () => { try { await openUrl(adminerUrl); } catch (error) { console.error("Failed to open Adminer URL:", error); } }}
+                disabled={!isCaddyRunning || !installedVersions.adminer}
+                title={!installedVersions.adminer ? "Adminer not installed" : isCaddyRunning ? `Open ${adminerUrl}` : "Start Caddy to enable"}
+              >
+                <span style={{ fontSize: "1rem" }}>🐘</span>
+                Adminer
+              </button>
+              <button
+                className="btn-quick-action"
                 onClick={() => setShowSettings(true)}
                 title="Open Settings"
               >
@@ -333,6 +343,34 @@ export function Dashboard() {
                   phpMyAdmin {installedVersions.phpmyadmin}
                 </span>
               )}
+              {installedVersions.postgresql && (
+                <span
+                  style={{
+                    padding: "0.25rem 0.75rem",
+                    borderRadius: "9999px",
+                    fontSize: "0.75rem",
+                    fontWeight: 500,
+                    color: "var(--text-primary)",
+                    border: "1px solid var(--border-color)",
+                  }}
+                >
+                  PostgreSQL {installedVersions.postgresql}
+                </span>
+              )}
+              {installedVersions.adminer && (
+                <span
+                  style={{
+                    padding: "0.25rem 0.75rem",
+                    borderRadius: "9999px",
+                    fontSize: "0.75rem",
+                    fontWeight: 500,
+                    color: "var(--text-primary)",
+                    border: "1px solid var(--border-color)",
+                  }}
+                >
+                  Adminer {installedVersions.adminer}
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -348,13 +386,13 @@ export function Dashboard() {
             className="service-grid-responsive"
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
+              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
               gap: "1rem",
               maxWidth: "80rem",
               margin: "0 auto",
             }}
           >
-            {[ServiceType.Caddy, ServiceType.PhpFpm, ServiceType.MySQL].map((serviceType) => {
+            {[ServiceType.Caddy, ServiceType.PhpFpm, ServiceType.MySQL, ServiceType.PostgreSQL].map((serviceType) => {
               const service = services[serviceType];
               if (!service) return null;
               let componentKey: string = serviceType === ServiceType.PhpFpm ? "php" : serviceType;

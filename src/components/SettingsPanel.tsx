@@ -24,6 +24,8 @@ const COMPONENT_ORDER: { key: string; getDisplayName: () => string }[] = (() => 
     { key: "php", getDisplayName: () => "PHP" },
     { key: dbKey, getDisplayName: () => getDatabaseDisplayName(platform) },
     { key: "phpmyadmin", getDisplayName: () => "phpMyAdmin" },
+    { key: "postgresql", getDisplayName: () => "PostgreSQL" },
+    { key: "adminer", getDisplayName: () => "Adminer" },
   ];
 })();
 
@@ -33,7 +35,10 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
     web_port: 8080,
     php_port: 9000,
     mysql_port: 3307,
+    postgres_port: 5433,
     project_root: "",
+    mysql_root_password: "",
+    postgres_root_password: "",
   });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -138,10 +143,12 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
         mysql: "mysql-8.4",
         mariadb: "mariadb-12.3",
         phpmyadmin: "phpmyadmin-5.2",
+        postgresql: "postgresql-18.3",
+        adminer: "adminer-5.1",
       };
 
       // Download only this component by skipping all others
-      const allComponents = ["caddy", "php", "mysql", "mariadb", "phpmyadmin"];
+      const allComponents = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer"];
       const skipList = allComponents.filter(c => c !== componentKey);
 
       await invoke("download_runtime_with_skip", {
@@ -361,6 +368,103 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
                 style={{ width: "180px" }}
               />
             </div>
+
+            {/* PostgreSQL Port */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "0.5rem 0.75rem",
+                borderRadius: "0.5rem",
+                opacity: components.find(c => c.key === "postgresql")?.installed ? 1 : 0.5,
+                transition: "background-color 0.15s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-secondary)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+            >
+              <label htmlFor="postgres-port" style={{ fontSize: "0.875rem", fontWeight: 500 }}>
+                PostgreSQL Port
+              </label>
+              <input
+                id="postgres-port"
+                type="number"
+                value={settings.postgres_port}
+                onChange={(e) => handlePortChange("postgres_port", e.target.value)}
+                min={1}
+                max={65535}
+                disabled={!components.find(c => c.key === "postgresql")?.installed}
+                className="input"
+                style={{ width: "180px" }}
+              />
+            </div>
+          </div>
+
+          {/* Database Passwords Section */}
+          <div style={{ marginBottom: "1.5rem" }}>
+            <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "0.5rem" }}>Database Passwords</h3>
+            <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", marginBottom: "0.75rem" }}>
+              Set root passwords for database servers. Changes take effect after service restart.
+            </p>
+
+            {/* MySQL/MariaDB Root Password */}
+            {components.find(c => c.key === dbComponentKey)?.installed && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: "0.75rem",
+                  padding: "0.5rem",
+                  borderRadius: "0.5rem",
+                  transition: "background-color 0.15s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-secondary)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+              >
+                <label htmlFor="mysql-password" style={{ fontSize: "0.875rem", fontWeight: 500 }}>
+                  {getDatabaseDisplayName()} Root Password
+                </label>
+                <input
+                  id="mysql-password"
+                  type="password"
+                  value={settings.mysql_root_password}
+                  onChange={(e) => setSettings({ ...settings, mysql_root_password: e.target.value })}
+                  placeholder="No password"
+                  className="input"
+                  style={{ width: "180px" }}
+                />
+              </div>
+            )}
+
+            {/* PostgreSQL Root Password */}
+            {components.find(c => c.key === "postgresql")?.installed && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "0.5rem",
+                  borderRadius: "0.5rem",
+                  transition: "background-color 0.15s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-secondary)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+              >
+                <label htmlFor="postgres-password" style={{ fontSize: "0.875rem", fontWeight: 500 }}>
+                  PostgreSQL Root Password
+                </label>
+                <input
+                  id="postgres-password"
+                  type="password"
+                  value={settings.postgres_root_password}
+                  onChange={(e) => setSettings({ ...settings, postgres_root_password: e.target.value })}
+                  placeholder="No password"
+                  className="input"
+                  style={{ width: "180px" }}
+                />
+              </div>
+            )}
           </div>
 
           {/* Components Section */}

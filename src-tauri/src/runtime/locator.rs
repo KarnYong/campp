@@ -9,10 +9,16 @@ pub struct RuntimePaths {
     pub php_ini: PathBuf,
     pub mysql: PathBuf,
     pub phpmyadmin: PathBuf,
+    /// PostgreSQL root directory (contains bin/, lib/, share/)
+    pub pgsql_dir: PathBuf,
+    /// Adminer directory (contains adminer.php)
+    pub adminer: PathBuf,
     /// Directory where PHP extensions are located (same as php_cgi)
     pub php_ext_dir: PathBuf,
     /// Data directory for MySQL
     pub mysql_data_dir: PathBuf,
+    /// Data directory for PostgreSQL
+    pub pgsql_data_dir: PathBuf,
     /// Logs directory
     pub logs_dir: PathBuf,
     /// Config directory
@@ -32,6 +38,8 @@ pub struct AppDataPaths {
     pub config_dir: PathBuf,
     /// MySQL data directory
     pub mysql_data_dir: PathBuf,
+    /// PostgreSQL data directory
+    pub pgsql_data_dir: PathBuf,
     /// Logs directory
     pub logs_dir: PathBuf,
     /// Projects directory
@@ -67,6 +75,7 @@ pub fn get_app_data_paths() -> Result<AppDataPaths, String> {
             runtime_dir: install_dir.join("runtime"),
             config_dir: install_dir.join("config"),
             mysql_data_dir: install_dir.join("mysql").join("data"),
+            pgsql_data_dir: install_dir.join("pgsql").join("data"),
             logs_dir: install_dir.join("logs"),
             projects_dir: install_dir.join("projects"),
         })
@@ -83,6 +92,7 @@ pub fn get_app_data_paths() -> Result<AppDataPaths, String> {
             runtime_dir: data_dir.join("runtime"),
             config_dir: data_dir.join("config"),
             mysql_data_dir: data_dir.join("mysql").join("data"),
+            pgsql_data_dir: data_dir.join("pgsql").join("data"),
             logs_dir: data_dir.join("logs"),
             projects_dir: data_dir.join("projects"),
         })
@@ -105,6 +115,20 @@ pub fn locate_runtime_binaries() -> Result<RuntimePaths, String> {
     // Detect phpMyAdmin directory (may be versioned like phpMyAdmin-5.2.2-all-languages)
     let phpmyadmin_path = detect_phpmyadmin_directory(runtime_dir)?;
 
+    // Detect PostgreSQL directory (optional — theseus-rs archives extract to postgresql-VERSION-TARGET/)
+    let pgsql_dir = detect_postgresql_directory(runtime_dir)
+        .unwrap_or_else(|e| {
+            tracing::info!("PostgreSQL not detected (optional): {}", e);
+            runtime_dir.join("postgresql")
+        });
+
+    // Detect Adminer directory (optional — single PHP file)
+    let adminer_path = detect_adminer_directory(runtime_dir)
+        .unwrap_or_else(|e| {
+            tracing::info!("Adminer not detected (optional): {}", e);
+            runtime_dir.join("adminer")
+        });
+
     Ok(RuntimePaths {
         caddy: detect_caddy_binary(runtime_dir)?,
         php_cgi: detect_php_binary(runtime_dir)?,
@@ -112,7 +136,10 @@ pub fn locate_runtime_binaries() -> Result<RuntimePaths, String> {
         php_ext_dir: detect_php_ext_dir(runtime_dir)?,
         mysql: detect_mysql_binary(runtime_dir)?,
         phpmyadmin: phpmyadmin_path,
+        pgsql_dir,
+        adminer: adminer_path,
         mysql_data_dir: app_paths.mysql_data_dir.clone(),
+        pgsql_data_dir: app_paths.pgsql_data_dir.clone(),
         logs_dir: app_paths.logs_dir.clone(),
         config_dir: app_paths.config_dir.clone(),
         projects_dir: app_paths.projects_dir.clone(),
@@ -502,6 +529,69 @@ fn detect_phpmyadmin_directory(runtime_dir: &Path) -> Result<PathBuf, String> {
     ))
 }
 
+/// Detect PostgreSQL root directory (theseus-rs archives extract to postgresql-VERSION-TARGET/)
+fn detect_postgresql_directory(runtime_dir: &Path) -> Result<PathBuf, String> {
+    // Look for versioned postgresql directories (e.g., postgresql-18.3.0-x86_64-pc-windows-msvc)
+    if let Ok(entries) = fs::read_dir(runtime_dir) {
+        for entry in entries.flatten() {
+            if let Ok(name) = entry.file_name().into_string() {
+                if name.starts_with("postgresql-") && entry.path().is_dir() {
+                    let bin_dir = entry.path().join("bin");
+                    if bin_dir.exists() {
+                        #[cfg(target_os = "windows")]
+                        {
+                            if bin_dir.join("pg_ctl.exe").exists() {
+                                return Ok(entry.path());
+                            }
+                        }
+                        #[cfg(not(target_os = "windows"))]
+                        {
+                            if bin_dir.join("pg_ctl").exists() {
+                                return Ok(entry.path());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: postgresql/ directory
+    let fallback = runtime_dir.join("postgresql");
+    #[cfg(target_os = "windows")]
+    let pg_ctl = fallback.join("bin").join("pg_ctl.exe");
+    #[cfg(not(target_os = "windows"))]
+    let pg_ctl = fallback.join("bin").join("pg_ctl");
+
+    if pg_ctl.exists() {
+        return Ok(fallback);
+    }
+
+    Err("PostgreSQL binaries not found (optional component)".to_string())
+}
+
+/// Detect Adminer directory (contains adminer.php)
+fn detect_adminer_directory(runtime_dir: &Path) -> Result<PathBuf, String> {
+    let adminer_dir = runtime_dir.join("adminer");
+    if adminer_dir.join("adminer.php").exists() {
+        return Ok(adminer_dir);
+    }
+
+    // Look for any adminer PHP file directly in runtime dir
+    if let Ok(entries) = fs::read_dir(runtime_dir) {
+        for entry in entries.flatten() {
+            if let Ok(name) = entry.file_name().into_string() {
+                if name.starts_with("adminer") && name.ends_with(".php") {
+                    // Create adminer directory and suggest it
+                    return Ok(runtime_dir.join("adminer"));
+                }
+            }
+        }
+    }
+
+    Err("Adminer not found (optional component)".to_string())
+}
+
 /// Check if a binary is valid (exists and is executable)
 pub fn is_valid_binary(path: &Path) -> bool {
     if !path.exists() {
@@ -582,6 +672,7 @@ mod tests {
             runtime_dir: base_dir.join("runtime"),
             config_dir: base_dir.join("config"),
             mysql_data_dir: base_dir.join("mysql").join("data"),
+            pgsql_data_dir: base_dir.join("pgsql").join("data"),
             logs_dir: base_dir.join("logs"),
             projects_dir: base_dir.join("projects"),
         };
@@ -632,7 +723,10 @@ mod tests {
             php_ext_dir: temp_dir.path().join("php").join("ext"),
             mysql: temp_dir.path().join("mysql").join("bin").join("mysqld.exe"),
             phpmyadmin: temp_dir.path().join("phpmyadmin"),
+            pgsql_dir: temp_dir.path().join("postgresql"),
+            adminer: temp_dir.path().join("adminer"),
             mysql_data_dir: temp_dir.path().join("mysql").join("data"),
+            pgsql_data_dir: temp_dir.path().join("pgsql").join("data"),
             logs_dir: temp_dir.path().join("logs"),
             config_dir: temp_dir.path().join("config"),
             projects_dir: temp_dir.path().join("projects"),
@@ -656,7 +750,10 @@ mod tests {
             php_ext_dir: temp_dir.path().join("php").join("ext"),
             mysql: temp_dir.path().join("mysql").join("bin").join("mysqld.exe"),
             phpmyadmin: temp_dir.path().join("phpmyadmin"),
+            pgsql_dir: temp_dir.path().join("postgresql"),
+            adminer: temp_dir.path().join("adminer"),
             mysql_data_dir: temp_dir.path().join("mysql").join("data"),
+            pgsql_data_dir: temp_dir.path().join("pgsql").join("data"),
             logs_dir: temp_dir.path().join("logs"),
             config_dir: temp_dir.path().join("config"),
             projects_dir: temp_dir.path().join("projects"),
@@ -679,6 +776,7 @@ mod tests {
             runtime_dir: base_dir.join("runtime"),
             config_dir: base_dir.join("config"),
             mysql_data_dir: base_dir.join("mysql").join("data"),
+            pgsql_data_dir: base_dir.join("pgsql").join("data"),
             logs_dir: base_dir.join("logs"),
             projects_dir: base_dir.join("projects"),
         };

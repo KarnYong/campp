@@ -94,23 +94,25 @@ pub async fn start_service(
     service: ServiceType,
     state: State<'_, AppState>,
 ) -> Result<ServiceMap, String> {
-    let mut manager = state.process_manager.lock()
-        .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
+    let pm = state.process_manager.clone();
 
-    // Initialize if needed - propagate error if this fails
-    manager.initialize()?;
+    tokio::task::spawn_blocking(move || {
+        let mut manager = pm.lock()
+            .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
 
-    // Start the service
-    let result = manager.start(service);
+        // Initialize if needed - propagate error if this fails
+        manager.initialize()?;
 
-    // Update health and return statuses regardless of start result
-    // This ensures the frontend sees the error state
-    manager.update_health();
-    let statuses = manager.get_all_statuses();
+        // Start the service
+        let result = manager.start(service);
 
-    // Return error after getting statuses so frontend can see the error state
-    result?;
-    Ok(statuses)
+        // Update health and return statuses regardless of start result
+        manager.update_health();
+        let statuses = manager.get_all_statuses();
+
+        result?;
+        Ok(statuses)
+    }).await.map_err(|e| format!("Task error: {}", e))?
 }
 
 /// Stop a service
@@ -119,15 +121,19 @@ pub async fn stop_service(
     service: ServiceType,
     state: State<'_, AppState>,
 ) -> Result<ServiceMap, String> {
-    let mut manager = state.process_manager.lock()
-        .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
+    let pm = state.process_manager.clone();
 
-    // Stop the service
-    manager.stop(service)?;
+    tokio::task::spawn_blocking(move || {
+        let mut manager = pm.lock()
+            .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
 
-    // Update health and return statuses
-    manager.update_health();
-    Ok(manager.get_all_statuses())
+        // Stop the service
+        manager.stop(service)?;
+
+        // Update health and return statuses
+        manager.update_health();
+        Ok(manager.get_all_statuses())
+    }).await.map_err(|e| format!("Task error: {}", e))?
 }
 
 /// Restart a service
@@ -136,22 +142,24 @@ pub async fn restart_service(
     service: ServiceType,
     state: State<'_, AppState>,
 ) -> Result<ServiceMap, String> {
-    let mut manager = state.process_manager.lock()
-        .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
+    let pm = state.process_manager.clone();
 
-    // Initialize if needed - propagate error if this fails
-    manager.initialize()?;
+    tokio::task::spawn_blocking(move || {
+        let mut manager = pm.lock()
+            .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
 
-    // Restart the service
-    let result = manager.restart(service);
+        // Initialize if needed
+        manager.initialize()?;
 
-    // Update health and return statuses regardless of restart result
-    manager.update_health();
-    let statuses = manager.get_all_statuses();
+        // Restart the service
+        let result = manager.restart(service);
 
-    // Return error after getting statuses so frontend can see the error state
-    result?;
-    Ok(statuses)
+        manager.update_health();
+        let statuses = manager.get_all_statuses();
+
+        result?;
+        Ok(statuses)
+    }).await.map_err(|e| format!("Task error: {}", e))?
 }
 
 /// Get the status of all services
@@ -162,7 +170,6 @@ pub async fn get_all_statuses(
     let mut manager = state.process_manager.lock()
         .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
 
-    // Update health before returning statuses
     manager.update_health();
     Ok(manager.get_all_statuses())
 }
@@ -179,29 +186,30 @@ pub async fn save_settings(settings: crate::config::AppSettings, state: State<'_
     // Save the settings first
     settings.save()?;
 
-    // Update the ProcessManager with new settings
-    let mut manager = state.process_manager.lock()
-        .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
+    let pm = state.process_manager.clone();
 
-    // Get the current running services before updating ports
-    let running_services: Vec<ServiceType> = manager.get_all_statuses()
-        .iter()
-        .filter(|(_, s)| s.state == ServiceState::Running)
-        .map(|(ty, _)| *ty)
-        .collect();
+    tokio::task::spawn_blocking(move || {
+        let mut manager = pm.lock()
+            .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
 
-    // Update ports in the process manager
-    manager.update_ports(&settings);
+        // Get the current running services before updating ports
+        let running_services: Vec<ServiceType> = manager.get_all_statuses()
+            .iter()
+            .filter(|(_, s)| s.state == ServiceState::Running)
+            .map(|(ty, _)| *ty)
+            .collect();
 
-    // Restart any running services with new configuration
-    for service in running_services {
-        // Stop the service
-        let _ = manager.stop(service);
-        // Start it again with new port settings
-        let _ = manager.start(service);
-    }
+        // Update ports in the process manager
+        manager.update_ports(&settings);
 
-    Ok(())
+        // Restart any running services with new configuration
+        for service in running_services {
+            let _ = manager.stop(service);
+            let _ = manager.start(service);
+        }
+
+        Ok(())
+    }).await.map_err(|e| format!("Task error: {}", e))?
 }
 
 /// Validate settings (check port conflicts, valid paths)
@@ -212,7 +220,7 @@ pub async fn validate_settings(settings: crate::config::AppSettings) -> Result<V
 
 /// Check if specific ports are available
 #[tauri::command]
-pub async fn check_ports(web_port: u16, php_port: u16, mysql_port: u16) -> serde_json::Value {
+pub async fn check_ports(web_port: u16, php_port: u16, mysql_port: u16, postgres_port: u16) -> serde_json::Value {
     use crate::config::is_port_available;
 
     serde_json::json!({
@@ -227,6 +235,10 @@ pub async fn check_ports(web_port: u16, php_port: u16, mysql_port: u16) -> serde
         "mysql": {
             "port": mysql_port,
             "available": is_port_available(mysql_port)
+        },
+        "postgres": {
+            "port": postgres_port,
+            "available": is_port_available(postgres_port)
         }
     })
 }
@@ -316,12 +328,15 @@ pub async fn download_runtime(app: tauri::AppHandle) -> Result<String, String> {
 /// Stop all running services (for cleanup on app exit)
 #[tauri::command]
 pub async fn cleanup_all_services(state: State<'_, AppState>) -> Result<String, String> {
-    let mut manager = state.process_manager.lock()
-        .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
+    let pm = state.process_manager.clone();
 
-    manager.stop_all()?;
+    tokio::task::spawn_blocking(move || {
+        let mut manager = pm.lock()
+            .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
 
-    Ok("All services stopped".to_string())
+        manager.stop_all()?;
+        Ok("All services stopped".to_string())
+    }).await.map_err(|e| format!("Task error: {}", e))?
 }
 
 /// Get all available runtime packages
@@ -376,6 +391,19 @@ pub async fn update_package_selection(
     Ok(())
 }
 
+/// Update database root passwords in settings
+#[tauri::command]
+pub async fn update_db_passwords(
+    mysql_password: String,
+    postgres_password: String,
+) -> Result<(), String> {
+    let mut settings = AppSettings::load();
+    settings.mysql_root_password = mysql_password;
+    settings.postgres_root_password = postgres_password;
+    settings.save()?;
+    Ok(())
+}
+
 /// Get the selected package IDs from runtime-config.json
 #[tauri::command]
 pub async fn get_selected_package_ids() -> Result<PackageSelection, String> {
@@ -398,7 +426,7 @@ pub async fn get_installed_versions() -> Result<std::collections::HashMap<String
     let mut versions = std::collections::HashMap::new();
 
     // Read version from marker files
-    for component in ["caddy", "php", "mysql", "mariadb", "phpmyadmin"] {
+    for component in ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer"] {
         let marker_file = runtime_dir.join(format!("{}_installed.txt", component));
         if let Ok(content) = fs::read_to_string(&marker_file) {
             // Parse version from format: "version=1.2.3\ninstalled_at=..."
@@ -465,7 +493,7 @@ pub async fn uninstall_component(
     component: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let valid_components = ["caddy", "php", "mysql", "mariadb", "phpmyadmin"];
+    let valid_components = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer"];
     if !valid_components.contains(&component.as_str()) {
         return Err(format!("Invalid component: {}", component));
     }
@@ -475,13 +503,18 @@ pub async fn uninstall_component(
         "caddy" => Some(ServiceType::Caddy),
         "php" => Some(ServiceType::PhpFpm),
         "mysql" | "mariadb" => Some(ServiceType::MySQL),
+        "postgresql" => Some(ServiceType::PostgreSQL),
         _ => None,
     };
 
     if let Some(st) = service_type {
-        let mut manager = state.process_manager.lock()
-            .map_err(|e| format!("Failed to acquire lock: {}", e))?;
-        let _ = manager.stop(st);
+        let pm = state.process_manager.clone();
+        let _ = tokio::task::spawn_blocking(move || {
+            let mut manager = pm.lock()
+                .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+            let _ = manager.stop(st);
+            Ok::<(), String>(())
+        }).await;
     }
 
     let downloader = RuntimeDownloader::new()?;

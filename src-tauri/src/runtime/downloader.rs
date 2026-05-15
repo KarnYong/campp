@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use reqwest::Client;
 
 use crate::runtime::locator::get_app_data_paths;
-use crate::runtime::packages::{PackageSelection, get_php_package, get_mysql_package, get_mariadb_package, get_phpmyadmin_package, get_config};
+use crate::runtime::packages::{PackageSelection, get_php_package, get_mysql_package, get_mariadb_package, get_phpmyadmin_package, get_postgresql_package, get_adminer_package, get_config};
 use sha2::{Digest, Sha256};
 
 /// Runtime configuration loaded from runtime-config.json (shared with packages.rs)
@@ -22,6 +22,8 @@ pub enum BinaryComponent {
     MySQL,
     MariaDB,
     PhpMyAdmin,
+    PostgreSQL,
+    Adminer,
 }
 
 impl BinaryComponent {
@@ -32,6 +34,8 @@ impl BinaryComponent {
             BinaryComponent::MySQL => "MySQL",
             BinaryComponent::MariaDB => "MariaDB",
             BinaryComponent::PhpMyAdmin => "phpMyAdmin",
+            BinaryComponent::PostgreSQL => "PostgreSQL",
+            BinaryComponent::Adminer => "Adminer",
         }
     }
 
@@ -71,6 +75,18 @@ impl BinaryComponent {
                     .map(|v| v.version.clone())
                     .unwrap_or_else(|| config.binaries.phpmyadmin.versions.first().map(|v| v.version.clone()).unwrap_or_default())
             }
+            BinaryComponent::PostgreSQL => {
+                config.binaries.postgresql.as_ref()
+                    .and_then(|pc| pc.versions.iter().find(|v| v.selected).map(|v| v.version.clone()))
+                    .or_else(|| config.binaries.postgresql.as_ref().and_then(|pc| pc.versions.first().map(|v| v.version.clone())))
+                    .unwrap_or_default()
+            }
+            BinaryComponent::Adminer => {
+                config.binaries.adminer.as_ref()
+                    .and_then(|ac| ac.versions.iter().find(|v| v.selected).map(|v| v.version.clone()))
+                    .or_else(|| config.binaries.adminer.as_ref().and_then(|ac| ac.versions.first().map(|v| v.version.clone())))
+                    .unwrap_or_default()
+            }
         }
     }
 
@@ -85,6 +101,8 @@ impl BinaryComponent {
             BinaryComponent::MySQL => "mysql",
             BinaryComponent::MariaDB => "mariadb",
             BinaryComponent::PhpMyAdmin => "phpmyadmin",
+            BinaryComponent::PostgreSQL => "postgresql",
+            BinaryComponent::Adminer => "adminer",
         }
     }
 }
@@ -111,6 +129,16 @@ impl RuntimeDownloader {
                 }
                 BinaryComponent::PhpMyAdmin => {
                     if let Some(pkg) = get_phpmyadmin_package(&selection.phpmyadmin) {
+                        return pkg.version;
+                    }
+                }
+                BinaryComponent::PostgreSQL => {
+                    if let Some(pkg) = get_postgresql_package(&selection.postgresql) {
+                        return pkg.version;
+                    }
+                }
+                BinaryComponent::Adminer => {
+                    if let Some(pkg) = get_adminer_package(&selection.adminer) {
                         return pkg.version;
                     }
                 }
@@ -318,6 +346,23 @@ impl RuntimeDownloader {
                         return pkg.url;
                     }
                 }
+                BinaryComponent::PostgreSQL => {
+                    if let Some(pkg) = get_postgresql_package(&selection.postgresql) {
+                        return match self.platform {
+                            Platform::WindowsX64 => pkg.windows_x64,
+                            Platform::WindowsArm64 => pkg.windows_arm64,
+                            Platform::MacOSX64 => pkg.macos_x64,
+                            Platform::MacOSArm64 => pkg.macos_arm64,
+                            Platform::LinuxX64 => pkg.linux_x64,
+                            Platform::LinuxArm64 => pkg.linux_arm64,
+                        };
+                    }
+                }
+                BinaryComponent::Adminer => {
+                    if let Some(pkg) = get_adminer_package(&selection.adminer) {
+                        return pkg.url;
+                    }
+                }
                 BinaryComponent::Caddy => {
                     // Caddy doesn't have package selection, use default
                 }
@@ -397,6 +442,35 @@ impl RuntimeDownloader {
                     .or_else(|| config.binaries.phpmyadmin.versions.first())
                     .unwrap();
                 version_info.url.clone()
+            }
+            BinaryComponent::PostgreSQL => {
+                if let Some(pc) = &config.binaries.postgresql {
+                    let version_info = pc.versions.iter()
+                        .find(|v| v.selected)
+                        .or_else(|| pc.versions.first())
+                        .unwrap();
+                    match self.platform {
+                        Platform::WindowsX64 => version_info.urls.windows_x64.clone().unwrap_or_default(),
+                        Platform::WindowsArm64 => version_info.urls.windows_arm64.clone().unwrap_or_default(),
+                        Platform::MacOSX64 => version_info.urls.macos_x64.clone().unwrap_or_default(),
+                        Platform::MacOSArm64 => version_info.urls.macos_arm64.clone().unwrap_or_default(),
+                        Platform::LinuxX64 => version_info.urls.linux_x64.clone().unwrap_or_default(),
+                        Platform::LinuxArm64 => version_info.urls.linux_arm64.clone().unwrap_or_default(),
+                    }
+                } else {
+                    String::new()
+                }
+            }
+            BinaryComponent::Adminer => {
+                if let Some(ac) = &config.binaries.adminer {
+                    let version_info = ac.versions.iter()
+                        .find(|v| v.selected)
+                        .or_else(|| ac.versions.first())
+                        .unwrap();
+                    version_info.url.clone()
+                } else {
+                    String::new()
+                }
             }
         }
     }
@@ -644,14 +718,20 @@ impl RuntimeDownloader {
         let platform_key = self.platform.url_key();
 
         match component {
-            BinaryComponent::Php | BinaryComponent::MySQL | BinaryComponent::MariaDB | BinaryComponent::Caddy => {
-                let version_info = match component {
-                    BinaryComponent::Caddy => config.binaries.caddy.versions.iter(),
-                    BinaryComponent::Php => config.binaries.php.versions.iter(),
-                    BinaryComponent::MySQL => config.binaries.mysql.versions.iter(),
+            BinaryComponent::Php | BinaryComponent::MySQL | BinaryComponent::MariaDB | BinaryComponent::Caddy | BinaryComponent::PostgreSQL => {
+                let version_info: Box<dyn Iterator<Item = &VersionInfo>> = match component {
+                    BinaryComponent::Caddy => Box::new(config.binaries.caddy.versions.iter()),
+                    BinaryComponent::Php => Box::new(config.binaries.php.versions.iter()),
+                    BinaryComponent::MySQL => Box::new(config.binaries.mysql.versions.iter()),
                     BinaryComponent::MariaDB => {
                         match &config.binaries.mariadb {
-                            Some(mc) => mc.versions.iter(),
+                            Some(mc) => Box::new(mc.versions.iter()),
+                            None => return None,
+                        }
+                    }
+                    BinaryComponent::PostgreSQL => {
+                        match &config.binaries.postgresql {
+                            Some(pc) => Box::new(pc.versions.iter()),
                             None => return None,
                         }
                     }
@@ -664,6 +744,7 @@ impl RuntimeDownloader {
                         BinaryComponent::Php => Some(selection.php.as_str()),
                         BinaryComponent::MySQL => Some(selection.mysql.as_str()),
                         BinaryComponent::MariaDB => Some(selection.mariadb.as_str()),
+                        BinaryComponent::PostgreSQL => Some(selection.postgresql.as_str()),
                         _ => None,
                     }
                 } else {
@@ -701,6 +782,15 @@ impl RuntimeDownloader {
                 let version = config.binaries.phpmyadmin.versions.iter()
                     .find(|v| v.selected)?;
                 version.checksum.clone()
+            }
+            BinaryComponent::Adminer => {
+                if let Some(ac) = &config.binaries.adminer {
+                    let version = ac.versions.iter()
+                        .find(|v| v.selected)?;
+                    version.checksum.clone()
+                } else {
+                    None
+                }
             }
         }
     }
@@ -861,12 +951,22 @@ impl RuntimeDownloader {
             _ => BinaryComponent::MySQL,
         };
 
-        let components = [
+        // Core components (always downloaded)
+        let mut components = vec![
             BinaryComponent::Caddy,
             BinaryComponent::Php,
             db_component,
             BinaryComponent::PhpMyAdmin,
         ];
+
+        // Optional components (only if not in skip list)
+        if !skip_list.contains(&"postgresql") {
+            components.push(BinaryComponent::PostgreSQL);
+        }
+        if !skip_list.contains(&"adminer") {
+            components.push(BinaryComponent::Adminer);
+        }
+
         let total = components.len() as u8;
 
         // Create temp directory for downloads
@@ -932,6 +1032,19 @@ impl RuntimeDownloader {
                 self.extract_tar_xz(&downloaded_path, &runtime_dir)?;
             } else if extension == "zip" {
                 self.extract_zip(&downloaded_path, &runtime_dir)?;
+            } else if extension == "php" {
+                // Single PHP file (e.g., Adminer) — copy to component directory
+                let component_dir = runtime_dir.join(component.binary_name());
+                fs::create_dir_all(&component_dir)
+                    .map_err(|e| format!("Failed to create {} directory: {}", component.name(), e))?;
+                let dest_path = component_dir.join(downloaded_path.file_name().unwrap_or_default());
+                fs::copy(&downloaded_path, &dest_path)
+                    .map_err(|e| format!("Failed to copy {}: {}", component.name(), e))?;
+                // Also create a generic adminer.php for easy routing
+                if *component == BinaryComponent::Adminer {
+                    let generic_dest = component_dir.join("adminer.php");
+                    let _ = fs::copy(&downloaded_path, &generic_dest);
+                }
             } else if extension.is_empty() {
                 // Bare binary - copy directly to runtime directory
                 let binary_name = downloaded_path
@@ -1055,7 +1168,7 @@ impl RuntimeDownloader {
             Err(_) => return installed,
         };
 
-        for component in ["caddy", "php", "mysql", "mariadb", "phpmyadmin"] {
+        for component in ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer"] {
             let marker_file = runtime_dir.join(format!("{}_installed.txt", component));
             if let Ok(content) = fs::read_to_string(&marker_file) {
                 // Parse version from format: "version=1.2.3\ninstalled_at=..."
@@ -1073,7 +1186,7 @@ impl RuntimeDownloader {
 
     /// Uninstall a specific component by removing its marker file and binary files
     pub fn uninstall_component(&self, component: &str) -> Result<(), String> {
-        let valid_components = ["caddy", "php", "mysql", "mariadb", "phpmyadmin"];
+        let valid_components = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer"];
         if !valid_components.contains(&component) {
             return Err(format!("Invalid component: {}", component));
         }
@@ -1166,6 +1279,28 @@ impl RuntimeDownloader {
                         .map_err(|e| format!("Failed to remove phpmyadmin dir: {}", e))?;
                 }
             }
+            "postgresql" => {
+                Self::remove_versioned_dirs(&runtime_dir, "postgresql-")?;
+                let pg_dir = runtime_dir.join("postgresql");
+                if pg_dir.exists() {
+                    fs::remove_dir_all(&pg_dir)
+                        .map_err(|e| format!("Failed to remove postgresql dir: {}", e))?;
+                }
+            }
+            "adminer" => {
+                let adminer_dir = runtime_dir.join("adminer");
+                if adminer_dir.exists() {
+                    fs::remove_dir_all(&adminer_dir)
+                        .map_err(|e| format!("Failed to remove adminer dir: {}", e))?;
+                }
+                // Also remove standalone adminer PHP files
+                for name in ["adminer.php", "adminer-mysql.php"] {
+                    let p = runtime_dir.join(name);
+                    if p.exists() {
+                        let _ = fs::remove_file(&p);
+                    }
+                }
+            }
             _ => {}
         }
 
@@ -1230,6 +1365,8 @@ fn is_executable(name: &str) -> bool {
         || name.ends_with("php-fpm")
         || name.ends_with("mysqld")
         || name.ends_with("mysql")
-        || name.ends_with("mysqld")
+        || name.ends_with("postgres")
+        || name.ends_with("pg_ctl")
+        || name.ends_with("initdb")
         || name.contains("bin/")
 }

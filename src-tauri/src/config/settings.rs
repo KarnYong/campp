@@ -7,6 +7,7 @@ pub const DEFAULT_PORTS: Ports = Ports {
     web: 8080,
     php: 9000,
     mysql: 3307,
+    postgres: 5433,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -14,18 +15,27 @@ pub struct Ports {
     pub web: u16,
     pub php: u16,
     pub mysql: u16,
+    pub postgres: u16,
 }
+
+fn default_postgres_port() -> u16 { 5433 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     pub web_port: u16,
     pub php_port: u16,
     pub mysql_port: u16,
+    #[serde(default = "default_postgres_port")]
+    pub postgres_port: u16,
     pub project_root: String,
     #[serde(default)]
     pub auto_start_services: bool,
     #[serde(default)]
     pub package_selection: PackageSelection,
+    #[serde(default)]
+    pub mysql_root_password: String,
+    #[serde(default)]
+    pub postgres_root_password: String,
 }
 
 impl Default for AppSettings {
@@ -34,6 +44,7 @@ impl Default for AppSettings {
             web_port: DEFAULT_PORTS.web,
             php_port: DEFAULT_PORTS.php,
             mysql_port: DEFAULT_PORTS.mysql,
+            postgres_port: DEFAULT_PORTS.postgres,
             project_root: dirs::data_local_dir()
                 .unwrap_or_else(|| dirs::home_dir().unwrap_or_default())
                 .join("campp")
@@ -42,6 +53,8 @@ impl Default for AppSettings {
                 .to_string(),
             auto_start_services: false,
             package_selection: PackageSelection::default(),
+            mysql_root_password: String::new(),
+            postgres_root_password: String::new(),
         }
     }
 }
@@ -137,8 +150,15 @@ impl AppSettings {
             ));
         }
 
+        if let Err(e) = std::net::TcpListener::bind(format!("127.0.0.1:{}", self.postgres_port)) {
+            warnings.push(format!(
+                "PostgreSQL port {} may be in use: {}",
+                self.postgres_port, e
+            ));
+        }
+
         // Check for valid port ranges
-        if self.web_port == 0 || self.php_port == 0 || self.mysql_port == 0 {
+        if self.web_port == 0 || self.php_port == 0 || self.mysql_port == 0 || self.postgres_port == 0 {
             errors.push("Port numbers must be greater than 0".to_string());
         }
 

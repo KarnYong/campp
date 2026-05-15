@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::process::{Child, Command, Stdio};
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 // Windows-specific: Constant to hide console window
 #[cfg(target_os = "windows")]
@@ -92,7 +92,7 @@ impl ProcessManager {
     pub fn with_settings(settings: crate::config::AppSettings) -> Self {
         let mut services = HashMap::new();
 
-        for service_type in [ServiceType::Caddy, ServiceType::PhpFpm, ServiceType::MySQL] {
+        for service_type in [ServiceType::Caddy, ServiceType::PhpFpm, ServiceType::MySQL, ServiceType::PostgreSQL] {
             services.insert(
                 service_type,
                 ServiceProcess {
@@ -119,6 +119,7 @@ impl ProcessManager {
             ServiceType::Caddy => settings.web_port,
             ServiceType::PhpFpm => settings.php_port,
             ServiceType::MySQL => settings.mysql_port,
+            ServiceType::PostgreSQL => settings.postgres_port,
         }
     }
 
@@ -152,6 +153,17 @@ impl ProcessManager {
             #[cfg(not(target_os = "linux"))]
             fs::create_dir_all(&paths.mysql_data_dir)
                 .map_err(|e| format!("Failed to create MySQL data dir: {}", e))?;
+
+            // Create PostgreSQL data dir only if PostgreSQL binaries are present
+            #[cfg(target_os = "windows")]
+            let pg_ctl = paths.pgsql_dir.join("bin").join("pg_ctl.exe");
+            #[cfg(not(target_os = "windows"))]
+            let pg_ctl = paths.pgsql_dir.join("bin").join("pg_ctl");
+            if pg_ctl.exists() {
+                fs::create_dir_all(&paths.pgsql_data_dir)
+                    .map_err(|e| format!("Failed to create PostgreSQL data dir: {}", e))?;
+            }
+
             fs::create_dir_all(&paths.projects_dir)
                 .map_err(|e| format!("Failed to create projects dir: {}", e))?;
         }
@@ -185,7 +197,8 @@ impl ProcessManager {
         let result = match service {
             ServiceType::Caddy => start_caddy(service_process, &paths, self.settings.php_port, self.settings.mysql_port),
             ServiceType::PhpFpm => start_php_fpm(service_process, &paths),
-            ServiceType::MySQL => start_mysql(service_process, &paths),
+            ServiceType::MySQL => start_mysql(service_process, &paths, &self.settings),
+            ServiceType::PostgreSQL => start_postgresql(service_process, &paths, &self.settings),
         };
 
         match result {
@@ -219,6 +232,28 @@ impl ProcessManager {
         if let Some(ref mut child) = service_process.child {
             let _ = child.kill();
             let _ = child.wait();
+        }
+
+        // For PostgreSQL, use pg_ctl for graceful shutdown before force-killing
+        if service == ServiceType::PostgreSQL {
+            if let Some(ref paths) = self.runtime_paths {
+                #[cfg(target_os = "windows")]
+                let pg_ctl = paths.pgsql_dir.join("bin").join("pg_ctl.exe");
+                #[cfg(not(target_os = "windows"))]
+                let pg_ctl = paths.pgsql_dir.join("bin").join("pg_ctl");
+
+                if pg_ctl.exists() {
+                    let _ = configure_no_window(Command::new(&pg_ctl))
+                        .arg("stop")
+                        .arg("-D")
+                        .arg(&paths.pgsql_data_dir)
+                        .arg("-m")
+                        .arg("fast")
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .output();
+                }
+            }
         }
 
         // For MySQL/MariaDB on Windows, also kill by PID to handle spawned child processes
@@ -331,7 +366,13 @@ fn start_caddy(service_process: &mut ServiceProcess, paths: &RuntimePaths, php_p
     kill_existing_processes("caddy");
 
     // Generate phpMyAdmin config if needed
-    crate::config::generator::generate_phpmyadmin_config(paths, mysql_port)?;
+    let settings = crate::config::AppSettings::load();
+    crate::config::generator::generate_phpmyadmin_config(paths, mysql_port, &settings.mysql_root_password)?;
+    // Generate Adminer launcher with pre-configured MySQL and PostgreSQL connections
+    crate::config::generator::generate_adminer_config(
+        paths, mysql_port, &settings.mysql_root_password,
+        settings.postgres_port, &settings.postgres_root_password,
+    )?;
     // Always regenerate Caddyfile with current port settings
     let caddyfile_path = paths.config_dir.join("Caddyfile");
     crate::config::generator::generate_caddyfile(&caddyfile_path, paths, service_process.port, php_port)?;
@@ -374,10 +415,8 @@ fn start_php_fpm(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> 
     kill_existing_processes("php-fpm");
     kill_existing_processes("php-cgi");
 
-    // Generate php.ini if it doesn't exist
-    if !paths.php_ini.exists() {
-        crate::config::generator::generate_php_ini(&paths.php_ini, paths)?;
-    }
+    // Generate php.ini (always regenerate to keep extensions in sync)
+    crate::config::generator::generate_php_ini(&paths.php_ini, paths)?;
 
     // Open log file with retry logic
     let log_path = paths.logs_dir.join("php-fpm.log");
@@ -450,7 +489,7 @@ fn start_php_fpm(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> 
 ///
 /// These are drop-in replacements for each other, but have different
 /// initialization requirements and binary names.
-fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> Result<(), String> {
+fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths, settings: &crate::config::AppSettings) -> Result<(), String> {
     // Kill any existing database server processes to avoid port conflicts
     #[cfg(target_os = "linux")]
     {
@@ -477,23 +516,25 @@ fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> Re
     let user_created_flag = paths.mysql_data_dir.join(".user_127_0_0_1_created");
     let needs_init_file = !user_created_flag.exists();
 
-    let init_file_path = if needs_init_file {
-        // Create init file to add root@127.0.0.1 user
-        let init_file = paths.logs_dir.join("mysql_init_user.sql");
-        fs::write(&init_file, "CREATE USER IF NOT EXISTS 'root'@'127.0.0.1' IDENTIFIED BY '';\n\
-            GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1' WITH GRANT OPTION;\n\
-            FLUSH PRIVILEGES;\n")
-            .map_err(|e| format!("Failed to create init file: {}", e))?;
-        Some(init_file)
+    // Always create init file to keep password in sync with settings
+    let init_file = paths.logs_dir.join("mysql_init_user.sql");
+    let password_sql = if settings.mysql_root_password.is_empty() {
+        "''".to_string()
     } else {
-        None
+        format!("'{}'", settings.mysql_root_password.replace('\'', "\\'"))
     };
+    fs::write(&init_file, format!(
+        "CREATE USER IF NOT EXISTS 'root'@'127.0.0.1' IDENTIFIED BY {};\n\
+        ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY {};\n\
+        GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1' WITH GRANT OPTION;\n\
+        FLUSH PRIVILEGES;\n", password_sql, password_sql))
+        .map_err(|e| format!("Failed to create init file: {}", e))?;
 
     // Open log file with retry logic
     let log_path = paths.logs_dir.join("mysql.log");
     let log_file = open_log_file_with_retry(&log_path, "MariaDB")?;
 
-    // Build MySQL command with optional init file
+    // Build MySQL command — always pass init file to keep password synced
     let mut cmd = configure_no_window(Command::new(&paths.mysql));
     cmd.arg("--datadir")
         .arg(&data_dir_str)
@@ -501,13 +542,9 @@ fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> Re
         .arg(service_process.port.to_string())
         .arg("--bind-address=127.0.0.1")
         .arg("--console")
-        .arg("--skip-name-resolve");
-
-    // Add init file on first run
-    if let Some(ref init_file) = init_file_path {
-        cmd.arg("--init-file")
-            .arg(init_file);
-    }
+        .arg("--skip-name-resolve")
+        .arg("--init-file")
+        .arg(&init_file);
 
     let mut child = cmd
         .stdout(Stdio::from(log_file.try_clone().unwrap()))
@@ -524,10 +561,7 @@ fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> Re
     // Check if process is still running
     match child.try_wait() {
         Ok(Some(status)) => {
-            // Clean up init file if it exists
-            if let Some(init_file) = init_file_path {
-                let _ = fs::remove_file(&init_file);
-            }
+            let _ = fs::remove_file(&init_file);
             Err(format!(
                 "MariaDB exited immediately with status: {:?}\n\nCheck logs at: {:?}",
                 status, log_path
@@ -545,9 +579,7 @@ fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> Re
             Ok(())
         }
         Err(e) => {
-            if let Some(init_file) = init_file_path {
-                let _ = fs::remove_file(&init_file);
-            }
+            let _ = fs::remove_file(&init_file);
             Err(format!("Failed to check MariaDB process: {}", e))
         }
     }
@@ -555,6 +587,235 @@ fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> Re
 
 fn initialize_mysql_data_dir(paths: &RuntimePaths) -> Result<(), String> {
     crate::database::mysql::initialize_mysql(paths)
+}
+
+/// Start PostgreSQL database server
+fn start_postgresql(service_process: &mut ServiceProcess, paths: &RuntimePaths, settings: &crate::config::AppSettings) -> Result<(), String> {
+    // Kill any existing PostgreSQL processes
+    kill_existing_processes("postgres");
+    kill_existing_processes("pg_ctl");
+
+    // Check that PostgreSQL binaries exist
+    #[cfg(target_os = "windows")]
+    let postgres_bin = paths.pgsql_dir.join("bin").join("postgres.exe");
+    #[cfg(not(target_os = "windows"))]
+    let postgres_bin = paths.pgsql_dir.join("bin").join("postgres");
+
+    if !postgres_bin.exists() {
+        return Err(format!(
+            "PostgreSQL binary not found at: {}. Please ensure PostgreSQL runtime was downloaded.",
+            postgres_bin.display()
+        ));
+    }
+
+    // Initialize data directory if needed
+    crate::database::postgres::initialize_postgresql(
+        &paths.pgsql_dir,
+        &paths.pgsql_data_dir,
+        &paths.logs_dir,
+    )?;
+
+    // Generate postgresql.conf and pg_hba.conf
+    crate::config::generator::generate_postgresql_conf(
+        &paths.pgsql_data_dir,
+        service_process.port,
+    )?;
+
+    // Use "trust" auth on first run (password not yet set) so psql can connect
+    // without a password. After setting the password, we switch to scram-sha-256.
+    let password_flag = paths.pgsql_data_dir.join(".password_set");
+    let needs_password_setup = !settings.postgres_root_password.is_empty() && !password_flag.exists();
+    let pg_auth_method = if needs_password_setup || settings.postgres_root_password.is_empty() {
+        "trust"
+    } else {
+        "scram-sha-256"
+    };
+    crate::config::generator::generate_pg_hba_conf(
+        &paths.pgsql_data_dir,
+        pg_auth_method,
+    )?;
+
+    // Open log file
+    let log_path = paths.logs_dir.join("postgresql.log");
+    let log_file = open_log_file_with_retry(&log_path, "PostgreSQL")?;
+
+    let data_dir_str = paths.pgsql_data_dir.to_string_lossy().to_string();
+
+    // Start postgres directly in foreground (like mysqld --console)
+    let mut cmd = configure_no_window(Command::new(&postgres_bin));
+    cmd.arg("-D").arg(&data_dir_str)
+        .arg("-p").arg(service_process.port.to_string());
+
+    // On Unix, set library path so postgres can find shared libraries
+    #[cfg(unix)]
+    {
+        let lib_dir = paths.pgsql_dir.join("lib");
+        let lib_path = lib_dir.to_string_lossy().to_string();
+        if let Ok(existing) = std::env::var("LD_LIBRARY_PATH") {
+            cmd.env("LD_LIBRARY_PATH", format!("{}:{}", lib_path, existing));
+        } else {
+            cmd.env("LD_LIBRARY_PATH", &lib_path);
+        }
+        if let Ok(existing) = std::env::var("DYLD_LIBRARY_PATH") {
+            cmd.env("DYLD_LIBRARY_PATH", format!("{}:{}", lib_path, existing));
+        } else {
+            cmd.env("DYLD_LIBRARY_PATH", &lib_path);
+        }
+    }
+
+    let mut child = cmd
+        .stdout(Stdio::from(log_file.try_clone().unwrap()))
+        .stderr(Stdio::from(log_file))
+        .spawn()
+        .map_err(|e| format!("Failed to start PostgreSQL: {}", e))?;
+
+    // Give PostgreSQL time to start
+    std::thread::sleep(std::time::Duration::from_secs(2));
+
+    match child.try_wait() {
+        Ok(Some(status)) => Err(format!(
+            "PostgreSQL exited immediately with status: {:?}\n\nCheck logs at: {:?}",
+            status, log_path
+        )),
+        Ok(None) => {
+            let pid = child.id();
+            service_process.child = Some(child);
+            service_process.log_file = Some(log_path);
+            service_process.pid = Some(pid);
+
+            // Set PostgreSQL root password on first run if configured
+            if !settings.postgres_root_password.is_empty() {
+                let password_flag_path = paths.pgsql_data_dir.join(".password_set");
+                if !password_flag_path.exists() {
+                    #[cfg(target_os = "windows")]
+                    let psql_bin = paths.pgsql_dir.join("bin").join("psql.exe");
+                    #[cfg(not(target_os = "windows"))]
+                    let psql_bin = paths.pgsql_dir.join("bin").join("psql");
+
+                    if psql_bin.exists() {
+                        // Wait for PostgreSQL to be ready (with polling instead of blind sleep)
+                        let ready = wait_for_postgres_ready(&psql_bin, service_process.port, &paths.pgsql_dir, 15);
+                        if !ready {
+                            tracing::warn!("PostgreSQL not ready in time, skipping password setup");
+                        } else {
+                            let escaped_pw = settings.postgres_root_password.replace('\'', "''");
+                            let sql = format!("ALTER USER root PASSWORD '{}';", escaped_pw);
+                            let port_str = service_process.port.to_string();
+
+                            let mut psql_cmd = configure_no_window(Command::new(&psql_bin));
+                            psql_cmd
+                                .arg("-h").arg("127.0.0.1")
+                                .arg("-p").arg(&port_str)
+                                .arg("-U").arg("root")
+                                .arg("-d").arg("postgres")
+                                .arg("-c").arg(&sql)
+                                .arg("-w") // Never prompt for password
+                                .stdin(Stdio::null()) // Prevent stdin reads from blocking
+                                .env("PGCONNECT_TIMEOUT", "5");
+
+                            // On Unix, set library path
+                            #[cfg(unix)]
+                            {
+                                let lib_dir = paths.pgsql_dir.join("lib");
+                                let lib_path = lib_dir.to_string_lossy().to_string();
+                                if let Ok(existing) = std::env::var("LD_LIBRARY_PATH") {
+                                    psql_cmd.env("LD_LIBRARY_PATH", format!("{}:{}", lib_path, existing));
+                                } else {
+                                    psql_cmd.env("LD_LIBRARY_PATH", &lib_path);
+                                }
+                                if let Ok(existing) = std::env::var("DYLD_LIBRARY_PATH") {
+                                    psql_cmd.env("DYLD_LIBRARY_PATH", format!("{}:{}", lib_path, existing));
+                                } else {
+                                    psql_cmd.env("DYLD_LIBRARY_PATH", &lib_path);
+                                }
+                            }
+
+                            match psql_cmd.output() {
+                                Ok(output) if output.status.success() => {
+                                    let _ = fs::write(&password_flag_path, "done");
+                                    tracing::info!("PostgreSQL root password set successfully");
+
+                                    // Switch to scram-sha-256 now that password is set
+                                    if let Err(e) = crate::config::generator::generate_pg_hba_conf(
+                                        &paths.pgsql_data_dir, "scram-sha-256",
+                                    ) {
+                                        tracing::warn!("Failed to update pg_hba.conf: {}", e);
+                                    } else {
+                                        // Signal PostgreSQL to reload config
+                                        reload_postgresql_conf(&paths);
+                                    }
+                                }
+                                Ok(output) => {
+                                    tracing::warn!("Failed to set PostgreSQL password: {}",
+                                        String::from_utf8_lossy(&output.stderr));
+                                }
+                                Err(e) => {
+                                    tracing::warn!("Failed to run psql to set password: {}", e);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Ok(())
+        }
+        Err(e) => Err(format!("Failed to check PostgreSQL process: {}", e)),
+    }
+}
+
+/// Wait for PostgreSQL to accept connections by polling with psql
+fn wait_for_postgres_ready(psql_bin: &Path, port: u16, pgsql_dir: &Path, timeout_secs: u64) -> bool {
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(timeout_secs);
+    let port_str = port.to_string();
+
+    while start.elapsed() < timeout {
+        let mut cmd = configure_no_window(Command::new(psql_bin));
+        cmd.arg("-h").arg("127.0.0.1")
+            .arg("-p").arg(&port_str)
+            .arg("-U").arg("root")
+            .arg("-d").arg("postgres")
+            .arg("-c").arg("SELECT 1;")
+            .arg("-w")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .env("PGCONNECT_TIMEOUT", "2");
+
+        #[cfg(unix)]
+        {
+            let lib_dir = pgsql_dir.join("lib");
+            let lib_path = lib_dir.to_string_lossy().to_string();
+            cmd.env("LD_LIBRARY_PATH", &lib_path);
+            cmd.env("DYLD_LIBRARY_PATH", &lib_path);
+        }
+
+        match cmd.output() {
+            Ok(output) if output.status.success() => return true,
+            _ => std::thread::sleep(std::time::Duration::from_millis(500)),
+        }
+    }
+    false
+}
+
+/// Signal PostgreSQL to reload its configuration files
+fn reload_postgresql_conf(paths: &RuntimePaths) {
+    #[cfg(target_os = "windows")]
+    let pg_ctl = paths.pgsql_dir.join("bin").join("pg_ctl.exe");
+    #[cfg(not(target_os = "windows"))]
+    let pg_ctl = paths.pgsql_dir.join("bin").join("pg_ctl");
+
+    if pg_ctl.exists() {
+        let data_dir_str = paths.pgsql_data_dir.to_string_lossy().to_string();
+        let _ = configure_no_window(Command::new(&pg_ctl))
+            .arg("reload")
+            .arg("-D").arg(&data_dir_str)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        tracing::info!("PostgreSQL config reloaded (switched to scram-sha-256)");
+    }
 }
 
 /// Kill any existing processes with the given name to avoid port conflicts
@@ -576,7 +837,7 @@ mod tests {
     fn test_process_manager_new() {
         let manager = ProcessManager::new();
 
-        assert_eq!(manager.services.len(), 3);
+        assert_eq!(manager.services.len(), 4);
 
         let caddy = manager.services.get(&ServiceType::Caddy).unwrap();
         assert_eq!(caddy.name, ServiceType::Caddy);
@@ -588,7 +849,7 @@ mod tests {
     #[test]
     fn test_process_manager_default() {
         let manager = ProcessManager::default();
-        assert_eq!(manager.services.len(), 3);
+        assert_eq!(manager.services.len(), 4);
         assert!(manager.runtime_paths.is_none());
     }
 
@@ -606,7 +867,7 @@ mod tests {
         let manager = ProcessManager::new();
         let statuses = manager.get_all_statuses();
 
-        assert_eq!(statuses.len(), 3);
+        assert_eq!(statuses.len(), 4);
 
         let caddy_info = statuses.get(&ServiceType::Caddy).unwrap();
         assert_eq!(caddy_info.service_type, ServiceType::Caddy);
@@ -662,6 +923,9 @@ mod tests {
 
         let mysql = manager.services.get(&ServiceType::MySQL).unwrap();
         assert_eq!(mysql.port, 3307);
+
+        let pgsql = manager.services.get(&ServiceType::PostgreSQL).unwrap();
+        assert_eq!(pgsql.port, 5433);
     }
 
     #[test]
@@ -721,7 +985,7 @@ mod integration_tests {
 
     /// Check if all required ports are available
     fn are_ports_available() -> bool {
-        is_port_available(8080) && is_port_available(9000) && is_port_available(3307)
+        is_port_available(8080) && is_port_available(9000) && is_port_available(3307) && is_port_available(5433)
     }
 
     /// Wait for a service to reach a specific state, with timeout
@@ -742,7 +1006,7 @@ mod integration_tests {
 
     /// Clean up any running services after test
     fn cleanup_services(manager: &mut ProcessManager) {
-        for service in [ServiceType::Caddy, ServiceType::PhpFpm, ServiceType::MySQL] {
+        for service in [ServiceType::Caddy, ServiceType::PhpFpm, ServiceType::MySQL, ServiceType::PostgreSQL] {
             let _ = manager.stop(service);
         }
         // Give processes time to fully exit
@@ -765,6 +1029,7 @@ mod integration_tests {
                 ServiceType::Caddy => "caddy.log",
                 ServiceType::PhpFpm => "php-fpm.log",
                 ServiceType::MySQL => "mysql.log",
+                ServiceType::PostgreSQL => "postgresql.log",
             };
             let log_path = paths.logs_dir.join(log_name);
             if log_path.exists() {

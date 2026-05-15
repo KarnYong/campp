@@ -10,7 +10,7 @@ mod runtime;
 pub use process::{ServiceInfo, ServiceMap, ServiceState, ServiceType};
 pub use process::manager::ProcessManager;
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::{Manager, Emitter, AppHandle, menu::MenuEvent};
 use tauri::tray::{TrayIconBuilder, TrayIconId};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
@@ -18,13 +18,13 @@ use tauri::image::Image;
 
 // Global state for the process manager
 pub struct AppState {
-    pub process_manager: Mutex<process::manager::ProcessManager>,
+    pub process_manager: Arc<Mutex<process::manager::ProcessManager>>,
 }
 
 impl AppState {
     pub fn new() -> Self {
         Self {
-            process_manager: Mutex::new(process::manager::ProcessManager::new()),
+            process_manager: Arc::new(Mutex::new(process::manager::ProcessManager::new())),
         }
     }
 }
@@ -99,6 +99,7 @@ pub fn run() {
             commands::get_available_packages_cmd,
             commands::get_package_selection,
             commands::update_package_selection,
+            commands::update_db_passwords,
             commands::get_selected_package_ids,
             commands::reload_runtime_config,
             commands::get_installed_versions,
@@ -160,7 +161,8 @@ fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
         "tray-quit" => {
             // Cleanup services before quitting
             if let Some(state) = app.try_state::<AppState>() {
-                let _ = state.process_manager.lock().unwrap().stop_all();
+                let pm = state.process_manager.clone();
+                let _ = pm.lock().unwrap().stop_all();
             }
             std::process::exit(0);
         }

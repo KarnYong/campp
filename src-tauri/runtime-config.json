@@ -5,17 +5,23 @@
     "caddy": {
       "versions": [
         {
-          "id": "caddy-2.8",
-          "version": "2.8.4",
+          "id": "caddy-2.11",
+          "version": "2.11.3",
           "selected": true,
-          "display_name": "Caddy 2.8.4 (Latest)",
-          "checksums": {},
+          "display_name": "Caddy 2.11.3 (Latest)",
+          "checksums": {
+            "windowsX64": "94ba71226d30a07d8eca3f971e88222fafb13f8bc46f391ed01afd6780f9c030",
+            "windowsArm64": "2c1960deb8c5fbc83e7ea3b9807e20c4d50efe3846e5248aa4eb2f6dc437de81",
+            "linuxX64": "3894577b14657feab3624d782f64175050211e52a228a6f57b4f24f4b0d970f3",
+            "macOSX64": "9e6f08758f2a4677d0f3acd3e3ccc541b0475217800325b5e5f4ef56668e4c88",
+            "macOSArm64": "b37757be82ef630dddf359e6f1685731a1c657576ce80c469e0e3e6a8fb49e9d"
+          },
           "urls": {
-            "windowsX64": "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_windows_amd64.zip",
-            "windowsArm64": "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_windows_arm64.zip",
-            "linuxX64": "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_linux_amd64.tar.gz",
-            "macOSX64": "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_mac_amd64.tar.gz",
-            "macOSArm64": "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_mac_arm64.tar.gz"
+            "windowsX64": "https://github.com/caddyserver/caddy/releases/download/v2.11.3/caddy_2.11.3_windows_amd64.zip",
+            "windowsArm64": "https://github.com/caddyserver/caddy/releases/download/v2.11.3/caddy_2.11.3_windows_arm64.zip",
+            "linuxX64": "https://github.com/caddyserver/caddy/releases/download/v2.11.3/caddy_2.11.3_linux_amd64.tar.gz",
+            "macOSX64": "https://github.com/caddyserver/caddy/releases/download/v2.11.3/caddy_2.11.3_mac_amd64.tar.gz",
+            "macOSArm64": "https://github.com/caddyserver/caddy/releases/download/v2.11.3/caddy_2.11.3_mac_arm64.tar.gz"
           }
         }
       ]
@@ -116,6 +122,46 @@
           "lts": false,
           "checksum": "6b99534f72ffb1d7275f50d23ca4141e1495c97d7cadb73a41d6dc580ed5ce29",
           "url": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/phpmyadmin-5.2.2/phpMyAdmin-5.2.2-all-languages.zip"
+        }
+      ]
+    },
+    "postgresql": {
+      "versions": [
+        {
+          "id": "postgresql-18.3",
+          "version": "18.3.0",
+          "selected": true,
+          "display_name": "PostgreSQL 18.3.0 (Latest)",
+          "eol": false,
+          "lts": false,
+          "checksums": {
+            "windowsX64": "5746652708a16ec8a48195da3707b7dafcf6ab2a976761825c0aac74c174bccd",
+            "macOSX64": "cafd061662f8673584240bd238e20dd83c1eefb2baf70e8e9224b7a8c59d41f1",
+            "macOSArm64": "67b2e48b91c61129de6d3c98d7bf6b35e113297b5d6f30c2cd8c6665aa71647b",
+            "linuxX64": "71066f6534cfbc1f6d1f645b3c5c7d2d352eb6a53280fe863a5b3d82614e9f7b",
+            "linuxArm64": "d2a94bc296758f93bc7d29abb12365b1bdb9e32d14ed25086042802995a606cf"
+          },
+          "urls": {
+            "windowsX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.3.0/postgresql-18.3.0-x86_64-pc-windows-msvc.zip",
+            "macOSX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.3.0/postgresql-18.3.0-x86_64-apple-darwin.tar.gz",
+            "macOSArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.3.0/postgresql-18.3.0-aarch64-apple-darwin.tar.gz",
+            "linuxX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.3.0/postgresql-18.3.0-x86_64-unknown-linux-gnu.tar.gz",
+            "linuxArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.3.0/postgresql-18.3.0-aarch64-unknown-linux-gnu.tar.gz"
+          }
+        }
+      ]
+    },
+    "adminer": {
+      "versions": [
+        {
+          "id": "adminer-5.4",
+          "version": "5.4.2",
+          "selected": true,
+          "display_name": "Adminer 5.4.2 (Latest)",
+          "eol": false,
+          "lts": false,
+          "checksum": "f8b1cdc676d72e88d2d470dd05f2dcb7212bf6cdcf78f1eadb7fc292f4cefd39",
+          "url": "https://github.com/vrana/adminer/releases/download/v5.4.2/adminer-5.4.2-en.php"
         }
       ]
     }

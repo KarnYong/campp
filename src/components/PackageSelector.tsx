@@ -6,10 +6,15 @@ import { detectPlatform } from "../utils/platform";
 interface PackageSelectorProps {
   onSelectionChange: (selection: PackageSelection) => void;
   initialSelection?: PackageSelection;
+  initialEnabled?: Record<string, boolean>;
   onEnabledChange?: (enabled: Record<string, boolean>) => void;
+  mysqlPassword?: string;
+  onMysqlPasswordChange?: (password: string) => void;
+  postgresPassword?: string;
+  onPostgresPasswordChange?: (password: string) => void;
 }
 
-export function PackageSelector({ onSelectionChange, initialSelection, onEnabledChange }: PackageSelectorProps) {
+export function PackageSelector({ onSelectionChange, initialSelection, initialEnabled, onEnabledChange, mysqlPassword, onMysqlPasswordChange, postgresPassword, onPostgresPasswordChange }: PackageSelectorProps) {
   const [packages, setPackages] = useState<PackagesConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentPlatform, setCurrentPlatform] = useState<string>("");
@@ -19,15 +24,21 @@ export function PackageSelector({ onSelectionChange, initialSelection, onEnabled
       mysql: "mysql-8.4",
       mariadb: "mariadb-12.3",
       phpmyadmin: "phpmyadmin-5.2",
+      postgresql: "postgresql-18.3",
+      adminer: "adminer-5.1",
     }
   );
-  const [enabled, setEnabled] = useState<Record<string, boolean>>({
-    caddy: true,
-    php: true,
-    mysql: true,
-    mariadb: true,
-    phpmyadmin: true,
-  });
+  const [enabled, setEnabled] = useState<Record<string, boolean>>(
+    initialEnabled || {
+      caddy: true,
+      php: true,
+      mysql: true,
+      mariadb: true,
+      phpmyadmin: true,
+      postgresql: false,
+      adminer: false,
+    }
+  );
 
   useEffect(() => {
     loadPackages();
@@ -99,81 +110,79 @@ export function PackageSelector({ onSelectionChange, initialSelection, onEnabled
 
   const rowStyle = (isEnabled: boolean): React.CSSProperties => ({
     display: "flex",
-    flexDirection: "column",
-    gap: "0.25rem",
+    alignItems: "center",
+    gap: "0.375rem",
     opacity: isEnabled ? 1 : 0.5,
   });
 
+  const selectStyle = (isEnabled: boolean): React.CSSProperties => ({
+    padding: "0.25rem 0.375rem",
+    fontSize: "0.8125rem",
+    flex: 1,
+    minWidth: 0,
+    cursor: isEnabled ? "pointer" : "not-allowed",
+  });
+
+  const pwStyle = (isEnabled: boolean): React.CSSProperties => ({
+    padding: "0.25rem 0.375rem",
+    fontSize: "0.8125rem",
+    width: "6.5rem",
+    cursor: isEnabled ? "text" : "not-allowed",
+  });
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
       {/* Caddy (always enabled) */}
       <div style={rowStyle(true)}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <input
-            type="checkbox"
-            checked={true}
-            disabled={true}
-            style={checkboxStyle(true)}
-          />
-          <label style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--text-primary)" }}>
-            Caddy Web Server
-          </label>
-          <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)", fontWeight: 400 }}>
-            (Required)
-          </span>
-          <span style={{
-            fontSize: "0.75rem",
-            color: "var(--text-secondary)",
-            marginLeft: "auto",
-          }}>
-            v2.8.4
-          </span>
-        </div>
+        <input type="checkbox" checked={true} disabled={true} style={checkboxStyle(true)} />
+        <label style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--text-primary)" }}>
+          Caddy
+        </label>
+        <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)", fontWeight: 400 }}>
+          (Required)
+        </span>
+        <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginLeft: "auto" }}>
+          v2.11.3
+        </span>
       </div>
 
-      {/* PHP Version Selector */}
+      {/* PHP Version */}
       <div style={rowStyle(enabled.php)}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <input
-            type="checkbox"
-            checked={enabled.php}
-            onChange={(e) => handleToggle("php", e.target.checked)}
-            style={checkboxStyle(false)}
-          />
-          <label style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--text-primary)" }}>
-            PHP Version
-          </label>
-        </div>
+        <input
+          type="checkbox"
+          checked={enabled.php}
+          onChange={(e) => handleToggle("php", e.target.checked)}
+          style={checkboxStyle(false)}
+        />
+        <label style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--text-primary)" }}>
+          PHP
+        </label>
         <select
           value={selection.php}
           onChange={(e) => handlePhpChange(e.target.value)}
           disabled={!enabled.php}
           className="input"
-          style={{ cursor: enabled.php ? "pointer" : "not-allowed", padding: "0.375rem 0.5rem", fontSize: "0.875rem", width: "100%" }}
+          style={selectStyle(enabled.php)}
         >
           {packages.php.map((pkg: PhpPackage) => (
             <option key={pkg.id} value={pkg.id}>
-              {pkg.display_name}
-              {pkg.eol && " (EOL)"}
-              {pkg.recommended && " (Recommended)"}
+              {pkg.display_name}{pkg.eol && " (EOL)"}{pkg.recommended && " ★"}
             </option>
           ))}
         </select>
       </div>
 
-      {/* Database Version Selector */}
+      {/* Database Version + Password */}
       <div style={rowStyle(isDbEnabled)}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <input
-            type="checkbox"
-            checked={isDbEnabled}
-            onChange={(e) => handleToggle(dbKey, e.target.checked)}
-            style={checkboxStyle(dbKey === "mariadb" ? false : false)}
-          />
-          <label style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--text-primary)" }}>
-            {dbName} Version
-          </label>
-        </div>
+        <input
+          type="checkbox"
+          checked={isDbEnabled}
+          onChange={(e) => handleToggle(dbKey, e.target.checked)}
+          style={checkboxStyle(false)}
+        />
+        <label style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--text-primary)" }}>
+          {dbName}
+        </label>
         <select
           value={dbKey === "mariadb" ? selection.mariadb : selection.mysql}
           onChange={(e) => {
@@ -185,42 +194,107 @@ export function PackageSelector({ onSelectionChange, initialSelection, onEnabled
           }}
           disabled={!isDbEnabled}
           className="input"
-          style={{ cursor: isDbEnabled ? "pointer" : "not-allowed", padding: "0.375rem 0.5rem", fontSize: "0.875rem", width: "100%" }}
+          style={selectStyle(isDbEnabled)}
         >
           {(dbKey === "mariadb" ? packages.mariadb : packages.mysql).map((pkg: MySQLPackage) => (
             <option key={pkg.id} value={pkg.id}>
-              {pkg.display_name}
-              {pkg.lts && " (LTS)"}
-              {pkg.recommended && " (Recommended)"}
+              {pkg.display_name}{pkg.lts && " (LTS)"}{pkg.recommended && " ★"}
             </option>
           ))}
         </select>
+        <input
+          type="password"
+          value={mysqlPassword || ""}
+          onChange={(e) => onMysqlPasswordChange?.(e.target.value)}
+          placeholder="Password"
+          disabled={!isDbEnabled}
+          className="input"
+          style={pwStyle(isDbEnabled)}
+        />
       </div>
 
-      {/* phpMyAdmin Version Selector */}
+      {/* phpMyAdmin Version */}
       <div style={rowStyle(enabled.phpmyadmin)}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <input
-            type="checkbox"
-            checked={enabled.phpmyadmin}
-            onChange={(e) => handleToggle("phpmyadmin", e.target.checked)}
-            style={checkboxStyle(false)}
-          />
-          <label style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--text-primary)" }}>
-            phpMyAdmin Version
-          </label>
-        </div>
+        <input
+          type="checkbox"
+          checked={enabled.phpmyadmin}
+          onChange={(e) => handleToggle("phpmyadmin", e.target.checked)}
+          style={checkboxStyle(false)}
+        />
+        <label style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--text-primary)" }}>
+          phpMyAdmin
+        </label>
         <select
           value={selection.phpmyadmin}
           onChange={(e) => handlePhpMyAdminChange(e.target.value)}
           disabled={!enabled.phpmyadmin}
           className="input"
-          style={{ cursor: enabled.phpmyadmin ? "pointer" : "not-allowed", padding: "0.375rem 0.5rem", fontSize: "0.875rem", width: "100%" }}
+          style={selectStyle(enabled.phpmyadmin)}
         >
           {packages.phpmyadmin.map((pkg: PhpMyAdminPackage) => (
             <option key={pkg.id} value={pkg.id}>
-              {pkg.display_name}
-              {pkg.recommended && " (Recommended)"}
+              {pkg.display_name}{pkg.recommended && " ★"}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* PostgreSQL Version + Password */}
+      <div style={rowStyle(enabled.postgresql)}>
+        <input
+          type="checkbox"
+          checked={enabled.postgresql}
+          onChange={(e) => handleToggle("postgresql", e.target.checked)}
+          style={checkboxStyle(false)}
+        />
+        <label style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--text-primary)" }}>
+          PostgreSQL
+        </label>
+        <select
+          value={selection.postgresql}
+          onChange={(e) => setSelection({ ...selection, postgresql: e.target.value })}
+          disabled={!enabled.postgresql}
+          className="input"
+          style={selectStyle(enabled.postgresql)}
+        >
+          {packages.postgresql.map((pkg: MySQLPackage) => (
+            <option key={pkg.id} value={pkg.id}>
+              {pkg.display_name}{pkg.recommended && " ★"}
+            </option>
+          ))}
+        </select>
+        <input
+          type="password"
+          value={postgresPassword || ""}
+          onChange={(e) => onPostgresPasswordChange?.(e.target.value)}
+          placeholder="Password"
+          disabled={!enabled.postgresql}
+          className="input"
+          style={pwStyle(enabled.postgresql)}
+        />
+      </div>
+
+      {/* Adminer Version */}
+      <div style={rowStyle(enabled.adminer)}>
+        <input
+          type="checkbox"
+          checked={enabled.adminer}
+          onChange={(e) => handleToggle("adminer", e.target.checked)}
+          style={checkboxStyle(false)}
+        />
+        <label style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--text-primary)" }}>
+          Adminer
+        </label>
+        <select
+          value={selection.adminer}
+          onChange={(e) => setSelection({ ...selection, adminer: e.target.value })}
+          disabled={!enabled.adminer}
+          className="input"
+          style={selectStyle(enabled.adminer)}
+        >
+          {packages.adminer.map((pkg: PhpMyAdminPackage) => (
+            <option key={pkg.id} value={pkg.id}>
+              {pkg.display_name}{pkg.recommended && " ★"}
             </option>
           ))}
         </select>
@@ -229,7 +303,7 @@ export function PackageSelector({ onSelectionChange, initialSelection, onEnabled
       {/* Package Info Box */}
       <div className="info-box" style={{ padding: "0.5rem", fontSize: "0.875rem" }}>
         <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", margin: "0 0 0.375rem 0" }}>
-          {enabledCount} of 4 components selected.
+          {enabledCount} of {Object.keys(enabled).length} components selected.
         </p>
         <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", margin: 0 }}>
           <strong>Note:</strong> EOL versions may have security vulnerabilities.
