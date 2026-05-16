@@ -17,10 +17,10 @@ Download the latest release from [GitHub Releases](https://github.com/KarnYong/c
 **Option A: DEB package (recommended)**
 ```bash
 # Download the latest .deb
-wget https://github.com/KarnYong/campp/releases/latest/download/CAMPP-0.3.1-amd64.deb
+wget https://github.com/KarnYong/campp/releases/latest/download/CAMPP-0.3.2-amd64.deb
 
 # Install
-sudo dpkg -i CAMPP-0.3.1-amd64.deb
+sudo dpkg -i CAMPP-0.3.2-amd64.deb
 
 # If missing dependencies:
 sudo apt-get install -f
@@ -32,13 +32,13 @@ sudo apt-get install -f
 **Option B: AppImage**
 ```bash
 # Download the latest AppImage
-wget https://github.com/KarnYong/campp/releases/latest/download/CAMPP-0.3.1-amd64.AppImage
+wget https://github.com/KarnYong/campp/releases/latest/download/CAMPP-0.3.2-amd64.AppImage
 
 # Make executable
-chmod +x CAMPP-0.3.1-amd64.AppImage
+chmod +x CAMPP-0.3.2-amd64.AppImage
 
 # Run
-./CAMPP-0.3.1-amd64.AppImage
+./CAMPP-0.3.2-amd64.AppImage
 ```
 
 **To uninstall:**

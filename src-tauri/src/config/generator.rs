@@ -181,6 +181,13 @@ realpath_cache_ttl=300
     file.write_all(php_ini_content.as_bytes())
         .map_err(|e| format!("Failed to write php.ini: {}", e))?;
 
+    // Also copy php.ini to the PHP runtime directory so CLI usage works out of the box
+    let runtime_ini = php_dir.join("php.ini");
+    if let Some(parent) = runtime_ini.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let _ = fs::copy(path, &runtime_ini);
+
     Ok(())
 }
 
