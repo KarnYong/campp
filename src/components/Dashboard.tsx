@@ -1,15 +1,18 @@
 import { invoke } from "@tauri-apps/api/core";
+import { emit } from "@tauri-apps/api/event";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useState, useEffect, useCallback } from "react";
 import { ServiceMap, ServiceType, ServiceState, getDatabaseDisplayName } from "../types/services";
 import { ServiceCard } from "./ServiceCard";
 import { StatusBar } from "./StatusBar";
 import { SettingsPanel } from "./SettingsPanel";
+import { DebugMenu } from "./DebugMenu";
 import { detectPlatform } from "../utils/platform";
 
 export function Dashboard() {
   const [services, setServices] = useState<Partial<ServiceMap>>({});
   const [showSettings, setShowSettings] = useState(false);
+  const [showDebugMenu, setShowDebugMenu] = useState(false);
   const [projectRoot, setProjectRoot] = useState<string>("");
   const [installDir, setInstallDir] = useState<string>("");
   const [installedVersions, setInstalledVersions] = useState<Record<string, string>>({});
@@ -229,6 +232,14 @@ export function Dashboard() {
               </button>
               <button
                 className="btn-quick-action"
+                onClick={() => setShowDebugMenu(true)}
+                title="Open Debug Menu"
+              >
+                <span style={{ fontSize: "1rem" }}>🔧</span>
+                Debug
+              </button>
+              <button
+                className="btn-quick-action"
                 onClick={async () => {
                   try {
                     await invoke("open_manual");
@@ -427,6 +438,46 @@ export function Dashboard() {
             onSettingsChanged={async () => {
               await refreshStatuses();
               await loadInstalledVersions();
+            }}
+          />
+        )}
+
+        {/* Debug Menu */}
+        {showDebugMenu && (
+          <DebugMenu
+            onClose={() => setShowDebugMenu(false)}
+            onOpenRuntimeFolder={async () => {
+              try {
+                const runtimeDir = await invoke<string>("get_runtime_dir");
+                await invoke("open_folder", { path: runtimeDir });
+              } catch (error) {
+                console.error("Failed to open folder:", error);
+                alert("Failed to open folder: " + error);
+              }
+            }}
+            onOpenDownloadFolder={async () => {
+              try {
+                const downloadDir = await invoke<string>("get_download_dir");
+                await invoke("open_folder", { path: downloadDir });
+              } catch (error) {
+                console.error("Failed to open download folder:", error);
+                alert("Failed to open download folder: " + error);
+              }
+            }}
+            onResetInstallation={async () => {
+              if (confirm("Reset installation? This will stop all services and delete runtime binaries.")) {
+                try {
+                  await invoke("cleanup_all_services");
+                  await invoke("reset_installation");
+                  window.location.reload();
+                } catch (error) {
+                  console.error("Failed to reset:", error);
+                  alert("Failed to reset: " + error);
+                }
+              }
+            }}
+            onShowWizard={() => {
+              emit("show-wizard");
             }}
           />
         )}

@@ -3,24 +3,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Dashboard } from "./components/Dashboard";
 import { FirstRunWizard } from "./components/FirstRunWizard";
-import { DebugMenu } from "./components/DebugMenu";
 import "./App.css";
 
 function App() {
   const [isFirstRun, setIsFirstRun] = useState<boolean | null>(null);
-  const [showDebugMenu, setShowDebugMenu] = useState(false);
 
   useEffect(() => {
     checkRuntimeInstalled();
-
-    // Debug mode: press Ctrl+Shift+D to toggle debug menu
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.key === "D") {
-        setShowDebugMenu((prev) => !prev);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyPress);
 
     // Listen for show-wizard event from menu
     const unlisten = listen("show-wizard", () => {
@@ -37,7 +26,6 @@ function App() {
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
-      window.removeEventListener("keydown", handleKeyPress);
       window.removeEventListener("beforeunload", handleBeforeUnload);
       unlisten.then((fn) => fn());
     };
@@ -56,41 +44,6 @@ function App() {
 
   const handleWizardComplete = () => {
     setIsFirstRun(false);
-  };
-
-  const handleResetInstallation = async () => {
-    if (confirm("Reset installation? This will stop all services and delete runtime binaries.")) {
-      try {
-        // Stop all services first
-        await invoke("cleanup_all_services");
-        await invoke("reset_installation");
-        setIsFirstRun(true);
-        setShowDebugMenu(false);
-      } catch (error) {
-        console.error("Failed to reset:", error);
-        alert("Failed to reset: " + error);
-      }
-    }
-  };
-
-  const handleOpenRuntimeFolder = async () => {
-    try {
-      const runtimeDir = await invoke<string>("get_runtime_dir");
-      await invoke("open_folder", { path: runtimeDir });
-    } catch (error) {
-      console.error("Failed to open folder:", error);
-      alert("Failed to open folder: " + error);
-    }
-  };
-
-  const handleOpenDownloadFolder = async () => {
-    try {
-      const downloadDir = await invoke<string>("get_download_dir");
-      await invoke("open_folder", { path: downloadDir });
-    } catch (error) {
-      console.error("Failed to open download folder:", error);
-      alert("Failed to open download folder: " + error);
-    }
   };
 
   if (isFirstRun === null) {
@@ -115,15 +68,6 @@ function App() {
 
   return (
     <>
-      {showDebugMenu && (
-        <DebugMenu
-          onClose={() => setShowDebugMenu(false)}
-          onOpenRuntimeFolder={handleOpenRuntimeFolder}
-          onOpenDownloadFolder={handleOpenDownloadFolder}
-          onResetInstallation={handleResetInstallation}
-          onShowWizard={() => setIsFirstRun(true)}
-        />
-      )}
       <Dashboard />
     </>
   );

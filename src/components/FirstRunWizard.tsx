@@ -163,6 +163,16 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
   const startDownload = async () => {
     setError(null);
 
+    const dbKey = currentPlatform === "linux" ? "mariadb" : "mysql";
+    if (enabledComponents[dbKey] && !mysqlPassword.trim()) {
+      setError("MySQL password is required.");
+      return;
+    }
+    if (enabledComponents.postgresql && !postgresPassword.trim()) {
+      setError("PostgreSQL password is required.");
+      return;
+    }
+
     // First, check system dependencies
     try {
       const depsResult = await invoke<DependencyCheckResult>("check_system_dependencies");
@@ -513,6 +523,13 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
                 onPostgresPasswordChange={setPostgresPassword}
               />
 
+              {error && (
+                <div className="error-box" style={{ marginBottom: "0.5rem", padding: "0.5rem", fontSize: "0.875rem" }}>
+                  <p className="error-box-text" style={{ margin: 0, fontSize: "0.8125rem", lineHeight: 1.4 }}>
+                    {error}
+                  </p>
+                </div>
+              )}
               <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem" }}>
                 <button onClick={handleBack} className="btn-secondary" style={{ fontSize: "0.875rem", padding: "0.5rem 1rem" }}>
                   Back

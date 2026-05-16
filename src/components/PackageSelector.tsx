@@ -46,6 +46,12 @@ export function PackageSelector({ onSelectionChange, initialSelection, initialEn
   }, []);
 
   useEffect(() => {
+    if (initialEnabled) {
+      setEnabled(initialEnabled);
+    }
+  }, [initialEnabled]);
+
+  useEffect(() => {
     if (packages) {
       onSelectionChange(selection);
     }
