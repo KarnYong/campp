@@ -814,8 +814,7 @@ impl RuntimeDownloader {
                     fs::create_dir_all(parent)
                         .map_err(|e| format!("Failed to create parent directory: {}", e))?;
                 }
-                let mut outfile = File::create(&outpath)
-                    .map_err(|e| format!("Failed to create file: {}", e))?;
+                let mut outfile = create_file_with_retry(&outpath)?;
                 io::copy(&mut file, &mut outfile)
                     .map_err(|e| format!("Failed to write file: {}", e))?;
 
@@ -846,9 +845,7 @@ impl RuntimeDownloader {
         let decoder = GzDecoder::new(file);
         let mut archive = tar::Archive::new(decoder);
 
-        archive
-            .unpack(dest_dir)
-            .map_err(|e| format!("Failed to extract {}: {}", archive_path.display(), e))?;
+        extract_tar_entries(&mut archive, dest_dir, archive_path)?;
 
         Self::set_binary_permissions(dest_dir);
         Ok(())
@@ -861,9 +858,7 @@ impl RuntimeDownloader {
         let decoder = XzDecoder::new(file);
         let mut archive = tar::Archive::new(decoder);
 
-        archive
-            .unpack(dest_dir)
-            .map_err(|e| format!("Failed to extract {}: {}", archive_path.display(), e))?;
+        extract_tar_entries(&mut archive, dest_dir, archive_path)?;
 
         Self::set_binary_permissions(dest_dir);
         Ok(())
@@ -945,6 +940,12 @@ impl RuntimeDownloader {
         progress_cb: ProgressCallback,
         skip_list: &[&str],
     ) -> Result<Vec<PathBuf>, String> {
+        // Kill any lingering service processes that may lock files in the runtime dir
+        kill_runtime_processes();
+        // Clean up any stale temp downloads
+        let temp_dir = std::env::temp_dir().join("campp-download");
+        let _ = fs::remove_dir_all(&temp_dir);
+
         // On Linux, use MariaDB instead of MySQL
         let db_component = match self.platform {
             Platform::LinuxX64 | Platform::LinuxArm64 => BinaryComponent::MariaDB,
@@ -979,8 +980,9 @@ impl RuntimeDownloader {
         for (i, component) in components.iter().enumerate() {
             let component_name = component.binary_name();
 
-            // Skip if component is in skip list
-            if skip_list.contains(&component_name) {
+            // Skip if component is in skip list (but never skip required components)
+            let required = matches!(*component, BinaryComponent::Caddy | BinaryComponent::Php);
+            if !required && skip_list.contains(&component_name) {
                 tracing::info!("Skipping {} (already installed)", component.name());
                 continue;
             }
@@ -1074,6 +1076,9 @@ impl RuntimeDownloader {
             // Create marker file to indicate component was installed with version
             let version = self.get_component_version(&component);
             let marker_file = runtime_dir.join(format!("{}_installed.txt", component.binary_name()));
+            if let Some(parent) = marker_file.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
             fs::write(&marker_file, format!("version={}\ninstalled_at={:?}", version, std::time::SystemTime::now()))
                 .map_err(|e| format!("Failed to create marker file: {}", e))?;
 
@@ -1369,4 +1374,87 @@ fn is_executable(name: &str) -> bool {
         || name.ends_with("pg_ctl")
         || name.ends_with("initdb")
         || name.contains("bin/")
+}
+
+/// Kill service processes that may hold file locks in the runtime directory
+fn kill_runtime_processes() {
+    #[cfg(windows)]
+    {
+        use std::process::Command;
+        for name in &["caddy.exe", "php-cgi.exe", "mysqld.exe", "postgres.exe"] {
+            let _ = Command::new("taskkill")
+                .args(["/F", "/IM", name])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .output();
+        }
+    }
+
+    #[cfg(unix)]
+    {
+        use std::process::Command;
+        for name in &["caddy", "php-cgi", "mysqld", "postgres"] {
+            let _ = Command::new("pkill")
+                .args(["-9", name])
+                .output();
+        }
+    }
+
+    std::thread::sleep(std::time::Duration::from_millis(1000));
+}
+
+/// Create a file with retry on Windows to handle transient file-locking errors (os error 32)
+fn create_file_with_retry(path: &Path) -> Result<File, String> {
+    let mut attempts = 0;
+    let max_attempts = 5;
+
+    loop {
+        match File::create(path) {
+            Ok(f) => return Ok(f),
+            Err(e) if attempts < max_attempts => {
+                attempts += 1;
+                std::thread::sleep(std::time::Duration::from_millis(500 * attempts as u64));
+                // Try killing processes that might be locking the file
+                kill_runtime_processes();
+            }
+            Err(e) => return Err(format!(
+                "Failed to create file '{}' after {} attempts: {}",
+                path.display(), max_attempts, e
+            )),
+        }
+    }
+}
+
+/// Extract tar archive entries with retry on file creation (handles Windows file locking)
+fn extract_tar_entries<R: std::io::Read>(
+    archive: &mut tar::Archive<R>,
+    dest_dir: &Path,
+    archive_path: &Path,
+) -> Result<(), String> {
+    let entries = archive.entries()
+        .map_err(|e| format!("Failed to read entries from {}: {}", archive_path.display(), e))?;
+
+    for entry_result in entries {
+        let mut entry = entry_result
+            .map_err(|e| format!("Failed to read entry from {}: {}", archive_path.display(), e))?;
+
+        let entry_path = entry.path()
+            .map_err(|e| format!("Invalid entry path: {}", e))?;
+        let outpath = dest_dir.join(&entry_path);
+
+        if entry.header().entry_type() == tar::EntryType::Directory {
+            fs::create_dir_all(&outpath)
+                .map_err(|e| format!("Failed to create directory '{}': {}", outpath.display(), e))?;
+        } else {
+            if let Some(parent) = outpath.parent() {
+                fs::create_dir_all(parent)
+                    .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+            }
+            let mut outfile = create_file_with_retry(&outpath)?;
+            io::copy(&mut entry, &mut outfile)
+                .map_err(|e| format!("Failed to write file '{}': {}", outpath.display(), e))?;
+        }
+    }
+
+    Ok(())
 }

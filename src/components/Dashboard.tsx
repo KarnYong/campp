@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { emit } from "@tauri-apps/api/event";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useState, useEffect, useCallback } from "react";
 import { ServiceMap, ServiceType, ServiceState, getDatabaseDisplayName } from "../types/services";
@@ -465,19 +464,15 @@ export function Dashboard() {
               }
             }}
             onResetInstallation={async () => {
-              if (confirm("Reset installation? This will stop all services and delete runtime binaries.")) {
-                try {
-                  await invoke("cleanup_all_services");
-                  await invoke("reset_installation");
-                  window.location.reload();
-                } catch (error) {
-                  console.error("Failed to reset:", error);
-                  alert("Failed to reset: " + error);
-                }
+              alert("This will reset your installation. All services will be stopped and all binaries, databases, and settings will be deleted. Your projects folder will be kept.");
+              if (!confirm("Are you sure you want to reset?")) return;
+              try {
+                await invoke("reset_installation");
+                window.location.reload();
+              } catch (error) {
+                console.error("Failed to reset:", error);
+                alert("Failed to reset: " + error);
               }
-            }}
-            onShowWizard={() => {
-              emit("show-wizard");
             }}
           />
         )}

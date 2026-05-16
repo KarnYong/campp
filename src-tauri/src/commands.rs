@@ -8,8 +8,10 @@ use crate::runtime::downloader::{DownloadProgress, RuntimeDownloader};
 use crate::runtime::packages::{PackageSelection, PackagesConfig};
 use crate::config::AppSettings;
 use crate::AppState;
+use crate::ProcessManager;
 use std::fs;
-use std::sync::Mutex;
+use std::process::Command;
+use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager, State};
 
 /// Open a folder in the system's file explorer using tauri-plugin-opener
@@ -183,6 +185,10 @@ pub async fn get_settings() -> Result<crate::config::AppSettings, String> {
 /// Save app settings
 #[tauri::command]
 pub async fn save_settings(settings: crate::config::AppSettings, state: State<'_, AppState>) -> Result<(), String> {
+    let old_settings = crate::config::AppSettings::load();
+    let mysql_changed = old_settings.mysql_root_password != settings.mysql_root_password;
+    let postgres_changed = old_settings.postgres_root_password != settings.postgres_root_password;
+
     // Save the settings first
     settings.save()?;
 
@@ -191,6 +197,14 @@ pub async fn save_settings(settings: crate::config::AppSettings, state: State<'_
     tokio::task::spawn_blocking(move || {
         let mut manager = pm.lock()
             .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
+
+        // If PostgreSQL password changed, remove .password_set flag so it gets re-applied on start
+        if postgres_changed {
+            if let Some(paths) = manager.get_runtime_paths() {
+                let flag = paths.pgsql_data_dir.join(".password_set");
+                let _ = fs::remove_file(&flag);
+            }
+        }
 
         // Get the current running services before updating ports
         let running_services: Vec<ServiceType> = manager.get_all_statuses()
@@ -201,6 +215,15 @@ pub async fn save_settings(settings: crate::config::AppSettings, state: State<'_
 
         // Update ports in the process manager
         manager.update_ports(&settings);
+
+        // If MySQL password changed and MySQL is running, apply inline before restart
+        if mysql_changed && running_services.contains(&ServiceType::MySQL) {
+            apply_mysql_password(&manager, &settings.mysql_root_password);
+        }
+        // If PostgreSQL password changed and PostgreSQL is running, apply inline
+        if postgres_changed && running_services.contains(&ServiceType::PostgreSQL) {
+            apply_postgres_password(&manager, &settings.postgres_root_password);
+        }
 
         // Restart any running services with new configuration
         for service in running_services {
@@ -252,16 +275,108 @@ pub async fn check_runtime_installed() -> Result<bool, String> {
 
 /// Reset installation (for testing/debug - deletes runtime directory)
 #[tauri::command]
-pub async fn reset_installation() -> Result<String, String> {
-    let downloader = RuntimeDownloader::new()?;
-    let runtime_dir = downloader.get_runtime_dir().map_err(|e| e.to_string())?;
+pub async fn reset_installation(state: State<'_, AppState>) -> Result<String, String> {
+    let pm = state.process_manager.clone();
+    do_reset_installation(pm).await
+}
 
-    if runtime_dir.exists() {
-        fs::remove_dir_all(&runtime_dir)
-            .map_err(|e| format!("Failed to remove runtime directory: {}", e))?;
+/// Core reset logic, usable from both Tauri commands and menu handlers
+pub async fn do_reset_installation(pm: Arc<Mutex<ProcessManager>>) -> Result<String, String> {
+    // Stop all managed services
+    let pm_clone = pm.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut manager = pm_clone.lock()
+            .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
+        let _ = manager.stop_all();
+        Ok::<(), String>(())
+    }).await.map_err(|e| format!("Task error: {}", e))??;
+
+    // Kill any lingering processes that may still hold file locks
+    kill_runtime_processes();
+
+    let paths = crate::runtime::locator::get_app_data_paths()?;
+
+    // Delete runtime binaries, config, data, and logs — but preserve projects
+    for dir in [&paths.runtime_dir, &paths.config_dir, &paths.mysql_data_dir, &paths.pgsql_data_dir, &paths.logs_dir] {
+        if dir.exists() {
+            remove_dir_all_with_retry(dir)?;
+        }
+    }
+
+    // Also delete the settings file so the wizard starts fresh
+    let settings_path = paths.config_dir.join("settings.json");
+    if settings_path.exists() {
+        let _ = fs::remove_file(&settings_path);
     }
 
     Ok("Installation reset. Run the app again to see first-run wizard.".to_string())
+}
+
+fn kill_runtime_processes() {
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/IM", "caddy.exe"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .output();
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/IM", "php-cgi.exe"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .output();
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/IM", "mysqld.exe"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .output();
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/IM", "postgres.exe"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .output();
+    }
+
+    #[cfg(unix)]
+    {
+        let _ = std::process::Command::new("pkill")
+            .args(["-9", "caddy"])
+            .output();
+        let _ = std::process::Command::new("pkill")
+            .args(["-9", "php-cgi"])
+            .output();
+        let _ = std::process::Command::new("pkill")
+            .args(["-9", "mysqld"])
+            .output();
+        let _ = std::process::Command::new("pkill")
+            .args(["-9", "postgres"])
+            .output();
+    }
+
+    // Give processes time to fully exit and release file locks
+    std::thread::sleep(std::time::Duration::from_millis(1000));
+}
+
+fn remove_dir_all_with_retry(path: &std::path::Path) -> Result<(), String> {
+    let mut attempts = 0;
+    let max_attempts = 5;
+
+    loop {
+        match fs::remove_dir_all(path) {
+            Ok(()) => return Ok(()),
+            Err(e) if attempts < max_attempts => {
+                attempts += 1;
+                std::thread::sleep(std::time::Duration::from_millis(500 * attempts as u64));
+                // Re-kill processes in case they restarted or are slow to release locks
+                kill_runtime_processes();
+            }
+            Err(e) => return Err(format!(
+                "Failed to remove runtime directory after {} attempts: {}. \
+                 Please stop all services manually and try again.",
+                max_attempts, e
+            )),
+        }
+    }
 }
 
 /// Get the runtime directory path
@@ -391,17 +506,168 @@ pub async fn update_package_selection(
     Ok(())
 }
 
-/// Update database root passwords in settings
+/// Update database root passwords in settings and apply to running databases
 #[tauri::command]
 pub async fn update_db_passwords(
+    state: State<'_, AppState>,
     mysql_password: String,
     postgres_password: String,
 ) -> Result<(), String> {
-    let mut settings = AppSettings::load();
-    settings.mysql_root_password = mysql_password;
-    settings.postgres_root_password = postgres_password;
+    let old_settings = AppSettings::load();
+
+    let mysql_changed = old_settings.mysql_root_password != mysql_password;
+    let postgres_changed = old_settings.postgres_root_password != postgres_password;
+
+    // Save new passwords to settings file
+    let mut settings = old_settings;
+    settings.mysql_root_password = mysql_password.clone();
+    settings.postgres_root_password = postgres_password.clone();
     settings.save()?;
-    Ok(())
+
+    // Apply password changes to running databases
+    let pm = state.process_manager.clone();
+    tokio::task::spawn_blocking(move || {
+        let manager = pm.lock()
+            .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
+
+        if mysql_changed {
+            apply_mysql_password(&manager, &mysql_password);
+        }
+        if postgres_changed {
+            apply_postgres_password(&manager, &postgres_password);
+        }
+
+        Ok::<(), String>(())
+    }).await.map_err(|e| format!("Task error: {}", e))?
+}
+
+fn apply_mysql_password(manager: &crate::ProcessManager, password: &str) {
+    let paths = match manager.get_runtime_paths() {
+        Some(p) => p,
+        None => return,
+    };
+
+    if manager.status(ServiceType::MySQL) != ServiceState::Running {
+        return;
+    }
+
+    let password_sql = if password.is_empty() {
+        "''".to_string()
+    } else {
+        format!("'{}'", password.replace('\'', "\\'"))
+    };
+
+    // mysql client is in the same bin/ directory as mysqld
+    let mysql_bin_dir = paths.mysql.parent().unwrap_or_else(|| std::path::Path::new(""));
+    #[cfg(target_os = "windows")]
+    let mysql_client = mysql_bin_dir.join("mysql.exe");
+    #[cfg(not(target_os = "windows"))]
+    let mysql_client = mysql_bin_dir.join("mysql");
+
+    if !mysql_client.exists() {
+        tracing::warn!("MySQL client not found at {:?}, password will apply on next restart", mysql_client);
+        return;
+    }
+
+    let port_str = manager.get_service_port(ServiceType::MySQL)
+        .unwrap_or(crate::config::settings::DEFAULT_PORTS.mysql)
+        .to_string();
+
+    let old_password = manager.get_settings().mysql_root_password.clone();
+
+    let sql = format!(
+        "ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY {}; FLUSH PRIVILEGES;",
+        password_sql
+    );
+
+    let mut cmd = crate::process::manager::configure_no_window(Command::new(&mysql_client));
+    cmd.arg("-h").arg("127.0.0.1")
+        .arg("-P").arg(&port_str)
+        .arg("-u").arg("root");
+
+    if !old_password.is_empty() {
+        cmd.arg(format!("-p{}", old_password));
+    }
+
+    cmd.arg("-e").arg(&sql)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+
+    match cmd.status() {
+        Ok(s) if s.success() => tracing::info!("MySQL password updated successfully"),
+        _ => tracing::warn!("Failed to update MySQL password inline, will apply on next restart"),
+    }
+}
+
+fn apply_postgres_password(manager: &crate::ProcessManager, password: &str) {
+    let paths = match manager.get_runtime_paths() {
+        Some(p) => p,
+        None => return,
+    };
+
+    if manager.status(ServiceType::PostgreSQL) != ServiceState::Running {
+        // Service not running — remove flag so password gets set on next start
+        let flag = paths.pgsql_data_dir.join(".password_set");
+        let _ = fs::remove_file(&flag);
+        tracing::info!("PostgreSQL not running, password will be applied on next start");
+        return;
+    }
+
+    #[cfg(target_os = "windows")]
+    let psql_bin = paths.pgsql_dir.join("bin").join("psql.exe");
+    #[cfg(not(target_os = "windows"))]
+    let psql_bin = paths.pgsql_dir.join("bin").join("psql");
+
+    if !psql_bin.exists() {
+        return;
+    }
+
+    let port_str = manager.get_service_port(ServiceType::PostgreSQL)
+        .unwrap_or(crate::config::settings::DEFAULT_PORTS.postgres)
+        .to_string();
+
+    let escaped_pw = password.replace('\'', "''");
+    let sql = format!("ALTER USER root PASSWORD '{}';", escaped_pw);
+
+    let mut cmd = crate::process::manager::configure_no_window(Command::new(&psql_bin));
+    cmd.arg("-h").arg("127.0.0.1")
+        .arg("-p").arg(&port_str)
+        .arg("-U").arg("root")
+        .arg("-d").arg("postgres")
+        .arg("-c").arg(&sql)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+
+    let old_password = manager.get_settings().postgres_root_password.clone();
+    if !old_password.is_empty() {
+        cmd.env("PGPASSWORD", &old_password);
+    }
+    cmd.env("PGCONNECT_TIMEOUT", "5");
+
+    #[cfg(unix)]
+    {
+        let lib_dir = paths.pgsql_dir.join("lib");
+        let lib_path = lib_dir.to_string_lossy().to_string();
+        if let Ok(existing) = std::env::var("LD_LIBRARY_PATH") {
+            cmd.env("LD_LIBRARY_PATH", format!("{}:{}", lib_path, existing));
+        } else {
+            cmd.env("LD_LIBRARY_PATH", &lib_path);
+        }
+    }
+
+    match cmd.output() {
+        Ok(output) if output.status.success() => {
+            tracing::info!("PostgreSQL password updated successfully");
+        }
+        Ok(output) => {
+            tracing::warn!("Failed to update PostgreSQL password: {}",
+                String::from_utf8_lossy(&output.stderr));
+        }
+        Err(e) => {
+            tracing::warn!("Failed to run psql to update password: {}", e);
+        }
+    }
 }
 
 /// Get the selected package IDs from runtime-config.json

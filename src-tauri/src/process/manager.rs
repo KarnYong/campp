@@ -6,6 +6,8 @@ use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+const DEFAULT_INDEX_PHP: &str = r#"<?php phpinfo(); ?>"#;
+
 // Windows-specific: Constant to hide console window
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -114,6 +116,18 @@ impl ProcessManager {
         }
     }
 
+    pub fn get_runtime_paths(&self) -> Option<RuntimePaths> {
+        self.runtime_paths.clone()
+    }
+
+    pub fn get_settings(&self) -> &crate::config::AppSettings {
+        &self.settings
+    }
+
+    pub fn get_service_port(&self, service: ServiceType) -> Option<u16> {
+        self.services.get(&service).map(|s| s.port)
+    }
+
     fn port_for_service(service_type: ServiceType, settings: &crate::config::AppSettings) -> u16 {
         match service_type {
             ServiceType::Caddy => settings.web_port,
@@ -173,6 +187,9 @@ impl ProcessManager {
 
     /// Start a service
     pub fn start(&mut self, service: ServiceType) -> Result<(), String> {
+        // Reload settings from disk to pick up any password/port changes
+        self.settings = crate::config::AppSettings::load();
+
         // Ensure we have runtime paths
         if self.runtime_paths.is_none() {
             self.initialize()?;
@@ -180,6 +197,12 @@ impl ProcessManager {
 
         // Clone the paths we need before the mutable borrow
         let paths = self.runtime_paths.as_ref().ok_or("Runtime paths not initialized")?.clone();
+
+        // Ensure default index.php exists in projects directory
+        let index_php = paths.projects_dir.join("index.php");
+        if !index_php.exists() {
+            let _ = fs::write(&index_php, DEFAULT_INDEX_PHP);
+        }
 
         let service_process = self
             .services
@@ -365,9 +388,11 @@ fn start_caddy(service_process: &mut ServiceProcess, paths: &RuntimePaths, php_p
     // Kill any existing Caddy processes to avoid port conflicts
     kill_existing_processes("caddy");
 
-    // Generate phpMyAdmin config if needed
     let settings = crate::config::AppSettings::load();
-    crate::config::generator::generate_phpmyadmin_config(paths, mysql_port, &settings.mysql_root_password)?;
+    // Generate phpMyAdmin config only if phpMyAdmin is installed
+    if paths.phpmyadmin.join("index.php").exists() {
+        crate::config::generator::generate_phpmyadmin_config(paths, mysql_port, &settings.mysql_root_password)?;
+    }
     // Generate Adminer launcher only if Adminer is installed
     if paths.adminer.join("adminer.php").exists() {
         crate::config::generator::generate_adminer_config(

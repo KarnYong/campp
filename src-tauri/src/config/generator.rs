@@ -16,24 +16,27 @@ pub fn generate_caddyfile(path: &PathBuf, paths: &RuntimePaths, port: u16, php_p
         .to_str()
         .ok_or("Invalid log path")?
         .replace('\\', "/");
-    let phpmyadmin = paths.phpmyadmin
-        .to_str()
-        .ok_or("Invalid phpMyAdmin path")?
-        .replace('\\', "/");
 
     let mut content = String::new();
     content.push_str(&format!("http://localhost:{} {{\n", port));
-    content.push_str("    # phpMyAdmin - must come before global directives\n");
-    content.push_str("    # Redirect /phpmyadmin to /phpmyadmin/\n");
-    content.push_str("    redir /phpmyadmin /phpmyadmin/\n");
-    content.push_str("\n");
-    content.push_str("    # Handle phpMyAdmin requests - handle_path strips the /phpmyadmin prefix\n");
-    content.push_str("    handle_path /phpmyadmin/* {\n");
-    content.push_str(&format!("        root * \"{}\"\n", phpmyadmin));
-    content.push_str(&format!("        php_fastcgi 127.0.0.1:{}\n", php_port));
-    content.push_str("        file_server browse\n");
-    content.push_str("    }\n");
-    content.push_str("\n");
+
+    // Add phpMyAdmin route only if installed
+    if paths.phpmyadmin.join("index.php").exists() {
+        let phpmyadmin = paths.phpmyadmin
+            .to_str()
+            .ok_or("Invalid phpMyAdmin path")?
+            .replace('\\', "/");
+        content.push_str("    # Redirect /phpmyadmin to /phpmyadmin/\n");
+        content.push_str("    redir /phpmyadmin /phpmyadmin/\n");
+        content.push_str("\n");
+        content.push_str("    # Handle phpMyAdmin requests - handle_path strips the /phpmyadmin prefix\n");
+        content.push_str("    handle_path /phpmyadmin/* {\n");
+        content.push_str(&format!("        root * \"{}\"\n", phpmyadmin));
+        content.push_str(&format!("        php_fastcgi 127.0.0.1:{}\n", php_port));
+        content.push_str("        file_server browse\n");
+        content.push_str("    }\n");
+        content.push_str("\n");
+    }
 
     // Add Adminer route if directory exists
     let adminer_php = paths.adminer.join("adminer.php");
@@ -57,8 +60,10 @@ pub fn generate_caddyfile(path: &PathBuf, paths: &RuntimePaths, port: u16, php_p
     content.push_str("    # Root directory for serving files (default project root)\n");
     content.push_str(&format!("    root * \"{}\"\n", projects));
     content.push_str("\n");
-    content.push_str("    # Enable PHP for all other requests\n");
-    content.push_str(&format!("    php_fastcgi 127.0.0.1:{}\n", php_port));
+    content.push_str("    # Serve PHP files via FastCGI\n");
+    content.push_str(&format!("    php_fastcgi 127.0.0.1:{} {{\n", php_port));
+    content.push_str("        index index.php\n");
+    content.push_str("    }\n");
     content.push_str("\n");
     content.push_str("    # File server for project files\n");
     content.push_str("    file_server browse\n");

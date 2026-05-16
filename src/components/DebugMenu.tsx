@@ -3,10 +3,9 @@ interface DebugMenuProps {
   onOpenRuntimeFolder: () => void;
   onOpenDownloadFolder: () => void;
   onResetInstallation: () => void;
-  onShowWizard: () => void;
 }
 
-export function DebugMenu({ onClose, onOpenRuntimeFolder, onOpenDownloadFolder, onResetInstallation, onShowWizard }: DebugMenuProps) {
+export function DebugMenu({ onClose, onOpenRuntimeFolder, onOpenDownloadFolder, onResetInstallation }: DebugMenuProps) {
   return (
     <div className="debug-menu">
       <div className="debug-menu-header">
@@ -24,9 +23,6 @@ export function DebugMenu({ onClose, onOpenRuntimeFolder, onOpenDownloadFolder, 
         </button>
         <button className="debug-menu-btn" onClick={onResetInstallation}>
           Reset Installation
-        </button>
-        <button className="debug-menu-btn" onClick={onShowWizard}>
-          Show First-Run Wizard
         </button>
       </div>
     </div>

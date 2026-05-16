@@ -73,7 +73,7 @@ export function PackageSelector({ onSelectionChange, initialSelection, initialEn
   };
 
   const handleToggle = (component: string, checked: boolean) => {
-    if (component === "caddy") return; // Caddy is always required
+    if (component === "caddy" || component === "php") return; // Caddy and PHP are always required
     const newEnabled = { ...enabled, [component]: checked };
     setEnabled(newEnabled);
   };
@@ -153,16 +153,19 @@ export function PackageSelector({ onSelectionChange, initialSelection, initialEn
       </div>
 
       {/* PHP Version */}
-      <div style={rowStyle(enabled.php)}>
+      <div style={rowStyle(true)}>
         <input
           type="checkbox"
-          checked={enabled.php}
-          onChange={(e) => handleToggle("php", e.target.checked)}
-          style={checkboxStyle(false)}
+          checked={true}
+          disabled={true}
+          style={checkboxStyle(true)}
         />
         <label style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--text-primary)" }}>
           PHP
         </label>
+        <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)", fontWeight: 400 }}>
+          (Required)
+        </span>
         <select
           value={selection.php}
           onChange={(e) => handlePhpChange(e.target.value)}

@@ -112,8 +112,12 @@ pub fn locate_runtime_binaries() -> Result<RuntimePaths, String> {
         ));
     }
 
-    // Detect phpMyAdmin directory (may be versioned like phpMyAdmin-5.2.2-all-languages)
-    let phpmyadmin_path = detect_phpmyadmin_directory(runtime_dir)?;
+    // Detect phpMyAdmin directory (optional — may not be installed)
+    let phpmyadmin_path = detect_phpmyadmin_directory(runtime_dir)
+        .unwrap_or_else(|e| {
+            tracing::info!("phpMyAdmin not detected (optional): {}", e);
+            runtime_dir.join("phpmyadmin")
+        });
 
     // Detect PostgreSQL directory (optional — theseus-rs archives extract to postgresql-VERSION-TARGET/)
     let pgsql_dir = detect_postgresql_directory(runtime_dir)
@@ -129,12 +133,19 @@ pub fn locate_runtime_binaries() -> Result<RuntimePaths, String> {
             runtime_dir.join("adminer")
         });
 
+    // Detect MySQL/MariaDB (optional — user may not install a database)
+    let mysql_path = detect_mysql_binary(runtime_dir)
+        .unwrap_or_else(|e| {
+            tracing::info!("MySQL/MariaDB not detected (optional): {}", e);
+            runtime_dir.join("mysql").join("bin").join("mysqld")
+        });
+
     Ok(RuntimePaths {
         caddy: detect_caddy_binary(runtime_dir)?,
         php_cgi: detect_php_binary(runtime_dir)?,
         php_ini: detect_php_ini(runtime_dir)?,
         php_ext_dir: detect_php_ext_dir(runtime_dir)?,
-        mysql: detect_mysql_binary(runtime_dir)?,
+        mysql: mysql_path,
         phpmyadmin: phpmyadmin_path,
         pgsql_dir,
         adminer: adminer_path,

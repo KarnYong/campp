@@ -57,12 +57,9 @@ pub fn run() {
                 // Create debug menu items with IDs
                 let open_download_folder = MenuItem::with_id(app, "open-download-folder", "View Download Folder (ZIP files)", true, None::<&str>)?;
                 let open_runtime_folder = MenuItem::with_id(app, "open-runtime-folder", "Open Runtime Folder", true, None::<&str>)?;
-                let separator = tauri::menu::PredefinedMenuItem::separator(app)?;
-                let reset_installation = MenuItem::with_id(app, "reset-installation", "Reset Installation", true, None::<&str>)?;
-                let show_wizard = MenuItem::with_id(app, "show-wizard", "Show First-Run Wizard", true, None::<&str>)?;
 
                 // Create submenu with items
-                let debug_menu = Submenu::with_items(app, "Debug", true, &[&open_download_folder, &open_runtime_folder, &separator, &reset_installation, &show_wizard])?;
+                let debug_menu = Submenu::with_items(app, "Debug", true, &[&open_download_folder, &open_runtime_folder])?;
                 let menu = Menu::with_items(app, &[&debug_menu])?;
                 app.set_menu(menu)?;
             }
@@ -134,17 +131,6 @@ fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
                     let _ = commands::open_folder(runtime_dir).await;
                 }
             });
-        }
-        "reset-installation" => {
-            let app = app.clone();
-            tauri::async_runtime::spawn(async move {
-                if let Ok(_) = commands::reset_installation().await {
-                    let _ = app.emit("show-wizard", ());
-                }
-            });
-        }
-        "show-wizard" => {
-            let _ = app.emit("show-wizard", ());
         }
         // Tray menu items
         "tray-show" => {
