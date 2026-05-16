@@ -170,7 +170,7 @@ export function Dashboard() {
                   color: "var(--text-primary)",
                 }}
               >
-                CAMPP = Caddy + {dbName} + PHP
+                CAMPP = Caddy + MySQL + PostgreSQL + PHP
               </h1>
               <p
                 style={{
