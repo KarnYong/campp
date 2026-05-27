@@ -3,7 +3,7 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
 
-pub fn generate_caddyfile(path: &PathBuf, paths: &RuntimePaths, port: u16, php_port: u16) -> Result<(), String> {
+pub fn generate_caddyfile(path: &PathBuf, paths: &RuntimePaths, port: u16, php_port: u16, bind_address: &str) -> Result<(), String> {
     let projects_raw = paths.projects_dir
         .to_str()
         .ok_or("Invalid project path")?;
@@ -18,7 +18,12 @@ pub fn generate_caddyfile(path: &PathBuf, paths: &RuntimePaths, port: u16, php_p
         .replace('\\', "/");
 
     let mut content = String::new();
-    content.push_str(&format!("http://localhost:{} {{\n", port));
+    let site_addr = if bind_address == "0.0.0.0" {
+        format!(":{}", port)
+    } else {
+        format!("http://{}:{}", bind_address, port)
+    };
+    content.push_str(&format!("{} {{\n", site_addr));
 
     // Add phpMyAdmin route only if installed
     if paths.phpmyadmin.join("index.php").exists() {
@@ -186,13 +191,6 @@ realpath_cache_ttl=300
     file.write_all(php_ini_content.as_bytes())
         .map_err(|e| format!("Failed to write php.ini: {}", e))?;
 
-    // Also copy php.ini to the PHP runtime directory so CLI usage works out of the box
-    let runtime_ini = php_dir.join("php.ini");
-    if let Some(parent) = runtime_ini.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    let _ = fs::copy(path, &runtime_ini);
-
     Ok(())
 }
 
@@ -345,7 +343,7 @@ $cfg['ExecTimeLimit'] = 0;
 }
 
 /// Generate PostgreSQL configuration file
-pub fn generate_postgresql_conf(data_dir: &PathBuf, port: u16) -> Result<(), String> {
+pub fn generate_postgresql_conf(data_dir: &PathBuf, port: u16, listen_all_interfaces: bool) -> Result<(), String> {
     let path = data_dir.join("postgresql.conf");
 
     // Platform-specific shared memory type
@@ -356,12 +354,13 @@ pub fn generate_postgresql_conf(data_dir: &PathBuf, port: u16) -> Result<(), Str
     #[cfg(target_os = "linux")]
     let shared_memory_type = "posix";
 
+    let pg_listen = if listen_all_interfaces { "*" } else { "127.0.0.1" };
     let content = format!(
         r#"# CAMPP PostgreSQL Configuration
 # Generated automatically
 
 # Connection settings
-listen_addresses = '127.0.0.1'
+listen_addresses = '{}'
 port = {}
 max_connections = 100
 
@@ -385,7 +384,7 @@ lc_numeric = 'C'
 lc_time = 'C'
 default_text_search_config = 'pg_catalog.english'
 "#,
-        port, shared_memory_type
+        pg_listen, port, shared_memory_type
     );
 
     let mut file = File::create(&path)
@@ -397,15 +396,19 @@ default_text_search_config = 'pg_catalog.english'
 }
 
 /// Generate PostgreSQL client authentication config
-pub fn generate_pg_hba_conf(data_dir: &PathBuf, auth_method: &str) -> Result<(), String> {
+pub fn generate_pg_hba_conf(data_dir: &PathBuf, auth_method: &str, listen_all_interfaces: bool) -> Result<(), String> {
     let path = data_dir.join("pg_hba.conf");
 
-    let content = format!(r#"# CAMPP PostgreSQL Client Authentication
+    let mut content = format!(r#"# CAMPP PostgreSQL Client Authentication
 # TYPE  DATABASE  USER  ADDRESS       METHOD
 local   all       all                 {auth_method}
 host    all       all   127.0.0.1/32  {auth_method}
 host    all       all   ::1/128        {auth_method}
 "#, auth_method = auth_method);
+
+    if listen_all_interfaces {
+        content.push_str(&format!("host    all       all   0.0.0.0/0     {}\n", auth_method));
+    }
 
     let mut file = File::create(&path)
         .map_err(|e| format!("Failed to create pg_hba.conf: {}", e))?;

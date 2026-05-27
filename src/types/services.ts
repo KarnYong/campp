@@ -35,6 +35,7 @@ export interface AppSettings {
   mysql_root_password: string;
   postgres_root_password: string;
   package_selection?: PackageSelection;
+  listen_all_interfaces?: boolean;
 }
 
 export interface DownloadProgress {

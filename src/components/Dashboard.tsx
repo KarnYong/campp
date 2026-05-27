@@ -15,13 +15,14 @@ export function Dashboard() {
   const [projectRoot, setProjectRoot] = useState<string>("");
   const [installDir, setInstallDir] = useState<string>("");
   const [installedVersions, setInstalledVersions] = useState<Record<string, string>>({});
+  const [listenAllInterfaces, setListenAllInterfaces] = useState(false);
 
   const currentPlatform = detectPlatform();
   const dbName = getDatabaseDisplayName(currentPlatform);
 
   // Get Caddy port from services
   const caddyPort = services[ServiceType.Caddy]?.port || 8080;
-  const webServerUrl = `http://localhost:${caddyPort}`;
+  const webServerUrl = `http://${listenAllInterfaces ? "localhost" : "127.0.0.1"}:${caddyPort}`;
   const phpMyAdminUrl = `${webServerUrl}/phpmyadmin`;
   const adminerUrl = `${webServerUrl}/adminer/`;
 
@@ -35,6 +36,10 @@ export function Dashboard() {
     } catch (error) {
       console.error("Failed to get service statuses:", error);
     }
+    try {
+      const s = await invoke<{ listen_all_interfaces?: boolean }>("get_settings");
+      setListenAllInterfaces(s.listen_all_interfaces || false);
+    } catch (_) {}
   }, []);
 
   const loadInstalledVersions = useCallback(async () => {
@@ -193,6 +198,21 @@ export function Dashboard() {
               >
                 <span style={{ fontSize: "1rem" }}>🌐</span>
                 Open Site
+                {listenAllInterfaces && isCaddyRunning && (
+                  <span style={{
+                    fontSize: "0.6rem",
+                    backgroundColor: "rgba(255, 180, 0, 0.15)",
+                    color: "var(--color-warning)",
+                    padding: "0.1rem 0.35rem",
+                    borderRadius: "0.25rem",
+                    marginLeft: "0.35rem",
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.03em",
+                  }}>
+                    LAN
+                  </span>
+                )}
               </button>
               <button
                 className="btn-quick-action"

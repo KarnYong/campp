@@ -303,9 +303,11 @@ fn detect_php_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
 
 /// Detect PHP configuration file
 fn detect_php_ini(runtime_dir: &Path) -> Result<PathBuf, String> {
-    // PHP ini will be generated in config directory
-    let app_paths = get_app_data_paths()?;
-    let php_ini_path = app_paths.config_dir.join("php.ini");
+    // Place php.ini in the PHP runtime directory so it works for both FPM and CLI
+    let php_binary = detect_php_binary(runtime_dir)?;
+    let php_dir = php_binary.parent()
+        .ok_or("Cannot determine PHP directory")?;
+    let php_ini_path = php_dir.join("php.ini");
 
     Ok(php_ini_path)
 }

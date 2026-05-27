@@ -218,7 +218,7 @@ impl ProcessManager {
  
         // Spawn the appropriate service
         let result = match service {
-            ServiceType::Caddy => start_caddy(service_process, &paths, self.settings.php_port, self.settings.mysql_port),
+            ServiceType::Caddy => start_caddy(service_process, &paths, self.settings.php_port, self.settings.mysql_port, &self.settings),
             ServiceType::PhpFpm => start_php_fpm(service_process, &paths),
             ServiceType::MySQL => start_mysql(service_process, &paths, &self.settings),
             ServiceType::PostgreSQL => start_postgresql(service_process, &paths, &self.settings),
@@ -384,11 +384,10 @@ impl ProcessManager {
 }
 
 /// Start Caddy web server
-fn start_caddy(service_process: &mut ServiceProcess, paths: &RuntimePaths, php_port: u16, mysql_port: u16) -> Result<(), String> {
+fn start_caddy(service_process: &mut ServiceProcess, paths: &RuntimePaths, php_port: u16, mysql_port: u16, settings: &crate::config::AppSettings) -> Result<(), String> {
     // Kill any existing Caddy processes to avoid port conflicts
     kill_existing_processes("caddy");
 
-    let settings = crate::config::AppSettings::load();
     // Generate phpMyAdmin config only if phpMyAdmin is installed
     if paths.phpmyadmin.join("index.php").exists() {
         crate::config::generator::generate_phpmyadmin_config(paths, mysql_port, &settings.mysql_root_password)?;
@@ -402,7 +401,7 @@ fn start_caddy(service_process: &mut ServiceProcess, paths: &RuntimePaths, php_p
     }
     // Always regenerate Caddyfile with current port settings
     let caddyfile_path = paths.config_dir.join("Caddyfile");
-    crate::config::generator::generate_caddyfile(&caddyfile_path, paths, service_process.port, php_port)?;
+    crate::config::generator::generate_caddyfile(&caddyfile_path, paths, service_process.port, php_port, settings.bind_address())?;
 
     // Open log file with retry logic for Windows file locking
     let log_path = paths.logs_dir.join("caddy.log");
@@ -442,8 +441,11 @@ fn start_php_fpm(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> 
     kill_existing_processes("php-fpm");
     kill_existing_processes("php-cgi");
 
-    // Generate php.ini (always regenerate to keep extensions in sync)
-    crate::config::generator::generate_php_ini(&paths.php_ini, paths)?;
+    // Generate php.ini only if it doesn't exist (first run)
+    // Users can manually edit php.ini in the runtime directory
+    if !paths.php_ini.exists() {
+        crate::config::generator::generate_php_ini(&paths.php_ini, paths)?;
+    }
 
     // Open log file with retry logic
     let log_path = paths.logs_dir.join("php-fpm.log");
@@ -550,11 +552,22 @@ fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths, setti
     } else {
         format!("'{}'", settings.mysql_root_password.replace('\'', "\\'"))
     };
-    fs::write(&init_file, format!(
+    let mut init_sql = format!(
         "CREATE USER IF NOT EXISTS 'root'@'127.0.0.1' IDENTIFIED BY {};\n\
         ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY {};\n\
-        GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1' WITH GRANT OPTION;\n\
-        FLUSH PRIVILEGES;\n", password_sql, password_sql))
+        GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1' WITH GRANT OPTION;\n",
+        password_sql, password_sql
+    );
+    if settings.listen_all_interfaces {
+        init_sql.push_str(&format!(
+            "CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY {};\n\
+            ALTER USER 'root'@'%' IDENTIFIED BY {};\n\
+            GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;\n",
+            password_sql, password_sql
+        ));
+    }
+    init_sql.push_str("FLUSH PRIVILEGES;\n");
+    fs::write(&init_file, init_sql)
         .map_err(|e| format!("Failed to create init file: {}", e))?;
 
     // Open log file with retry logic
@@ -567,7 +580,7 @@ fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths, setti
         .arg(&data_dir_str)
         .arg("--port")
         .arg(service_process.port.to_string())
-        .arg("--bind-address=127.0.0.1")
+        .arg(format!("--bind-address={}", settings.bind_address()))
         .arg("--console")
         .arg("--skip-name-resolve")
         .arg("--init-file")
@@ -646,6 +659,7 @@ fn start_postgresql(service_process: &mut ServiceProcess, paths: &RuntimePaths, 
     crate::config::generator::generate_postgresql_conf(
         &paths.pgsql_data_dir,
         service_process.port,
+        settings.listen_all_interfaces,
     )?;
 
     // Use "trust" auth on first run (password not yet set) so psql can connect
@@ -660,6 +674,7 @@ fn start_postgresql(service_process: &mut ServiceProcess, paths: &RuntimePaths, 
     crate::config::generator::generate_pg_hba_conf(
         &paths.pgsql_data_dir,
         pg_auth_method,
+        settings.listen_all_interfaces,
     )?;
 
     // Open log file
@@ -764,7 +779,7 @@ fn start_postgresql(service_process: &mut ServiceProcess, paths: &RuntimePaths, 
 
                                     // Switch to scram-sha-256 now that password is set
                                     if let Err(e) = crate::config::generator::generate_pg_hba_conf(
-                                        &paths.pgsql_data_dir, "scram-sha-256",
+                                        &paths.pgsql_data_dir, "scram-sha-256", settings.listen_all_interfaces,
                                     ) {
                                         tracing::warn!("Failed to update pg_hba.conf: {}", e);
                                     } else {

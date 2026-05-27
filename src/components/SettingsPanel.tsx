@@ -39,6 +39,7 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
     project_root: "",
     mysql_root_password: "",
     postgres_root_password: "",
+    listen_all_interfaces: false,
   });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -398,6 +399,91 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
                 style={{ width: "180px" }}
               />
             </div>
+          </div>
+
+          {/* Network Configuration */}
+          <div style={{ marginTop: "1rem", marginBottom: "0.5rem" }}>
+            <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "0.5rem" }}>Network</h3>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "0.5rem 0.75rem",
+              borderRadius: "0.5rem",
+              transition: "background-color 0.15s",
+            }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-secondary)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+            >
+              <div>
+                <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>Mode</span>
+                <p style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "0.125rem" }}>
+                  {settings.listen_all_interfaces
+                    ? "Accessible from other devices on your network"
+                    : "Accessible only from this computer"}
+                </p>
+              </div>
+              <div style={{
+                display: "flex",
+                borderRadius: "0.375rem",
+                overflow: "hidden",
+                border: "1px solid var(--border-color)",
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setSettings({ ...settings, listen_all_interfaces: false })}
+                  style={{
+                    padding: "0.3rem 0.75rem",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    border: "none",
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                    backgroundColor: !settings.listen_all_interfaces ? "var(--color-primary)" : "transparent",
+                    color: !settings.listen_all_interfaces ? "#fff" : "var(--text-secondary)",
+                  }}
+                >
+                  LOCAL
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!settings.listen_all_interfaces && !confirm(
+                      "LAN mode exposes your development services to all devices on your network.\n\n" +
+                      "Only use this on trusted, private networks. Are you sure?"
+                    )) {
+                      return;
+                    }
+                    setSettings({ ...settings, listen_all_interfaces: true });
+                  }}
+                  style={{
+                    padding: "0.3rem 0.75rem",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    border: "none",
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                    backgroundColor: settings.listen_all_interfaces ? "var(--color-primary)" : "transparent",
+                    color: settings.listen_all_interfaces ? "#fff" : "var(--text-secondary)",
+                  }}
+                >
+                  LAN
+                </button>
+              </div>
+            </div>
+            {settings.listen_all_interfaces && (
+              <div style={{
+                marginTop: "0.5rem",
+                padding: "0.5rem 0.75rem",
+                borderRadius: "0.375rem",
+                backgroundColor: "rgba(255, 180, 0, 0.1)",
+                border: "1px solid var(--color-warning)",
+              }}>
+                <p style={{ fontSize: "0.75rem", color: "var(--color-warning)" }}>
+                  Ensure your firewall is configured appropriately when using LAN mode.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Components Section */}

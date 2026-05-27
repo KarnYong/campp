@@ -36,6 +36,8 @@ pub struct AppSettings {
     pub mysql_root_password: String,
     #[serde(default)]
     pub postgres_root_password: String,
+    #[serde(default)]
+    pub listen_all_interfaces: bool,
 }
 
 impl Default for AppSettings {
@@ -55,11 +57,17 @@ impl Default for AppSettings {
             package_selection: PackageSelection::default(),
             mysql_root_password: String::new(),
             postgres_root_password: String::new(),
+            listen_all_interfaces: false,
         }
     }
 }
 
 impl AppSettings {
+    /// Returns "0.0.0.0" if listen_all_interfaces is true, "127.0.0.1" otherwise
+    pub fn bind_address(&self) -> &'static str {
+        if self.listen_all_interfaces { "0.0.0.0" } else { "127.0.0.1" }
+    }
+
     /// Get the path to the settings file
     fn settings_path() -> Option<PathBuf> {
         dirs::data_local_dir()
@@ -129,28 +137,29 @@ impl AppSettings {
         }
 
         // Check for port conflicts
-        if let Err(e) = std::net::TcpListener::bind(format!("127.0.0.1:{}", self.web_port)) {
+        let bind_addr = self.bind_address();
+        if let Err(e) = std::net::TcpListener::bind(format!("{}:{}", bind_addr, self.web_port)) {
             warnings.push(format!(
                 "Web port {} may be in use: {}",
                 self.web_port, e
             ));
         }
 
-        if let Err(e) = std::net::TcpListener::bind(format!("127.0.0.1:{}", self.php_port)) {
+        if let Err(e) = std::net::TcpListener::bind(format!("{}:{}", bind_addr, self.php_port)) {
             warnings.push(format!(
                 "PHP-FPM port {} may be in use: {}",
                 self.php_port, e
             ));
         }
 
-        if let Err(e) = std::net::TcpListener::bind(format!("127.0.0.1:{}", self.mysql_port)) {
+        if let Err(e) = std::net::TcpListener::bind(format!("{}:{}", bind_addr, self.mysql_port)) {
             warnings.push(format!(
                 "MySQL port {} may be in use: {}",
                 self.mysql_port, e
             ));
         }
 
-        if let Err(e) = std::net::TcpListener::bind(format!("127.0.0.1:{}", self.postgres_port)) {
+        if let Err(e) = std::net::TcpListener::bind(format!("{}:{}", bind_addr, self.postgres_port)) {
             warnings.push(format!(
                 "PostgreSQL port {} may be in use: {}",
                 self.postgres_port, e
