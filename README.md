@@ -17,10 +17,10 @@ Download the latest release from [GitHub Releases](https://github.com/KarnYong/c
 **Option A: DEB package (recommended)**
 ```bash
 # Download the latest .deb
-wget https://github.com/KarnYong/campp/releases/latest/download/CAMPP-0.3.3-amd64.deb
+wget https://github.com/KarnYong/campp/releases/latest/download/CAMPP-0.3.4-amd64.deb
 
 # Install
-sudo dpkg -i CAMPP-0.3.3-amd64.deb
+sudo dpkg -i CAMPP-0.3.4-amd64.deb
 
 # If missing dependencies:
 sudo apt-get install -f
@@ -32,10 +32,10 @@ sudo apt-get install -f
 **Option B: AppImage**
 ```bash
 # Download the latest AppImage
-wget https://github.com/KarnYong/campp/releases/latest/download/CAMPP-0.3.3-amd64.AppImage
+wget https://github.com/KarnYong/campp/releases/latest/download/CAMPP-0.3.4-amd64.AppImage
 
 # Make executable
-chmod +x CAMPP-0.3.3-amd64.AppImage
+chmod +x CAMPP-0.3.4-amd64.AppImage
 
 # Run
 ./CAMPP-0.3.3-amd64.AppImage
@@ -64,6 +64,11 @@ rm -rf ~/.local/share/campp
 - **Modern UI**: Clean desktop interface built with Tauri + React + TypeScript
 - **Service Management**: Start, stop, and restart services individually or all at once
 - **Port Configuration**: Customize ports for each service via Settings panel
+- **LAN Mode**: Expose services to other devices on your local network
+- **Editable php.ini**: Manually customize PHP configuration (e.g. add extensions)
+- **PostgreSQL Support**: Built-in PostgreSQL alongside MySQL/MariaDB
+- **Database Password Management**: Set root passwords for MySQL and PostgreSQL from Settings
+- **Optional Components**: Choose which components to install (phpMyAdmin, Adminer, MySQL, PostgreSQL)
 - **Quick Actions**: Open project folder, phpMyAdmin, or logs with one click
 - **PHP Version Choice**: Select PHP 8.5.1 or PHP 7.4.33 (Windows) for legacy application support
 - **Platform-Appropriate Database**: MySQL 8.4.0 LTS on Windows/macOS, MariaDB 12.3.1 on Linux
@@ -76,7 +81,9 @@ rm -rf ~/.local/share/campp
 | PHP-FPM | 8.5.1 (7.4.33 available on Windows) | Fast and reliable PHP runtime |
 | MySQL | 8.4.0 LTS | Enterprise-grade database (**Windows & macOS**) |
 | MariaDB | 12.3.1 | Community-developed database fork (**Linux**) |
+| PostgreSQL | 18.3 | Advanced open-source database (**optional**) |
 | phpMyAdmin | 5.2.2 | Web-based database administration interface |
+| Adminer | 5.1.0 | Lightweight database manager (**optional**) |
 
 ### Runtime Sources
 
@@ -88,7 +95,9 @@ Runtime binaries are downloaded from the following sources:
 | PHP-FPM | Windows/macOS/Linux | [campp-runtime-binaries](https://github.com/KarnYong/campp-runtime-binaries) (built from [PHP for Windows](https://downloads.php.net/~windows/releases/) and [static-php-cli](https://dl.static-php.dev/static-php-cli/bulk/)) |
 | MySQL | Windows/macOS | [campp-runtime-binaries](https://github.com/KarnYong/campp-runtime-binaries) (built from [MySQL Downloads](https://dev.mysql.com/downloads/mysql/)) |
 | MariaDB | Linux | [MariaDB Archive](https://archive.mariadb.org/) |
+| PostgreSQL | All | [theseus-rs/postgresql-binaries](https://github.com/theseus-rs/postgresql-binaries) |
 | phpMyAdmin | All | [campp-runtime-binaries](https://github.com/KarnYong/campp-runtime-binaries) (built from [phpMyAdmin](https://www.phpmyadmin.net/)) |
+| Adminer | All | [vrana/adminer](https://github.com/vrana/adminer) |
 
 > **Note**: The `campp-runtime-binaries` repository contains pre-compiled binaries packaged for CAMPP's specific requirements.
 
@@ -99,9 +108,11 @@ Runtime binaries are downloaded from the following sources:
 | Web Server | 8080 | http://localhost:8080 |
 | PHP-FPM | 9000 | Internal (FastCGI) |
 | Database (MySQL/MariaDB) | 3307 | localhost:3307 |
+| PostgreSQL | 5433 | localhost:5433 |
 | phpMyAdmin | 8080 | http://localhost:8080/phpmyadmin |
+| Adminer | 8080 | http://localhost:8080/adminer/ |
 
-**Default Database Credentials**: `root` / (empty password)
+**Default Database Credentials**: `root` / (empty password) — for both MySQL/MariaDB and PostgreSQL
 
 **Port Customization**: You can change ports in Settings (⚙️). Running services will automatically restart when you save.
 
@@ -111,7 +122,7 @@ Runtime binaries are downloaded from the following sources:
 2. **First Run**: The app will download required binaries on first launch (~500MB)
 3. **Start Services**: Click "Start All" or start individual services from the dashboard
 4. **View Projects**: Access http://localhost:8080 to view your projects
-5. **Manage Database**: Access http://localhost:8080/phpmyadmin for database management
+5. **Manage Database**: Access http://localhost:8080/phpmyadmin or http://localhost:8080/adminer/ for database management
 
 ## Development
 
@@ -150,7 +161,7 @@ campp/
 │   │   ├── runtime/       # Binary download system
 │   │   └── database/      # MariaDB integration
 │   └── templates/         # Service config templates
-└── DEVELOPMENT_PLAN.md    # (removed)
+└── .github/workflows/     # CI/CD (build & release)
 ```
 
 ## System Requirements

@@ -86,7 +86,7 @@ src-tauri/src/
 ### App Data Directory Structure
 ```
 ~/.campp/
-├── config/           # Generated configs (Caddyfile, php.ini, etc.)
+├── config/           # Generated configs (Caddyfile, php-fpm.conf, etc.)
 ├── mysql/data/       # MariaDB datadir
 ├── logs/             # Service logs
 ├── projects/         # User projects
@@ -124,8 +124,31 @@ The project follows an 8-phase implementation plan:
 | `vite.config.ts` | Frontend dev server (port 1420) |
 | `DEVELOPMENT_PLAN.md` | Full implementation plan and architecture details |
 
+## Release Workflow
+
+The GitHub Actions workflow (`.github/workflows/build.yml`) builds and releases for all platforms.
+
+**Trigger**: Push a `v*` tag (e.g. `v0.3.4`). Version is read from `package.json`.
+
+```bash
+# After bumping version and committing:
+git tag v0.3.4
+git push origin v0.3.4
+```
+
+**Jobs**:
+- `build-macOS` — Builds ARM64 + x64 DMGs, creates universal binary, signs and notarizes (requires Apple secrets)
+- `build-windows` — Builds MSI and NSIS installer
+- `build-linux` — Builds .deb, .AppImage, .rpm
+- `create-release` — Collects all artifacts, creates a draft GitHub Release with auto-generated notes
+
+**Required Secrets** (for macOS signing/notarization):
+`APPLE_CERTIFICATE_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_APP_PASSWORD`, `APPLE_TEAM_ID`
+
+**Can also be triggered manually** via `workflow_dispatch` with a `create_release` toggle.
+
 ## Platform-Specific Notes
 
 - **Windows**: WebView2 runtime required, builds use `windows_subsystem = "windows"` to prevent extra console
-- **macOS**: Code signing required for distribution (see DEVELOPMENT_PLAN.md Phase 8)
+- **macOS**: Code signing and notarization required for distribution
 - **Linux**: AppImage target for universal distribution
