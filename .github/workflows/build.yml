@@ -200,10 +200,10 @@ jobs:
           chmod +x notarize_and_staple.sh
 
       - name: Build ARM64
-        run: npm run tauri build -- --target aarch64-apple-darwin
+        run: npm run tauri build -- --target aarch64-apple-darwin --bundles app
 
       - name: Build x64
-        run: npm run tauri build -- --target x86_64-apple-darwin
+        run: npm run tauri build -- --target x86_64-apple-darwin --bundles app
 
       - name: Sign ARM64 app
         env:
