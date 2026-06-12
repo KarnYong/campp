@@ -6,6 +6,7 @@ interface ServiceCardProps {
   port?: number;
   error?: string;
   notInstalled?: boolean;
+  tunnelUrl?: string | null;
   onStart: () => void;
   onStop: () => void;
   onRestart: () => void;
@@ -18,6 +19,7 @@ export function ServiceCard({
   port = DEFAULT_PORTS[serviceType],
   error,
   notInstalled = false,
+  tunnelUrl,
   onStart,
   onStop,
   onRestart,
@@ -103,6 +105,39 @@ export function ServiceCard({
       >
         <span>Port: {port}</span>
       </div>
+
+      {/* Tunnel URL (ngrok only) */}
+      {serviceType === ServiceType.Ngrok && isRunning && (
+        <div style={{ marginTop: "0.5rem" }}>
+          {tunnelUrl ? (
+            <div style={{
+              padding: "0.5rem",
+              backgroundColor: "rgba(16, 185, 129, 0.1)",
+              border: "1px solid rgba(16, 185, 129, 0.3)",
+              borderRadius: "0.375rem",
+              fontSize: "0.75rem",
+              wordBreak: "break-all",
+            }}>
+              <strong style={{ color: "var(--text-primary)" }}>Public URL:</strong>{" "}
+              <a href={tunnelUrl} target="_blank" rel="noopener noreferrer"
+                style={{ color: "var(--color-primary, #3b82f6)", textDecoration: "underline" }}>
+                {tunnelUrl}
+              </a>
+            </div>
+          ) : (
+            <div style={{
+              padding: "0.5rem",
+              backgroundColor: "var(--bg-card-secondary)",
+              borderRadius: "0.375rem",
+              fontSize: "0.75rem",
+              color: "var(--text-secondary)",
+              fontStyle: "italic",
+            }}>
+              Connecting...
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Error Message */}
       {!notInstalled && isError && error && (

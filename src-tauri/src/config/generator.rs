@@ -18,12 +18,14 @@ pub fn generate_caddyfile(path: &PathBuf, paths: &RuntimePaths, port: u16, php_p
         .replace('\\', "/");
 
     let mut content = String::new();
-    let site_addr = if bind_address == "0.0.0.0" {
-        format!(":{}", port)
-    } else {
-        format!("http://{}:{}", bind_address, port)
-    };
+    // Always use :{port} as the site address so Caddy matches any Host header
+    // (needed for ngrok tunnels which forward with the ngrok domain as Host).
+    // Use `bind` directive to restrict listen address when not in LAN mode.
+    let site_addr = format!(":{}", port);
     content.push_str(&format!("{} {{\n", site_addr));
+    if bind_address != "0.0.0.0" {
+        content.push_str(&format!("    bind {}\n", bind_address));
+    }
 
     // Add phpMyAdmin route only if installed
     if paths.phpmyadmin.join("index.php").exists() {
@@ -562,6 +564,32 @@ h1 {{ font-size: 1.8rem; margin-bottom: 0.5rem; color: #fff; }}
         .map_err(|e| format!("Failed to create Adminer index.php: {}", e))?;
     file.write_all(content.as_bytes())
         .map_err(|e| format!("Failed to write Adminer index.php: {}", e))?;
+
+    Ok(())
+}
+
+/// Generate ngrok configuration file
+pub fn generate_ngrok_config(
+    path: &PathBuf,
+    authtoken: &str,
+    caddy_port: u16,
+) -> Result<(), String> {
+    let content = format!(
+        r#"version: "2"
+authtoken: {}
+web_addr: "127.0.0.1:4040"
+tunnels:
+  caddy:
+    proto: http
+    addr: {}
+"#,
+        authtoken, caddy_port,
+    );
+
+    let mut file = File::create(path)
+        .map_err(|e| format!("Failed to create ngrok config: {}", e))?;
+    file.write_all(content.as_bytes())
+        .map_err(|e| format!("Failed to write ngrok config: {}", e))?;
 
     Ok(())
 }

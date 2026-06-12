@@ -26,6 +26,7 @@ const COMPONENT_ORDER: { key: string; getDisplayName: () => string }[] = (() => 
     { key: "phpmyadmin", getDisplayName: () => "phpMyAdmin" },
     { key: "postgresql", getDisplayName: () => "PostgreSQL" },
     { key: "adminer", getDisplayName: () => "Adminer" },
+    { key: "ngrok", getDisplayName: () => "ngrok" },
   ];
 })();
 
@@ -40,6 +41,7 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
     mysql_root_password: "",
     postgres_root_password: "",
     listen_all_interfaces: false,
+    ngrok_authtoken: "",
   });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -146,6 +148,7 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
         phpmyadmin: "phpmyadmin-5.2",
         postgresql: "postgresql-18.3",
         adminer: "adminer-5.1",
+        ngrok: "ngrok-3",
       };
 
       // Download only this component by skipping all others
@@ -485,6 +488,40 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
               </div>
             )}
           </div>
+
+          {/* Ngrok Configuration — only visible when ngrok is installed */}
+          {components.find(c => c.key === "ngrok")?.installed && (
+            <div style={{ marginBottom: "1.5rem" }}>
+              <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "0.5rem" }}>ngrok Tunnel</h3>
+              <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", marginBottom: "0.75rem" }}>
+                Required for sharing your local server publicly. Get a free token at{" "}
+                <a href="https://dashboard.ngrok.com/signup" target="_blank" rel="noopener noreferrer"
+                  style={{ color: "var(--color-primary, #3b82f6)" }}>
+                  ngrok.com
+                </a>.
+              </p>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <label style={{ fontSize: "0.875rem", fontWeight: 500, whiteSpace: "nowrap" }}>
+                  Authtoken
+                </label>
+                <input
+                  type="password"
+                  value={settings.ngrok_authtoken || ""}
+                  onChange={(e) => setSettings({ ...settings, ngrok_authtoken: e.target.value })}
+                  placeholder="Paste your ngrok authtoken"
+                  style={{
+                    flex: 1,
+                    padding: "0.375rem 0.5rem",
+                    borderRadius: "0.25rem",
+                    border: "1px solid var(--border-color)",
+                    backgroundColor: "var(--bg-card-secondary)",
+                    color: "var(--text-primary)",
+                    fontSize: "0.875rem",
+                  }}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Components Section */}
           <div style={{ marginBottom: "1.5rem" }}>

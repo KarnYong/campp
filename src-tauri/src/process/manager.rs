@@ -94,7 +94,7 @@ impl ProcessManager {
     pub fn with_settings(settings: crate::config::AppSettings) -> Self {
         let mut services = HashMap::new();
 
-        for service_type in [ServiceType::Caddy, ServiceType::PhpFpm, ServiceType::MySQL, ServiceType::PostgreSQL] {
+        for service_type in [ServiceType::Caddy, ServiceType::PhpFpm, ServiceType::MySQL, ServiceType::PostgreSQL, ServiceType::Ngrok] {
             services.insert(
                 service_type,
                 ServiceProcess {
@@ -134,6 +134,7 @@ impl ProcessManager {
             ServiceType::PhpFpm => settings.php_port,
             ServiceType::MySQL => settings.mysql_port,
             ServiceType::PostgreSQL => settings.postgres_port,
+            ServiceType::Ngrok => 4040,
         }
     }
 
@@ -204,6 +205,16 @@ impl ProcessManager {
             let _ = fs::write(&index_php, DEFAULT_INDEX_PHP);
         }
 
+        // Pre-check: ngrok requires Caddy to be running
+        if service == ServiceType::Ngrok {
+            let caddy_running = self.services.get(&ServiceType::Caddy)
+                .map(|s| s.state.is_running())
+                .unwrap_or(false);
+            if !caddy_running {
+                return Err("Caddy must be running before starting ngrok. Start Caddy first.".to_string());
+            }
+        }
+
         let service_process = self
             .services
             .get_mut(&service)
@@ -215,13 +226,14 @@ impl ProcessManager {
         }
 
         service_process.state = ServiceState::Starting;
- 
+
         // Spawn the appropriate service
         let result = match service {
             ServiceType::Caddy => start_caddy(service_process, &paths, self.settings.php_port, self.settings.mysql_port, &self.settings),
             ServiceType::PhpFpm => start_php_fpm(service_process, &paths),
             ServiceType::MySQL => start_mysql(service_process, &paths, &self.settings),
             ServiceType::PostgreSQL => start_postgresql(service_process, &paths, &self.settings),
+            ServiceType::Ngrok => start_ngrok(service_process, &paths, &self.settings),
         };
 
         match result {
@@ -806,6 +818,69 @@ fn start_postgresql(service_process: &mut ServiceProcess, paths: &RuntimePaths, 
     }
 }
 
+/// Start ngrok tunnel service
+fn start_ngrok(
+    service_process: &mut ServiceProcess,
+    paths: &RuntimePaths,
+    settings: &crate::config::AppSettings,
+) -> Result<(), String> {
+    // Check authtoken is configured
+    if settings.ngrok_authtoken.is_empty() {
+        return Err("ngrok authtoken not configured. Set it in Settings.".to_string());
+    }
+
+    // Check that the ngrok binary exists
+    if !paths.ngrok.exists() {
+        return Err(format!(
+            "ngrok binary not found at: {}. Install ngrok from Settings.",
+            paths.ngrok.display()
+        ));
+    }
+
+    // Generate ngrok.yml config with authtoken
+    let ngrok_config_path = paths.config_dir.join("ngrok.yml");
+    crate::config::generator::generate_ngrok_config(
+        &ngrok_config_path,
+        &settings.ngrok_authtoken,
+        settings.web_port,
+    )?;
+
+    // Kill any existing ngrok processes
+    kill_existing_processes("ngrok");
+
+    // Open log file
+    let log_path = paths.logs_dir.join("ngrok.log");
+    let log_file = open_log_file_with_retry(&log_path, "ngrok")?;
+
+    // Spawn ngrok process
+    let mut child = configure_no_window(Command::new(&paths.ngrok))
+        .arg("http")
+        .arg("--config")
+        .arg(&ngrok_config_path)
+        .arg(format!("{}", settings.web_port))
+        .current_dir(&paths.config_dir)
+        .stdout(Stdio::from(log_file.try_clone().unwrap()))
+        .stderr(Stdio::from(log_file))
+        .spawn()
+        .map_err(|e| format!("Failed to start ngrok: {}", e))?;
+
+    // Give ngrok a moment to start
+    std::thread::sleep(std::time::Duration::from_millis(1000));
+
+    // Check if process is still running
+    match child.try_wait() {
+        Ok(Some(status)) => Err(format!("ngrok exited immediately with status: {:?}", status)),
+        Ok(None) => {
+            let pid = child.id();
+            service_process.child = Some(child);
+            service_process.log_file = Some(log_path);
+            service_process.pid = Some(pid);
+            Ok(())
+        }
+        Err(e) => Err(format!("Failed to check ngrok process: {}", e)),
+    }
+}
+
 /// Wait for PostgreSQL to accept connections by polling with psql
 fn wait_for_postgres_ready(psql_bin: &Path, port: u16, pgsql_dir: &Path, timeout_secs: u64) -> bool {
     let start = std::time::Instant::now();
@@ -879,7 +954,7 @@ mod tests {
     fn test_process_manager_new() {
         let manager = ProcessManager::new();
 
-        assert_eq!(manager.services.len(), 4);
+        assert_eq!(manager.services.len(), 5);
 
         let caddy = manager.services.get(&ServiceType::Caddy).unwrap();
         assert_eq!(caddy.name, ServiceType::Caddy);
@@ -891,7 +966,7 @@ mod tests {
     #[test]
     fn test_process_manager_default() {
         let manager = ProcessManager::default();
-        assert_eq!(manager.services.len(), 4);
+        assert_eq!(manager.services.len(), 5);
         assert!(manager.runtime_paths.is_none());
     }
 
@@ -909,7 +984,7 @@ mod tests {
         let manager = ProcessManager::new();
         let statuses = manager.get_all_statuses();
 
-        assert_eq!(statuses.len(), 4);
+        assert_eq!(statuses.len(), 5);
 
         let caddy_info = statuses.get(&ServiceType::Caddy).unwrap();
         assert_eq!(caddy_info.service_type, ServiceType::Caddy);
@@ -1048,7 +1123,7 @@ mod integration_tests {
 
     /// Clean up any running services after test
     fn cleanup_services(manager: &mut ProcessManager) {
-        for service in [ServiceType::Caddy, ServiceType::PhpFpm, ServiceType::MySQL, ServiceType::PostgreSQL] {
+        for service in [ServiceType::Caddy, ServiceType::PhpFpm, ServiceType::MySQL, ServiceType::PostgreSQL, ServiceType::Ngrok] {
             let _ = manager.stop(service);
         }
         // Give processes time to fully exit
@@ -1072,6 +1147,7 @@ mod integration_tests {
                 ServiceType::PhpFpm => "php-fpm.log",
                 ServiceType::MySQL => "mysql.log",
                 ServiceType::PostgreSQL => "postgresql.log",
+                ServiceType::Ngrok => "ngrok.log",
             };
             let log_path = paths.logs_dir.join(log_name);
             if log_path.exists() {
@@ -1120,6 +1196,9 @@ mod integration_tests {
             let _ = Command::new("taskkill")
                 .args(&["/F", "/IM", "mysqld.exe"])
                 .output();
+            let _ = Command::new("taskkill")
+                .args(&["/F", "/IM", "ngrok.exe"])
+                .output();
         }
 
         #[cfg(unix)]
@@ -1133,6 +1212,9 @@ mod integration_tests {
                 .output();
             let _ = Command::new("pkill")
                 .args(&["-9", "mysqld"])
+                .output();
+            let _ = Command::new("pkill")
+                .args(&["-9", "ngrok"])
                 .output();
         }
     }

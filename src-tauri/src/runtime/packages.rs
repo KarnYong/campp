@@ -14,6 +14,8 @@ pub struct PackagesConfig {
     pub phpmyadmin: Vec<PhpMyAdminPackage>,
     #[serde(default)]
     pub adminer: Vec<PhpMyAdminPackage>,
+    #[serde(default)]
+    pub ngrok: Vec<MySQLPackage>,
 }
 
 /// PHP package with version and download URLs
@@ -95,6 +97,8 @@ pub struct PackageSelection {
     pub postgresql: String,
     #[serde(default = "default_adminer")]
     pub adminer: String,
+    #[serde(default = "default_ngrok")]
+    pub ngrok: String,
 }
 
 fn default_mariadb() -> String {
@@ -109,6 +113,10 @@ fn default_adminer() -> String {
     "adminer-5.1".to_string()
 }
 
+fn default_ngrok() -> String {
+    "ngrok-3".to_string()
+}
+
 impl Default for PackageSelection {
     fn default() -> Self {
         Self {
@@ -118,6 +126,7 @@ impl Default for PackageSelection {
             phpmyadmin: "phpmyadmin-5.2".to_string(),
             postgresql: "postgresql-18.3".to_string(),
             adminer: "adminer-5.1".to_string(),
+            ngrok: "ngrok-3".to_string(),
         }
     }
 }
@@ -148,6 +157,9 @@ pub struct BinariesConfig {
     #[serde(default)]
     #[serde(rename = "adminer")]
     pub adminer: Option<PhpMyAdminConfig>,
+    #[serde(default)]
+    #[serde(rename = "ngrok")]
+    pub ngrok: Option<BinaryConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -419,6 +431,20 @@ pub fn get_available_packages() -> PackagesConfig {
                 lts: v.lts,
                 recommended: v.selected,
             }).collect()).unwrap_or_default(),
+            ngrok: cfg.binaries.ngrok.as_ref().map(|nc| nc.versions.iter().map(|v| MySQLPackage {
+                id: v.id.clone(),
+                version: v.version.clone(),
+                display_name: v.display_name.clone(),
+                windows_x64: v.urls.windows_x64.clone().unwrap_or_default(),
+                windows_arm64: v.urls.windows_arm64.clone().unwrap_or_default(),
+                linux_x64: v.urls.linux_x64.clone().unwrap_or_default(),
+                linux_arm64: v.urls.linux_arm64.clone().unwrap_or_default(),
+                macos_x64: v.urls.macos_x64.clone().unwrap_or_default(),
+                macos_arm64: v.urls.macos_arm64.clone().unwrap_or_default(),
+                eol: v.eol,
+                lts: v.lts,
+                recommended: v.selected,
+            }).collect()).unwrap_or_default(),
         }
     } else {
         // Fallback to hardcoded defaults
@@ -460,6 +486,9 @@ pub fn get_selected_package_ids() -> PackageSelection {
             adminer: cfg.binaries.adminer.as_ref()
                 .and_then(|ac| ac.versions.iter().find(|v| v.selected).map(|v| v.id.clone()))
                 .unwrap_or_else(|| "adminer-5.1".to_string()),
+            ngrok: cfg.binaries.ngrok.as_ref()
+                .and_then(|nc| nc.versions.iter().find(|v| v.selected).map(|v| v.id.clone()))
+                .unwrap_or_else(|| "ngrok-3".to_string()),
         }
     } else {
         PackageSelection::default()
@@ -510,6 +539,14 @@ pub fn get_postgresql_package(id: &str) -> Option<MySQLPackage> {
 pub fn get_adminer_package(id: &str) -> Option<PhpMyAdminPackage> {
     get_available_packages()
         .adminer
+        .into_iter()
+        .find(|p| p.id == id)
+}
+
+/// Get ngrok package by ID
+pub fn get_ngrok_package(id: &str) -> Option<MySQLPackage> {
+    get_available_packages()
+        .ngrok
         .into_iter()
         .find(|p| p.id == id)
 }
@@ -658,6 +695,22 @@ fn get_default_packages() -> PackagesConfig {
                 version: "5.1.0".to_string(),
                 display_name: "Adminer 5.1.0 (Latest)".to_string(),
                 url: "https://github.com/vrana/adminer/releases/download/v5.1.0/adminer-5.1.0-mysql.php".to_string(),
+                eol: false,
+                lts: false,
+                recommended: true,
+            },
+        ],
+        ngrok: vec![
+            MySQLPackage {
+                id: "ngrok-3".to_string(),
+                version: "3.19.2".to_string(),
+                display_name: "ngrok 3.19.2".to_string(),
+                windows_x64: "https://bin.ngrok.com/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip".to_string(),
+                windows_arm64: "https://bin.ngrok.com/c/bNyj1mQVY4c/ngrok-v3-stable-windows-arm64.zip".to_string(),
+                linux_x64: "https://bin.ngrok.com/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz".to_string(),
+                linux_arm64: "https://bin.ngrok.com/c/bNyj1mQVY4c/ngrok-v3-stable-linux-arm64.tgz".to_string(),
+                macos_x64: "https://bin.ngrok.com/c/bNyj1mQVY4c/ngrok-v3-stable-darwin-amd64.tgz".to_string(),
+                macos_arm64: "https://bin.ngrok.com/c/bNyj1mQVY4c/ngrok-v3-stable-darwin-arm64.tgz".to_string(),
                 eol: false,
                 lts: false,
                 recommended: true,

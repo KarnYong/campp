@@ -335,6 +335,11 @@ fn kill_runtime_processes() {
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .output();
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/IM", "ngrok.exe"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .output();
     }
 
     #[cfg(unix)]
@@ -350,6 +355,9 @@ fn kill_runtime_processes() {
             .output();
         let _ = std::process::Command::new("pkill")
             .args(["-9", "postgres"])
+            .output();
+        let _ = std::process::Command::new("pkill")
+            .args(["-9", "ngrok"])
             .output();
     }
 
@@ -692,7 +700,7 @@ pub async fn get_installed_versions() -> Result<std::collections::HashMap<String
     let mut versions = std::collections::HashMap::new();
 
     // Read version from marker files
-    for component in ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer"] {
+    for component in ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer", "ngrok"] {
         let marker_file = runtime_dir.join(format!("{}_installed.txt", component));
         if let Ok(content) = fs::read_to_string(&marker_file) {
             // Parse version from format: "version=1.2.3\ninstalled_at=..."
@@ -759,7 +767,7 @@ pub async fn uninstall_component(
     component: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let valid_components = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer"];
+    let valid_components = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer", "ngrok"];
     if !valid_components.contains(&component.as_str()) {
         return Err(format!("Invalid component: {}", component));
     }
@@ -787,6 +795,37 @@ pub async fn uninstall_component(
     downloader.uninstall_component(&component)?;
 
     Ok(())
+}
+
+/// Get the ngrok public tunnel URL (queries ngrok's local API at port 4040)
+#[tauri::command]
+pub async fn get_ngrok_public_url() -> Result<Option<String>, String> {
+    let client = reqwest::Client::new();
+    let response = client
+        .get("http://127.0.0.1:4040/api/tunnels")
+        .timeout(std::time::Duration::from_secs(2))
+        .send()
+        .await;
+
+    match response {
+        Ok(resp) => {
+            if !resp.status().is_success() {
+                return Ok(None);
+            }
+            let body: serde_json::Value = resp.json().await
+                .map_err(|e| format!("Failed to parse ngrok API response: {}", e))?;
+            // Extract the first tunnel's public_url
+            if let Some(tunnels) = body.get("tunnels").and_then(|t| t.as_array()) {
+                if let Some(first_tunnel) = tunnels.first() {
+                    if let Some(public_url) = first_tunnel.get("public_url").and_then(|u| u.as_str()) {
+                        return Ok(Some(public_url.to_string()));
+                    }
+                }
+            }
+            Ok(None)
+        }
+        Err(_) => Ok(None), // ngrok not running or API not available
+    }
 }
 
 /// Get debug info for troubleshooting (version, paths, config status)

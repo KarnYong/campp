@@ -12,6 +12,8 @@ pub enum ServiceType {
     MySQL,
     #[serde(rename = "postgresql")]
     PostgreSQL,
+    #[serde(rename = "ngrok")]
+    Ngrok,
 }
 
 impl ServiceType {
@@ -21,6 +23,7 @@ impl ServiceType {
             ServiceType::PhpFpm => 9000,
             ServiceType::MySQL => 3307,
             ServiceType::PostgreSQL => 5433,
+            ServiceType::Ngrok => 4040,
         }
     }
 
@@ -30,6 +33,7 @@ impl ServiceType {
             ServiceType::PhpFpm => "PHP-FPM 8.5",
             ServiceType::MySQL => "MySQL",
             ServiceType::PostgreSQL => "PostgreSQL",
+            ServiceType::Ngrok => "ngrok",
         }
     }
 
@@ -39,6 +43,7 @@ impl ServiceType {
             ServiceType::PhpFpm => "PHP Runtime",
             ServiceType::MySQL => "Database Server",
             ServiceType::PostgreSQL => "Database Server",
+            ServiceType::Ngrok => "Tunnel (Dev Only)",
         }
     }
 
@@ -48,6 +53,7 @@ impl ServiceType {
             ServiceType::PhpFpm => "php-cgi",
             ServiceType::MySQL => "mysqld",
             ServiceType::PostgreSQL => "postgres",
+            ServiceType::Ngrok => "ngrok",
         }
     }
 }
@@ -105,6 +111,7 @@ mod tests {
         assert_eq!(ServiceType::PhpFpm.default_port(), 9000);
         assert_eq!(ServiceType::MySQL.default_port(), 3307);
         assert_eq!(ServiceType::PostgreSQL.default_port(), 5433);
+        assert_eq!(ServiceType::Ngrok.default_port(), 4040);
     }
 
     #[test]
@@ -113,6 +120,7 @@ mod tests {
         assert_eq!(ServiceType::PhpFpm.display_name(), "PHP-FPM 8.5");
         assert_eq!(ServiceType::MySQL.display_name(), "MySQL");
         assert_eq!(ServiceType::PostgreSQL.display_name(), "PostgreSQL");
+        assert_eq!(ServiceType::Ngrok.display_name(), "ngrok");
     }
 
     #[test]
@@ -121,6 +129,7 @@ mod tests {
         assert_eq!(ServiceType::PhpFpm.binary_name(), "php-cgi");
         assert_eq!(ServiceType::MySQL.binary_name(), "mysqld");
         assert_eq!(ServiceType::PostgreSQL.binary_name(), "postgres");
+        assert_eq!(ServiceType::Ngrok.binary_name(), "ngrok");
     }
 
     #[test]
@@ -204,7 +213,8 @@ mod tests {
         set.insert(ServiceType::PhpFpm);
         set.insert(ServiceType::MySQL);
         set.insert(ServiceType::PostgreSQL);
+        set.insert(ServiceType::Ngrok);
 
-        assert_eq!(set.len(), 4);
+        assert_eq!(set.len(), 5);
     }
 }

@@ -7,6 +7,7 @@ export enum ServiceType {
   PhpFpm = "php-fpm",
   MySQL = "mysql",
   PostgreSQL = "postgresql",
+  Ngrok = "ngrok",
 }
 
 export enum ServiceState {
@@ -32,6 +33,7 @@ export interface AppSettings {
   php_port: number;
   postgres_port: number;
   project_root: string;
+  ngrok_authtoken?: string;
   mysql_root_password: string;
   postgres_root_password: string;
   package_selection?: PackageSelection;
@@ -97,6 +99,7 @@ export interface PackagesConfig {
   postgresql: MySQLPackage[];
   phpmyadmin: PhpMyAdminPackage[];
   adminer: PhpMyAdminPackage[];
+  ngrok: MySQLPackage[];
 }
 
 export interface PackageSelection {
@@ -106,6 +109,7 @@ export interface PackageSelection {
   phpmyadmin: string;
   postgresql: string;
   adminer: string;
+  ngrok: string;
 }
 
 export const DEFAULT_PORTS = {
@@ -113,6 +117,7 @@ export const DEFAULT_PORTS = {
   [ServiceType.PhpFpm]: 9000,
   [ServiceType.MySQL]: 3307,
   [ServiceType.PostgreSQL]: 5433,
+  [ServiceType.Ngrok]: 4040,
 } as const;
 
 export const SERVICE_DISPLAY_NAMES = {
@@ -120,6 +125,7 @@ export const SERVICE_DISPLAY_NAMES = {
   [ServiceType.PhpFpm]: "PHP-FPM",
   [ServiceType.MySQL]: "MariaDB",
   [ServiceType.PostgreSQL]: "PostgreSQL",
+  [ServiceType.Ngrok]: "ngrok",
 } as const;
 
 // Platform-specific display name for MySQL/MariaDB
@@ -143,6 +149,7 @@ export const SERVICE_DESCRIPTIONS = {
   [ServiceType.PhpFpm]: "PHP Runtime",
   [ServiceType.MySQL]: "Database Server",
   [ServiceType.PostgreSQL]: "Database Server",
+  [ServiceType.Ngrok]: "Tunnel (Dev Only)",
 } as const;
 
 // System dependency types

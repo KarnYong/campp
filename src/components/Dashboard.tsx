@@ -16,6 +16,10 @@ export function Dashboard() {
   const [installDir, setInstallDir] = useState<string>("");
   const [installedVersions, setInstalledVersions] = useState<Record<string, string>>({});
   const [listenAllInterfaces, setListenAllInterfaces] = useState(false);
+  const [ngrokUrl, setNgrokUrl] = useState<string | null>(null);
+  const [showNgrokTokenModal, setShowNgrokTokenModal] = useState(false);
+  const [ngrokTokenInput, setNgrokTokenInput] = useState("");
+  const [ngrokTokenSaving, setNgrokTokenSaving] = useState(false);
 
   const currentPlatform = detectPlatform();
   const dbName = getDatabaseDisplayName(currentPlatform);
@@ -30,9 +34,11 @@ export function Dashboard() {
   const isCaddyRunning = services[ServiceType.Caddy]?.state === ServiceState.Running;
 
   const refreshStatuses = useCallback(async () => {
+    let currentStatuses: Partial<ServiceMap> = {};
     try {
       const statuses = await invoke<ServiceMap>("get_all_statuses");
       setServices(statuses);
+      currentStatuses = statuses;
     } catch (error) {
       console.error("Failed to get service statuses:", error);
     }
@@ -40,6 +46,16 @@ export function Dashboard() {
       const s = await invoke<{ listen_all_interfaces?: boolean }>("get_settings");
       setListenAllInterfaces(s.listen_all_interfaces || false);
     } catch (_) {}
+    // Poll ngrok public URL if running
+    try {
+      const ngrokRunning = currentStatuses[ServiceType.Ngrok]?.state === "running";
+      if (ngrokRunning) {
+        const url = await invoke<string | null>("get_ngrok_public_url");
+        setNgrokUrl(url);
+      } else {
+        setNgrokUrl(null);
+      }
+    } catch (_) { setNgrokUrl(null); }
   }, []);
 
   const loadInstalledVersions = useCallback(async () => {
@@ -88,9 +104,33 @@ export function Dashboard() {
       await invoke("start_service", { service: serviceType });
       await refreshStatuses();
     } catch (error) {
-      console.error(`Failed to start ${serviceType}:`, error);
-      alert(`Failed to start ${serviceType}:\n${error}`);
+      const errMsg = String(error);
+      if (serviceType === ServiceType.Ngrok && errMsg.includes("authtoken")) {
+        setNgrokTokenInput("");
+        setShowNgrokTokenModal(true);
+      } else {
+        alert(`Failed to start ${serviceType}:\n${error}`);
+      }
       await refreshStatuses();
+    }
+  };
+
+  const saveNgrokTokenAndStart = async () => {
+    if (!ngrokTokenInput.trim()) return;
+    setNgrokTokenSaving(true);
+    try {
+      const settings = await invoke<any>("get_settings");
+      settings.ngrok_authtoken = ngrokTokenInput.trim();
+      await invoke("save_settings", { settings });
+      setShowNgrokTokenModal(false);
+      setNgrokTokenInput("");
+      // Now start ngrok
+      await invoke("start_service", { service: ServiceType.Ngrok });
+      await refreshStatuses();
+    } catch (error) {
+      alert(`Failed to save authtoken:\n${error}`);
+    } finally {
+      setNgrokTokenSaving(false);
     }
   };
 
@@ -401,6 +441,20 @@ export function Dashboard() {
                   Adminer {installedVersions.adminer}
                 </span>
               )}
+              {installedVersions.ngrok && (
+                <span
+                  style={{
+                    padding: "0.25rem 0.75rem",
+                    borderRadius: "9999px",
+                    fontSize: "0.75rem",
+                    fontWeight: 500,
+                    color: "var(--text-primary)",
+                    border: "1px solid var(--border-color)",
+                  }}
+                >
+                  ngrok {installedVersions.ngrok}
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -422,7 +476,7 @@ export function Dashboard() {
               margin: "0 auto",
             }}
           >
-            {[ServiceType.Caddy, ServiceType.PhpFpm, ServiceType.MySQL, ServiceType.PostgreSQL].map((serviceType) => {
+            {[ServiceType.Caddy, ServiceType.PhpFpm, ServiceType.MySQL, ServiceType.PostgreSQL, ServiceType.Ngrok].map((serviceType) => {
               const service = services[serviceType];
               if (!service) return null;
               let componentKey: string = serviceType === ServiceType.PhpFpm ? "php" : serviceType;
@@ -438,6 +492,7 @@ export function Dashboard() {
                   port={service.port}
                   error={service.error_message}
                   notInstalled={isNotInstalled}
+                  tunnelUrl={serviceType === ServiceType.Ngrok ? ngrokUrl : undefined}
                   onStart={() => startService(serviceType)}
                   onStop={() => stopService(serviceType)}
                   onRestart={() => restartService(serviceType)}
@@ -495,6 +550,114 @@ export function Dashboard() {
               }
             }}
           />
+        )}
+
+        {/* Ngrok Authtoken Modal */}
+        {showNgrokTokenModal && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              backgroundColor: "rgba(0, 0, 0, 0.5)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+            }}
+            onClick={() => setShowNgrokTokenModal(false)}
+          >
+            <div
+              style={{
+                backgroundColor: "var(--bg-card)",
+                borderRadius: "0.75rem",
+                padding: "1.5rem",
+                maxWidth: "28rem",
+                width: "90%",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+                border: "1px solid var(--border-color)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 style={{ fontSize: "1.125rem", fontWeight: 600, margin: "0 0 0.5rem 0", color: "var(--text-primary)" }}>
+                ngrok Authtoken Required
+              </h2>
+              <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", margin: "0 0 1rem 0", lineHeight: 1.5 }}>
+                To share your local server via ngrok, you need a free authtoken.
+                Sign up at{" "}
+                <a
+                  href="https://dashboard.ngrok.com/signup"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "var(--color-primary, #3b82f6)" }}
+                >
+                  ngrok.com
+                </a>{" "}
+                and copy your authtoken from the{" "}
+                <a
+                  href="https://dashboard.ngrok.com/get-started/your-authtoken"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "var(--color-primary, #3b82f6)" }}
+                >
+                  dashboard
+                </a>.
+              </p>
+              <div style={{ marginBottom: "1rem" }}>
+                <input
+                  type="password"
+                  value={ngrokTokenInput}
+                  onChange={(e) => setNgrokTokenInput(e.target.value)}
+                  placeholder="Paste your authtoken here"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveNgrokTokenAndStart();
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem 0.75rem",
+                    borderRadius: "0.375rem",
+                    border: "1px solid var(--border-color)",
+                    backgroundColor: "var(--bg-card-secondary)",
+                    color: "var(--text-primary)",
+                    fontSize: "0.875rem",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                <button
+                  onClick={() => setShowNgrokTokenModal(false)}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    borderRadius: "0.375rem",
+                    border: "1px solid var(--border-color)",
+                    backgroundColor: "transparent",
+                    color: "var(--text-secondary)",
+                    fontSize: "0.875rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveNgrokTokenAndStart}
+                  disabled={!ngrokTokenInput.trim() || ngrokTokenSaving}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    borderRadius: "0.375rem",
+                    border: "none",
+                    backgroundColor: ngrokTokenInput.trim() ? "var(--color-primary, #3b82f6)" : "var(--bg-card-secondary)",
+                    color: ngrokTokenInput.trim() ? "#fff" : "var(--text-secondary)",
+                    fontSize: "0.875rem",
+                    cursor: ngrokTokenInput.trim() ? "pointer" : "not-allowed",
+                    fontWeight: 500,
+                  }}
+                >
+                  {ngrokTokenSaving ? "Saving..." : "Save & Start ngrok"}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </>
