@@ -164,6 +164,24 @@
           "url": "https://github.com/vrana/adminer/releases/download/v5.4.2/adminer-5.4.2-en.php"
         }
       ]
+    },
+    "ngrok": {
+      "versions": [
+        {
+          "id": "ngrok-3",
+          "version": "3.19.2",
+          "selected": true,
+          "display_name": "ngrok 3.19.2",
+          "urls": {
+            "windowsX64": "https://bin.ngrok.com/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip",
+            "windowsArm64": "https://bin.ngrok.com/c/bNyj1mQVY4c/ngrok-v3-stable-windows-arm64.zip",
+            "linuxX64": "https://bin.ngrok.com/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz",
+            "linuxArm64": "https://bin.ngrok.com/c/bNyj1mQVY4c/ngrok-v3-stable-linux-arm64.tgz",
+            "macOSX64": "https://bin.ngrok.com/c/bNyj1mQVY4c/ngrok-v3-stable-darwin-amd64.tgz",
+            "macOSArm64": "https://bin.ngrok.com/c/bNyj1mQVY4c/ngrok-v3-stable-darwin-arm64.tgz"
+          }
+        }
+      ]
     }
   }
 }

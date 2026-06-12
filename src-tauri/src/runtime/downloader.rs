@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use reqwest::Client;
 
 use crate::runtime::locator::get_app_data_paths;
-use crate::runtime::packages::{PackageSelection, get_php_package, get_mysql_package, get_mariadb_package, get_phpmyadmin_package, get_postgresql_package, get_adminer_package, get_config};
+use crate::runtime::packages::{PackageSelection, get_php_package, get_mysql_package, get_mariadb_package, get_phpmyadmin_package, get_postgresql_package, get_adminer_package, get_ngrok_package, get_config};
 use sha2::{Digest, Sha256};
 
 /// Runtime configuration loaded from runtime-config.json (shared with packages.rs)
@@ -24,6 +24,7 @@ pub enum BinaryComponent {
     PhpMyAdmin,
     PostgreSQL,
     Adminer,
+    Ngrok,
 }
 
 impl BinaryComponent {
@@ -36,6 +37,7 @@ impl BinaryComponent {
             BinaryComponent::PhpMyAdmin => "phpMyAdmin",
             BinaryComponent::PostgreSQL => "PostgreSQL",
             BinaryComponent::Adminer => "Adminer",
+            BinaryComponent::Ngrok => "ngrok",
         }
     }
 
@@ -87,6 +89,12 @@ impl BinaryComponent {
                     .or_else(|| config.binaries.adminer.as_ref().and_then(|ac| ac.versions.first().map(|v| v.version.clone())))
                     .unwrap_or_default()
             }
+            BinaryComponent::Ngrok => {
+                config.binaries.ngrok.as_ref()
+                    .and_then(|nc| nc.versions.iter().find(|v| v.selected).map(|v| v.version.clone()))
+                    .or_else(|| config.binaries.ngrok.as_ref().and_then(|nc| nc.versions.first().map(|v| v.version.clone())))
+                    .unwrap_or_default()
+            }
         }
     }
 
@@ -103,6 +111,7 @@ impl BinaryComponent {
             BinaryComponent::PhpMyAdmin => "phpmyadmin",
             BinaryComponent::PostgreSQL => "postgresql",
             BinaryComponent::Adminer => "adminer",
+            BinaryComponent::Ngrok => "ngrok",
         }
     }
 }
@@ -139,6 +148,11 @@ impl RuntimeDownloader {
                 }
                 BinaryComponent::Adminer => {
                     if let Some(pkg) = get_adminer_package(&selection.adminer) {
+                        return pkg.version;
+                    }
+                }
+                BinaryComponent::Ngrok => {
+                    if let Some(pkg) = get_ngrok_package(&selection.ngrok) {
                         return pkg.version;
                     }
                 }
@@ -363,6 +377,18 @@ impl RuntimeDownloader {
                         return pkg.url;
                     }
                 }
+                BinaryComponent::Ngrok => {
+                    if let Some(pkg) = get_ngrok_package(&selection.ngrok) {
+                        return match self.platform {
+                            Platform::WindowsX64 => pkg.windows_x64,
+                            Platform::WindowsArm64 => pkg.windows_arm64,
+                            Platform::MacOSX64 => pkg.macos_x64,
+                            Platform::MacOSArm64 => pkg.macos_arm64,
+                            Platform::LinuxX64 => pkg.linux_x64,
+                            Platform::LinuxArm64 => pkg.linux_arm64,
+                        };
+                    }
+                }
                 BinaryComponent::Caddy => {
                     // Caddy doesn't have package selection, use default
                 }
@@ -468,6 +494,24 @@ impl RuntimeDownloader {
                         .or_else(|| ac.versions.first())
                         .unwrap();
                     version_info.url.clone()
+                } else {
+                    String::new()
+                }
+            }
+            BinaryComponent::Ngrok => {
+                if let Some(nc) = &config.binaries.ngrok {
+                    let version_info = nc.versions.iter()
+                        .find(|v| v.selected)
+                        .or_else(|| nc.versions.first())
+                        .unwrap();
+                    match self.platform {
+                        Platform::WindowsX64 => version_info.urls.windows_x64.clone().unwrap_or_default(),
+                        Platform::WindowsArm64 => version_info.urls.windows_arm64.clone().unwrap_or_default(),
+                        Platform::MacOSX64 => version_info.urls.macos_x64.clone().unwrap_or_default(),
+                        Platform::MacOSArm64 => version_info.urls.macos_arm64.clone().unwrap_or_default(),
+                        Platform::LinuxX64 => version_info.urls.linux_x64.clone().unwrap_or_default(),
+                        Platform::LinuxArm64 => version_info.urls.linux_arm64.clone().unwrap_or_default(),
+                    }
                 } else {
                     String::new()
                 }
@@ -718,7 +762,7 @@ impl RuntimeDownloader {
         let platform_key = self.platform.url_key();
 
         match component {
-            BinaryComponent::Php | BinaryComponent::MySQL | BinaryComponent::MariaDB | BinaryComponent::Caddy | BinaryComponent::PostgreSQL => {
+            BinaryComponent::Php | BinaryComponent::MySQL | BinaryComponent::MariaDB | BinaryComponent::Caddy | BinaryComponent::PostgreSQL | BinaryComponent::Ngrok => {
                 let version_info: Box<dyn Iterator<Item = &VersionInfo>> = match component {
                     BinaryComponent::Caddy => Box::new(config.binaries.caddy.versions.iter()),
                     BinaryComponent::Php => Box::new(config.binaries.php.versions.iter()),
@@ -735,6 +779,12 @@ impl RuntimeDownloader {
                             None => return None,
                         }
                     }
+                    BinaryComponent::Ngrok => {
+                        match &config.binaries.ngrok {
+                            Some(nc) => Box::new(nc.versions.iter()),
+                            None => return None,
+                        }
+                    }
                     _ => return None,
                 };
 
@@ -745,6 +795,7 @@ impl RuntimeDownloader {
                         BinaryComponent::MySQL => Some(selection.mysql.as_str()),
                         BinaryComponent::MariaDB => Some(selection.mariadb.as_str()),
                         BinaryComponent::PostgreSQL => Some(selection.postgresql.as_str()),
+                        BinaryComponent::Ngrok => Some(selection.ngrok.as_str()),
                         _ => None,
                     }
                 } else {
@@ -967,6 +1018,9 @@ impl RuntimeDownloader {
         if !skip_list.contains(&"adminer") {
             components.push(BinaryComponent::Adminer);
         }
+        if !skip_list.contains(&"ngrok") {
+            components.push(BinaryComponent::Ngrok);
+        }
 
         let total = components.len() as u8;
 
@@ -1173,7 +1227,7 @@ impl RuntimeDownloader {
             Err(_) => return installed,
         };
 
-        for component in ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer"] {
+        for component in ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer", "ngrok"] {
             let marker_file = runtime_dir.join(format!("{}_installed.txt", component));
             if let Ok(content) = fs::read_to_string(&marker_file) {
                 // Parse version from format: "version=1.2.3\ninstalled_at=..."
@@ -1191,7 +1245,7 @@ impl RuntimeDownloader {
 
     /// Uninstall a specific component by removing its marker file and binary files
     pub fn uninstall_component(&self, component: &str) -> Result<(), String> {
-        let valid_components = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer"];
+        let valid_components = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer", "ngrok"];
         if !valid_components.contains(&component) {
             return Err(format!("Invalid component: {}", component));
         }
@@ -1306,6 +1360,15 @@ impl RuntimeDownloader {
                     }
                 }
             }
+            "ngrok" => {
+                Self::remove_entries(&runtime_dir, &["ngrok"])?;
+                // Also remove ngrok/ directory if it exists
+                let ngrok_dir = runtime_dir.join("ngrok");
+                if ngrok_dir.exists() {
+                    fs::remove_dir_all(&ngrok_dir)
+                        .map_err(|e| format!("Failed to remove ngrok dir: {}", e))?;
+                }
+            }
             _ => {}
         }
 
@@ -1373,6 +1436,7 @@ fn is_executable(name: &str) -> bool {
         || name.ends_with("postgres")
         || name.ends_with("pg_ctl")
         || name.ends_with("initdb")
+        || name.ends_with("ngrok")
         || name.contains("bin/")
 }
 

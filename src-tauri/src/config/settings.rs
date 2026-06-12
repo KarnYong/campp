@@ -38,6 +38,8 @@ pub struct AppSettings {
     pub postgres_root_password: String,
     #[serde(default)]
     pub listen_all_interfaces: bool,
+    #[serde(default)]
+    pub ngrok_authtoken: String,
 }
 
 impl Default for AppSettings {
@@ -58,6 +60,7 @@ impl Default for AppSettings {
             mysql_root_password: String::new(),
             postgres_root_password: String::new(),
             listen_all_interfaces: false,
+            ngrok_authtoken: String::new(),
         }
     }
 }

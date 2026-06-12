@@ -26,6 +26,7 @@ export function PackageSelector({ onSelectionChange, initialSelection, initialEn
       phpmyadmin: "phpmyadmin-5.2",
       postgresql: "postgresql-18.3",
       adminer: "adminer-5.1",
+      ngrok: "ngrok-3",
     }
   );
   const [enabled, setEnabled] = useState<Record<string, boolean>>(
@@ -37,6 +38,7 @@ export function PackageSelector({ onSelectionChange, initialSelection, initialEn
       phpmyadmin: true,
       postgresql: false,
       adminer: false,
+      ngrok: false,
     }
   );
 
@@ -302,6 +304,35 @@ export function PackageSelector({ onSelectionChange, initialSelection, initialEn
           style={selectStyle(enabled.adminer)}
         >
           {packages.adminer.map((pkg: PhpMyAdminPackage) => (
+            <option key={pkg.id} value={pkg.id}>
+              {pkg.display_name}{pkg.recommended && " ★"}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* ngrok Version */}
+      <div style={rowStyle(enabled.ngrok)}>
+        <input
+          type="checkbox"
+          checked={enabled.ngrok}
+          onChange={(e) => handleToggle("ngrok", e.target.checked)}
+          style={checkboxStyle(false)}
+        />
+        <label style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--text-primary)" }}>
+          ngrok
+        </label>
+        <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)", fontWeight: 400 }}>
+          (Dev Tunnel)
+        </span>
+        <select
+          value={selection.ngrok}
+          onChange={(e) => setSelection({ ...selection, ngrok: e.target.value })}
+          disabled={!enabled.ngrok}
+          className="input"
+          style={selectStyle(enabled.ngrok)}
+        >
+          {(packages.ngrok || []).map((pkg: MySQLPackage) => (
             <option key={pkg.id} value={pkg.id}>
               {pkg.display_name}{pkg.recommended && " ★"}
             </option>

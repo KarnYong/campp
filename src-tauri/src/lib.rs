@@ -110,6 +110,7 @@ pub fn run() {
             commands::cleanup_all_services,
             commands::uninstall_component,
             commands::get_debug_info,
+            commands::get_ngrok_public_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

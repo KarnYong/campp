@@ -25,6 +25,8 @@ pub struct RuntimePaths {
     pub config_dir: PathBuf,
     /// Projects directory
     pub projects_dir: PathBuf,
+    /// ngrok binary path (optional — tunnel service)
+    pub ngrok: PathBuf,
 }
 
 /// Application data directory structure
@@ -140,6 +142,13 @@ pub fn locate_runtime_binaries() -> Result<RuntimePaths, String> {
             runtime_dir.join("mysql").join("bin").join("mysqld")
         });
 
+    // Detect ngrok binary (optional — development tunnel service)
+    let ngrok_path = detect_ngrok_binary(runtime_dir)
+        .unwrap_or_else(|e| {
+            tracing::info!("ngrok not detected (optional): {}", e);
+            runtime_dir.join("ngrok")
+        });
+
     Ok(RuntimePaths {
         caddy: detect_caddy_binary(runtime_dir)?,
         php_cgi: detect_php_binary(runtime_dir)?,
@@ -154,6 +163,7 @@ pub fn locate_runtime_binaries() -> Result<RuntimePaths, String> {
         logs_dir: app_paths.logs_dir.clone(),
         config_dir: app_paths.config_dir.clone(),
         projects_dir: app_paths.projects_dir.clone(),
+        ngrok: ngrok_path,
     })
 }
 
@@ -605,6 +615,39 @@ fn detect_adminer_directory(runtime_dir: &Path) -> Result<PathBuf, String> {
     Err("Adminer not found (optional component)".to_string())
 }
 
+/// Detect ngrok binary (optional — development tunnel service)
+fn detect_ngrok_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let paths_to_check = vec![
+            runtime_dir.join("ngrok.exe"),
+            runtime_dir.join("ngrok").join("ngrok.exe"),
+        ];
+
+        for path in paths_to_check {
+            if path.exists() {
+                return Ok(path);
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let paths_to_check = vec![
+            runtime_dir.join("ngrok"),
+            runtime_dir.join("ngrok").join("ngrok"),
+        ];
+
+        for path in paths_to_check {
+            if path.exists() {
+                return Ok(path);
+            }
+        }
+    }
+
+    Err("ngrok binary not found (optional component)".to_string())
+}
+
 /// Check if a binary is valid (exists and is executable)
 pub fn is_valid_binary(path: &Path) -> bool {
     if !path.exists() {
@@ -743,6 +786,7 @@ mod tests {
             logs_dir: temp_dir.path().join("logs"),
             config_dir: temp_dir.path().join("config"),
             projects_dir: temp_dir.path().join("projects"),
+            ngrok: temp_dir.path().join("ngrok.exe"),
         };
 
         assert!(paths.caddy.ends_with("caddy.exe"));
@@ -750,6 +794,7 @@ mod tests {
         assert!(paths.php_ini.ends_with("php.ini"));
         assert!(paths.mysql.ends_with("mysqld.exe"));
         assert!(paths.phpmyadmin.ends_with("phpmyadmin"));
+        assert!(paths.ngrok.ends_with("ngrok.exe"));
     }
 
     #[test]
@@ -770,6 +815,7 @@ mod tests {
             logs_dir: temp_dir.path().join("logs"),
             config_dir: temp_dir.path().join("config"),
             projects_dir: temp_dir.path().join("projects"),
+            ngrok: temp_dir.path().join("ngrok.exe"),
         };
 
         let paths2 = paths1.clone();
@@ -777,6 +823,7 @@ mod tests {
         assert_eq!(paths1.caddy, paths2.caddy);
         assert_eq!(paths1.php_cgi, paths2.php_cgi);
         assert_eq!(paths1.mysql, paths2.mysql);
+        assert_eq!(paths1.ngrok, paths2.ngrok);
     }
 
     #[test]

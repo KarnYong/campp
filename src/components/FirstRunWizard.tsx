@@ -52,6 +52,9 @@ const packages = {
   adminer: [
     { id: "adminer-5.1", version: "5.1.0" },
   ],
+  ngrok: [
+    { id: "ngrok-3", version: "3.19.2" },
+  ],
 };
 
 export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
@@ -75,6 +78,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
     phpmyadmin: "phpmyadmin-5.2",
     postgresql: "postgresql-18.3",
     adminer: "adminer-5.1",
+    ngrok: "ngrok-3",
   });
   const [existingComponents, setExistingComponents] = useState<ExistingComponent[]>([]);
   const [hasExistingOnWelcome, setHasExistingOnWelcome] = useState(false);
@@ -87,6 +91,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
     phpmyadmin: true,
     postgresql: false,
     adminer: false,
+    ngrok: false,
   });
   const [mysqlPassword, setMysqlPassword] = useState("");
   const [postgresPassword, setPostgresPassword] = useState("");
@@ -100,11 +105,12 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
         setHasExistingOnWelcome(hasExisting);
 
         // Auto-enable optional components if already installed
-        if (existing.postgresql || existing.adminer) {
+        if (existing.postgresql || existing.adminer || existing.ngrok) {
           setEnabledComponents((prev) => ({
             ...prev,
             postgresql: !!existing.postgresql || prev.postgresql,
             adminer: !!existing.adminer || prev.adminer,
+            ngrok: !!existing.ngrok || prev.ngrok,
           }));
         }
       } catch (err) {
@@ -231,6 +237,12 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
           version: existing.adminer || "",
           displayName: "Adminer",
           isExisting: !!existing.adminer,
+        },
+        {
+          name: "ngrok",
+          version: existing.ngrok || "",
+          displayName: "ngrok",
+          isExisting: !!existing.ngrok,
         },
       ];
 
@@ -875,6 +887,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
                     { name: "phpMyAdmin", version: packages.phpmyadmin.find(p => p.id === packageSelection.phpmyadmin)?.version || "5.2.2", key: "phpmyadmin" },
                     { name: "PostgreSQL", version: packages.postgresql.find(p => p.id === packageSelection.postgresql)?.version || "18.3.0", key: "postgresql" },
                     { name: "Adminer", version: packages.adminer.find(p => p.id === packageSelection.adminer)?.version || "5.1.0", key: "adminer" },
+                    { name: "ngrok", version: packages.ngrok?.find(p => p.id === packageSelection.ngrok)?.version || "3.19.2", key: "ngrok" },
                   ];
                 })()
                   .filter((pkg) => enabledComponents[pkg.key] !== false)
