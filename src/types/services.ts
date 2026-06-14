@@ -49,6 +49,8 @@ export interface DownloadProgress {
   totalComponents: number;
   downloadedBytes: number;
   totalBytes: number;
+  /** Non-fatal warning (e.g. ngrok skipped by antivirus). Optional. */
+  warning?: string;
 }
 
 // Package selection types

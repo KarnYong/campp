@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { useState, useEffect, useCallback } from "react";
 import { AppSettings, PackageSelection, getDatabaseDisplayName } from "../types/services";
 import { detectPlatform } from "../utils/platform";
+import { isAntivirusError, addDefenderExclusion } from "../utils/antivirus";
+import { NgrokAntivirusNotice } from "./NgrokAntivirusNotice";
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -49,6 +51,11 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
   const [success, setSuccess] = useState<string | null>(null);
   const [components, setComponents] = useState<ComponentInfo[]>([]);
   const [componentAction, setComponentAction] = useState<string | null>(null);
+  // Last component-level error (install/uninstall) plus the component it was
+  // for, so the AV "fix & retry" button can replay that action.
+  const [componentError, setComponentError] = useState<string | null>(null);
+  const [failedComponentKey, setFailedComponentKey] = useState<string | null>(null);
+  const [isFixingComponentAv, setIsFixingComponentAv] = useState(false);
 
   const loadSettings = useCallback(async () => {
     try {
@@ -110,6 +117,7 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
   };
 
   const handleUninstall = async (componentKey: string) => {
+    clearComponentError();
     if (componentKey === "php" || componentKey === "mysql" || componentKey === "mariadb") {
       const msg = componentKey === "php"
         ? "PHP is required by Caddy for serving PHP files and phpMyAdmin. Uninstall anyway?"
@@ -130,13 +138,16 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
       await invoke("uninstall_component", { component: componentKey });
       await refreshComponents();
     } catch (e) {
-      alert(`Failed to uninstall: ${e}`);
+      const msg = e as string;
+      setComponentError(`Failed to uninstall: ${msg}`);
+      setFailedComponentKey(componentKey);
     } finally {
       setComponentAction(null);
     }
   };
 
   const handleReinstall = async (componentKey: string) => {
+    clearComponentError();
     const actionKey = `reinstall-${componentKey}`;
     setComponentAction(actionKey);
     try {
@@ -161,7 +172,9 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
       });
       await refreshComponents();
     } catch (e) {
-      alert(`Failed to reinstall: ${e}`);
+      const msg = e as string;
+      setComponentError(`Failed to reinstall: ${msg}`);
+      setFailedComponentKey(componentKey);
     } finally {
       setComponentAction(null);
     }
@@ -169,6 +182,27 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
 
   const handleInstall = async (componentKey: string) => {
     await handleReinstall(componentKey);
+  };
+
+  // Clear a stale error when a new action starts.
+  const clearComponentError = () => {
+    setComponentError(null);
+    setFailedComponentKey(null);
+  };
+
+  // AV "fix & retry" for the failed component (Windows Defender blocking ngrok).
+  const handleComponentAvFixAndRetry = async () => {
+    if (!failedComponentKey) return;
+    setIsFixingComponentAv(true);
+    try {
+      await addDefenderExclusion();
+    } catch (e) {
+      setComponentError(`Failed to add Defender exclusion: ${e}`);
+      setIsFixingComponentAv(false);
+      return;
+    }
+    setIsFixingComponentAv(false);
+    await handleReinstall(failedComponentKey);
   };
 
   if (loading) {
@@ -529,6 +563,42 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
             <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", marginBottom: "0.75rem" }}>
               Manage installed software components.
             </p>
+            {detectPlatform() === "windows" && (
+              <NgrokAntivirusNotice />
+            )}
+            {componentError && (
+              <div className="error-box" style={{ marginBottom: "0.75rem", padding: "0.625rem 0.75rem", fontSize: "0.8125rem" }}>
+                <p className="error-box-text" style={{ margin: "0 0 0.375rem 0", whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.4 }}>
+                  {componentError}
+                </p>
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                  {isAntivirusError(componentError) && detectPlatform() === "windows" && failedComponentKey && (
+                    <button
+                      onClick={handleComponentAvFixAndRetry}
+                      disabled={isFixingComponentAv || !!componentAction}
+                      className="btn-primary"
+                      style={{ fontSize: "0.75rem", padding: "0.3rem 0.6rem" }}
+                    >
+                      {isFixingComponentAv ? "Adding exclusion…" : "Add Defender exclusion & retry"}
+                    </button>
+                  )}
+                  <button
+                    onClick={clearComponentError}
+                    style={{
+                      padding: "0.25rem 0.5rem",
+                      borderRadius: "0.25rem",
+                      border: "1px solid var(--color-error)",
+                      backgroundColor: "transparent",
+                      color: "var(--color-error)",
+                      fontSize: "0.75rem",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            )}
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
               {components.map((comp) => {
                 const isActing = componentAction === `uninstall-${comp.key}` || componentAction === `reinstall-${comp.key}`;

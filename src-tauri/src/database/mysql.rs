@@ -43,32 +43,39 @@ pub fn initialize_mysql(paths: &RuntimePaths) -> Result<(), String> {
         let mariadbd_dir = paths.mysql.parent()
             .ok_or("Failed to get MariaDB binary directory")?;
 
-        let install_db_script = mariadbd_dir.parent()
+        let scripts_dir = mariadbd_dir.parent()
             .ok_or("Failed to get MariaDB base directory")?
-            .join("scripts")
-            .join("mariadb-install-db");
+            .join("scripts");
+        let install_db_script = scripts_dir.join("mariadb-install-db");
+        let install_db_fallback = scripts_dir.join("mysql_install_db");
 
-        if !install_db_script.exists() {
-            let install_db_script_fallback = mariadbd_dir.parent()
-                .ok_or("Failed to get MariaDB base directory")?
-                .join("scripts")
-                .join("mysql_install_db");
+        // Resolve the actual init script. (Previously the fallback was checked
+        // for existence but never selected, so a MariaDB build shipping only
+        // mysql_install_db would still try the missing mariadb-install-db.)
+        let init_script = if install_db_script.exists() {
+            install_db_script
+        } else if install_db_fallback.exists() {
+            install_db_fallback
+        } else {
+            return Err(format!(
+                "MariaDB installation script not found. Tried:\n  - {}\n  - {}\n\
+                Please ensure the MariaDB runtime was downloaded correctly.",
+                install_db_script.display(),
+                install_db_fallback.display()
+            ));
+        };
 
-            if !install_db_script_fallback.exists() {
-                return Err(format!(
-                    "MariaDB installation script not found. Tried:\n  - {}\n  - {}\n\
-                    Please ensure the MariaDB runtime was downloaded correctly.",
-                    install_db_script.display(),
-                    install_db_script_fallback.display()
-                ));
-            }
-        }
+        // Tar entries extracted via io::copy lose their Unix mode, so the init
+        // script and the server binary it invokes land at 0o644 and can't run.
+        // Ensure both are executable right before spawning. No-op on Windows.
+        crate::runtime::locator::ensure_executable(&init_script);
+        crate::runtime::locator::ensure_executable(&paths.mysql);
 
         let init_log_path = paths.logs_dir.join("mysql_init.log");
         let init_log_file = fs::File::create(&init_log_path)
             .map_err(|e| format!("Failed to create init log file: {}", e))?;
 
-        let mut cmd = configure_no_window(Command::new(&install_db_script));
+        let mut cmd = configure_no_window(Command::new(&init_script));
         cmd.arg(format!("--datadir={}", data_dir_str))
             .arg(format!("--basedir={}", mariadbd_dir.parent().unwrap().display()))
             .arg("--user=")
@@ -129,6 +136,10 @@ pub fn initialize_mysql(paths: &RuntimePaths) -> Result<(), String> {
         tracing::info!("MySQL 8.x: Initializing data directory at: {}", data_dir_str);
 
         let mysqld = &paths.mysql;
+
+        // Ensure mysqld is executable before spawning (tar extraction drops the
+        // exec bit). No-op on Windows.
+        crate::runtime::locator::ensure_executable(mysqld);
 
         let init_log_path = paths.logs_dir.join("mysql_init.log");
         let init_log_file = fs::File::create(&init_log_path)

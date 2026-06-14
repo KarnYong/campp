@@ -8,7 +8,9 @@ import {
   getDatabaseDisplayName,
 } from "../types/services";
 import { PackageSelector } from "./PackageSelector";
+import { NgrokAntivirusNotice } from "./NgrokAntivirusNotice";
 import { detectPlatform } from "../utils/platform";
+import { isAntivirusError, addDefenderExclusion } from "../utils/antivirus";
 
 // Version injected by Vite at build time from package.json
 const APP_VERSION = __APP_VERSION__;
@@ -71,6 +73,10 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
     totalBytes: 0,
   });
   const [error, setError] = useState<string | null>(null);
+  // Remember the skip list used for the last download attempt so the AV
+  // "fix & retry" button can replay the exact same install.
+  const [lastSkipList, setLastSkipList] = useState<string[]>([]);
+  const [isFixingAv, setIsFixingAv] = useState(false);
   const [packageSelection, setPackageSelection] = useState<PackageSelection>({
     php: "php-8.5",
     mysql: "mysql-8.4",
@@ -277,6 +283,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
     // Merge existing skip list + user-disabled components
     const disabled = getDisabledComponents();
     const skipList = [...new Set([...existingSkipList, ...disabled])];
+    setLastSkipList(skipList);
 
     try {
       // Save the package selection and database passwords to settings
@@ -302,6 +309,67 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
       setStep("confirm");
     }
   };
+
+  // Called from the "Add Defender exclusion & retry" button when an antivirus
+  // block is detected. Adds the exclusions (UAC prompt) then replays the last
+  // download attempt.
+  const handleAvFixAndRetry = async () => {
+    setError(null);
+    setIsFixingAv(true);
+    try {
+      await addDefenderExclusion();
+    } catch (e) {
+      setError(`Failed to add Defender exclusion: ${e}`);
+      setIsFixingAv(false);
+      return;
+    }
+    setIsFixingAv(false);
+    await proceedWithDownload(lastSkipList);
+  };
+
+  // Called from the complete-step banner after a bulk install where ngrok was
+  // skipped by the antivirus. Adds the exclusion, then reinstalls ngrok only.
+  const handleRetryNgrokFromBanner = async () => {
+    setError(null);
+    setIsFixingAv(true);
+    try {
+      await addDefenderExclusion();
+    } catch (e) {
+      setError(`Failed to add Defender exclusion: ${e}`);
+      setIsFixingAv(false);
+      return;
+    }
+    setIsFixingAv(false);
+    setStep("download");
+    // Reinstall ngrok only — skip every other component. Caddy/PHP are required
+    // so they come along, but the DB/phpMyAdmin/etc. are skipped.
+    const skipList = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer"];
+    try {
+      await invoke("download_runtime_with_skip", { packageSelection, skipList });
+    } catch (e) {
+      setError(`Failed to reinstall ngrok: ${e}`);
+      setStep("confirm");
+    }
+  };
+
+  // "Add Defender exclusion & retry" — shown inside error boxes only when the
+  // failure looks like an antivirus block on Windows.
+  const avFixButton =
+    error && isAntivirusError(error) && currentPlatform === "windows" ? (
+      <button
+        onClick={handleAvFixAndRetry}
+        disabled={isFixingAv}
+        className="btn-primary"
+        style={{
+          marginTop: "0.375rem",
+          width: "100%",
+          fontSize: "0.75rem",
+          padding: "0.375rem 0.5rem",
+        }}
+      >
+        {isFixingAv ? "Adding exclusion…" : "Add Defender exclusion & retry"}
+      </button>
+    ) : null;
 
   const handleOverwriteAll = () => {
     proceedWithDownload([]);
@@ -535,6 +603,10 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
                 onPostgresPasswordChange={setPostgresPassword}
               />
 
+              {enabledComponents.ngrok && currentPlatform === "windows" && (
+                <NgrokAntivirusNotice />
+              )}
+
               {error && (
                 <div className="error-box" style={{ marginBottom: "0.5rem", padding: "0.5rem", fontSize: "0.875rem" }}>
                   <p className="error-box-text" style={{ margin: 0, fontSize: "0.8125rem", lineHeight: 1.4 }}>
@@ -742,6 +814,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
                   >
                     Dismiss
                   </button>
+                  {avFixButton}
                 </div>
               )}
               <div style={{ display: "flex", justifyContent: "center", gap: "0.375rem", flexWrap: "wrap" }}>
@@ -855,6 +928,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
                   >
                     Dismiss
                   </button>
+                  {avFixButton}
                 </div>
               )}
             </div>
@@ -866,6 +940,40 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
               <p style={{ marginBottom: "0.75rem", color: "var(--color-success)", fontWeight: 500, fontSize: "0.875rem" }}>
                 Runtime binaries installed successfully!
               </p>
+              {progress.warning && (
+                <div
+                  style={{
+                    margin: "0 auto 1rem",
+                    maxWidth: "28rem",
+                    padding: "0.625rem 0.75rem",
+                    borderRadius: "0.5rem",
+                    border: "1px solid #d97706",
+                    backgroundColor: "rgba(217, 119, 6, 0.12)",
+                    color: "#fbbf24",
+                    fontSize: "0.8125rem",
+                    lineHeight: 1.4,
+                    textAlign: "left",
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  ⚠ {progress.warning}
+                  {isAntivirusError(progress.warning) && currentPlatform === "windows" && (
+                    <button
+                      onClick={handleRetryNgrokFromBanner}
+                      disabled={isFixingAv}
+                      className="btn-primary"
+                      style={{
+                        marginTop: "0.5rem",
+                        width: "100%",
+                        fontSize: "0.75rem",
+                        padding: "0.375rem 0.5rem",
+                      }}
+                    >
+                      {isFixingAv ? "Adding exclusion…" : "Add Defender exclusion & retry ngrok"}
+                    </button>
+                  )}
+                </div>
+              )}
               <div
                 style={{
                   display: "flex",

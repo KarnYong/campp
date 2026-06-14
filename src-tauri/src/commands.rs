@@ -755,6 +755,104 @@ pub async fn download_runtime_with_skip(
     Ok("Runtime binaries installed successfully".to_string())
 }
 
+/// Add Windows Defender real-time scanning exclusions for the CAMPP download
+/// temp dir and runtime dir(s). This unblocks ngrok, which Defender flags as
+/// "potentially unwanted software" (os error 225). Elevates via a UAC prompt;
+/// returns Ok only after the exclusions were actually applied.
+#[cfg(target_os = "windows")]
+#[tauri::command]
+pub async fn add_windows_defender_exclusion() -> Result<(), String> {
+    use std::path::PathBuf;
+
+    // Collect every folder Defender scans during a CAMPP install: the download
+    // temp dir, the actual runtime extraction dir, and the app-data runtime
+    // dir (~/.campp/runtime). Add-MpPreference is idempotent, so duplicates are
+    // harmless; we still dedupe to keep the exclusion list tidy.
+    let mut paths: Vec<PathBuf> = vec![std::env::temp_dir().join("campp-download")];
+    if let Ok(downloader) = RuntimeDownloader::new() {
+        if let Ok(runtime_dir) = downloader.get_runtime_dir() {
+            paths.push(runtime_dir);
+        }
+    }
+    if let Ok(app_paths) = crate::runtime::locator::get_app_data_paths() {
+        paths.push(app_paths.runtime_dir);
+    }
+
+    let mut unique: Vec<String> = paths
+        .into_iter()
+        .filter_map(|p| p.to_str().map(|s| s.to_string()))
+        .collect();
+    unique.sort();
+    unique.dedup();
+    let ps_paths = unique
+        .iter()
+        .map(|p| format!("'{}'", p))
+        .collect::<Vec<_>>()
+        .join(",");
+
+    let temp_base = std::env::temp_dir();
+    let script_path = temp_base.join("campp-defender-exclusion.ps1");
+    let result_path = temp_base.join("campp-defender-exclusion.result");
+
+    // The elevated script adds each exclusion (tolerating "already exists"),
+    // then writes OK or the error message to the result file.
+    let script = format!(
+        "$ErrorActionPreference = 'Stop'\n\
+         try {{\n\
+           foreach ($p in @({ps_paths})) {{\n\
+             try {{ Add-MpPreference -ExclusionPath $p }} catch {{ }}\n\
+           }}\n\
+           Set-Content -Path '{result}' -Value 'OK' -NoNewline\n\
+         }} catch {{\n\
+           Set-Content -Path '{result}' -Value ($_.Exception.Message) -NoNewline\n\
+         }}\n",
+        ps_paths = ps_paths,
+        result = result_path.display(),
+    );
+
+    // Remove any stale result so we don't read a previous run's outcome.
+    let _ = fs::remove_file(&result_path);
+    fs::write(&script_path, script)
+        .map_err(|e| format!("Failed to write Defender exclusion script: {}", e))?;
+
+    // Elevate via UAC. Start-Process -Verb RunAs -Wait blocks until the
+    // elevated child exits; if UAC is declined it throws (non-zero exit), and
+    // the result file simply won't be written.
+    let elevate_cmd = format!(
+        "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','{}'",
+        script_path.display(),
+    );
+    let _ = Command::new("powershell")
+        .args(["-NoProfile", "-Command", &elevate_cmd])
+        .status()
+        .map_err(|e| format!("Failed to launch Defender exclusion: {}", e))?;
+
+    let _ = fs::remove_file(&script_path);
+    let outcome = fs::read_to_string(&result_path).unwrap_or_default();
+    let _ = fs::remove_file(&result_path);
+
+    if outcome.trim() == "OK" {
+        Ok(())
+    } else {
+        Err(format!(
+            "Could not add the Windows Defender exclusion{detail}. \
+             If you declined the UAC prompt, try again. As a manual fallback, run this \
+             in an elevated PowerShell:\n  Set-MpPreference -PUAProtection Disable",
+            detail = if outcome.trim().is_empty() {
+                String::new()
+            } else {
+                format!(" ({})", outcome.trim())
+            }
+        ))
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+#[tauri::command]
+pub async fn add_windows_defender_exclusion() -> Result<(), String> {
+    Err("Windows Defender exclusions are only supported on Windows.".to_string())
+}
+
 /// Check system dependencies (libraries required by runtime binaries)
 #[tauri::command]
 pub async fn check_system_dependencies() -> DependencyCheckResult {

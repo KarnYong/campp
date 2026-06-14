@@ -111,6 +111,7 @@ pub fn run() {
             commands::uninstall_component,
             commands::get_debug_info,
             commands::get_ngrok_public_url,
+            commands::add_windows_defender_exclusion,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

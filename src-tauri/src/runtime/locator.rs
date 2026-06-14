@@ -675,6 +675,107 @@ pub fn is_valid_binary(path: &Path) -> bool {
     }
 }
 
+/// Ensure every executable under a runtime directory has its execute bit set.
+///
+/// Walks `dir` recursively and chmod 0o755 every regular file that lives inside a
+/// directory named `bin`, `sbin`, or `scripts`, plus a set of well-known standalone
+/// binaries at the root. No-op on Windows (which has no execute bit).
+///
+/// Why this is needed: tar entries extracted via manual `io::copy` (see the
+/// downloader) do not retain their stored Unix mode, so every extracted file
+/// lands at mode 0o644. Without this step, server binaries inside *versioned*
+/// extraction trees can't be spawned and the OS returns EACCES ("Permission
+/// denied") — the MariaDB/MySQL startup failure on macOS/Linux:
+///   - mariadb-VERSION/bin/mariadbd          (Linux MariaDB)
+///   - mariadb-VERSION/scripts/mariadb-install-db
+///   - mysql-VERSION/bin/mysqld              (macOS MySQL)
+///   - postgresql-VERSION/bin/*              (postgres, pg_ctl, initdb)
+///   - buildroot/bin/php-fpm                 (static-php)
+///
+/// It is called both right after extraction (fresh installs) and at process
+/// manager init (so installs created before this fix self-heal instead of
+/// requiring a re-download).
+pub fn ensure_runtime_executables(dir: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        fn chmod_executables_in(dir: &Path, parent_is_exec_dir: bool) {
+            let entries = match fs::read_dir(dir) {
+                Ok(e) => e,
+                Err(_) => return,
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    let child_is_exec_dir = path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .map(|n| matches!(n, "bin" | "sbin" | "scripts"))
+                        .unwrap_or(false);
+                    chmod_executables_in(&path, child_is_exec_dir);
+                } else if parent_is_exec_dir && path.is_file() {
+                    if let Ok(metadata) = fs::metadata(&path) {
+                        let mut perms = metadata.permissions();
+                        perms.set_mode(0o755);
+                        let _ = fs::set_permissions(&path, perms);
+                    }
+                }
+            }
+        }
+
+        // Standalone binaries sitting directly at the runtime root.
+        let binary_paths = [
+            dir.join("caddy"),
+            dir.join("php-fpm"),
+            dir.join("php-cgi"),
+            dir.join("ngrok"),
+            dir.join("mysqld"),
+            dir.join("mariadbd"),
+        ];
+        for path in &binary_paths {
+            if path.exists() {
+                if let Ok(metadata) = fs::metadata(path) {
+                    let mode = metadata.permissions().mode();
+                    if mode & 0o111 == 0 {
+                        let _ = fs::set_permissions(path, fs::Permissions::from_mode(mode | 0o755));
+                    }
+                }
+            }
+        }
+
+        chmod_executables_in(dir, false);
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = dir;
+    }
+}
+
+/// Ensure a single binary or script is executable on Unix. Defensive
+/// belt-and-suspenders counterpart to [`ensure_runtime_executables`]: chmod the
+/// exact file right before spawning it, so a "Permission denied" startup error
+/// can't slip through even if the recursive walk hit an edge case (e.g. a
+/// symlink, an unexpected directory layout, or an install that predates the
+/// walk). No-op on Windows. Idempotent.
+pub fn ensure_executable(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(metadata) = fs::metadata(path) {
+            let mode = metadata.permissions().mode();
+            if mode & 0o111 == 0 {
+                let _ = fs::set_permissions(path, fs::Permissions::from_mode(mode | 0o755));
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+    }
+}
+
 /// Verify all runtime binaries are present and valid
 pub fn verify_runtime_binaries() -> Result<RuntimePaths, String> {
     let paths = locate_runtime_binaries()?;

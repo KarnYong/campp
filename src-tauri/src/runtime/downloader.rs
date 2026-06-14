@@ -264,6 +264,11 @@ pub struct DownloadProgress {
     pub total_components: u8,
     pub downloaded_bytes: u64,
     pub total_bytes: u64,
+    /// Non-fatal warning (e.g. an optional component like ngrok was skipped
+    /// because the antivirus blocked it). Surfaced to the UI so the user can
+    /// retry from Settings. `None` on normal progress events.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
 }
 
 /// Download step
@@ -725,6 +730,7 @@ impl RuntimeDownloader {
             total_components: total,
             downloaded_bytes,
             total_bytes,
+            warning: None,
         });
 
         Ok(file_path)
@@ -846,9 +852,51 @@ impl RuntimeDownloader {
         }
     }
 
+    /// Append antivirus-quarantine guidance to an error when Windows Defender
+    /// blocked a file. Defender flags ngrok (and sometimes its archive) as
+    /// "potentially unwanted software" (PUA) — os error 225,
+    /// "file contains a virus or potentially unwanted software". ngrok is a
+    /// legitimate tunneling tool that AV engines frequently misidentify, so this
+    /// is almost always a false positive. The app cannot bypass Defender; this
+    /// turns the cryptic OS error into actionable instructions.
+    fn maybe_av_hint(base: String, path: &Path, e: &std::io::Error) -> String {
+        let flagged = e.raw_os_error() == Some(225)
+            || e.to_string().to_lowercase().contains("virus")
+            || e.to_string().to_lowercase().contains("unwanted software");
+        if !flagged {
+            return base;
+        }
+
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("the file");
+        let temp_dir = std::env::temp_dir().join("campp-download");
+        let runtime_dir = crate::runtime::locator::get_app_data_paths()
+            .map(|p| p.runtime_dir.display().to_string())
+            .unwrap_or_else(|_| "the CAMPP runtime folder".to_string());
+
+        format!(
+            "{base}\n\n\
+             Antivirus notice: your antivirus (likely Windows Defender) blocked {name} because it \
+             flagged it as \"potentially unwanted software\". ngrok is a legitimate tunneling tool \
+             that AV engines frequently misidentify — this is almost always a false positive, not a \
+             real infection.\n\n\
+             To install ngrok, exclude the CAMPP folders from real-time scanning, then retry:\n  \
+             • {temp_dir}\n  • {runtime_dir}\n\n\
+             Run this in an elevated PowerShell, then retry the install:\n  \
+             Add-MpPreference -ExclusionPath \"{temp_dir}\"; Add-MpPreference -ExclusionPath \"{runtime_dir}\"\n\n\
+             (Or temporarily disable real-time protection during install.)",
+            base = base,
+            name = name,
+            temp_dir = temp_dir.display(),
+            runtime_dir = runtime_dir,
+        )
+    }
+
     /// Extract a ZIP archive
     fn extract_zip(&self, archive_path: &Path, dest_dir: &Path) -> Result<(), String> {
-        let file = File::open(archive_path).map_err(|e| format!("Failed to open archive: {}", e))?;
+        let file = File::open(archive_path).map_err(|e| Self::maybe_av_hint(format!("Failed to open archive: {}", e), archive_path, &e))?;
         let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Failed to read ZIP: {}", e))?;
 
         for i in 0..archive.len() {
@@ -892,7 +940,7 @@ impl RuntimeDownloader {
     fn extract_tar_gz(&self, archive_path: &Path, dest_dir: &Path) -> Result<(), String> {
         use flate2::read::GzDecoder;
 
-        let file = File::open(archive_path).map_err(|e| format!("Failed to open archive: {}", e))?;
+        let file = File::open(archive_path).map_err(|e| Self::maybe_av_hint(format!("Failed to open archive: {}", e), archive_path, &e))?;
         let decoder = GzDecoder::new(file);
         let mut archive = tar::Archive::new(decoder);
 
@@ -905,7 +953,7 @@ impl RuntimeDownloader {
     fn extract_tar_xz(&self, archive_path: &Path, dest_dir: &Path) -> Result<(), String> {
         use xz2::read::XzDecoder;
 
-        let file = File::open(archive_path).map_err(|e| format!("Failed to open archive: {}", e))?;
+        let file = File::open(archive_path).map_err(|e| Self::maybe_av_hint(format!("Failed to open archive: {}", e), archive_path, &e))?;
         let decoder = XzDecoder::new(file);
         let mut archive = tar::Archive::new(decoder);
 
@@ -916,57 +964,10 @@ impl RuntimeDownloader {
     }
 
     fn set_binary_permissions(dest_dir: &Path) {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-
-            let binary_paths = [
-                dest_dir.join("caddy"),
-                dest_dir.join("php-fpm"),
-                dest_dir.join("php-cgi"),
-                dest_dir.join("buildroot/bin/php-fpm"),
-                dest_dir.join("buildroot/bin/php"),
-                dest_dir.join("mysql/bin/mysqld"),
-                dest_dir.join("bin/mysqld"),
-            ];
-
-            for path in &binary_paths {
-                if path.exists() {
-                    if let Ok(metadata) = fs::metadata(path) {
-                        let mut perms = metadata.permissions();
-                        let mode = perms.mode();
-                        if mode & 0o111 == 0 {
-                            perms.set_mode(mode | 0o755);
-                            let _ = fs::set_permissions(path, perms);
-                        }
-                    }
-                }
-            }
-
-            if let Ok(entries) = fs::read_dir(dest_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_dir() {
-                        if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
-                            if dir_name == "bin" || dir_name == "sbin" {
-                                if let Ok(bin_entries) = fs::read_dir(&path) {
-                                    for bin_entry in bin_entries.flatten() {
-                                        let bin_path = bin_entry.path();
-                                        if bin_path.is_file() {
-                                            if let Ok(metadata) = fs::metadata(&bin_path) {
-                                                let mut perms = metadata.permissions();
-                                                perms.set_mode(0o755);
-                                                let _ = fs::set_permissions(&bin_path, perms);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        // Delegates to the shared self-heal routine in the locator module so the
+        // exact same execute-bit logic runs both after extraction (here) and at
+        // runtime init (so pre-existing installs are fixed without re-download).
+        crate::runtime::locator::ensure_runtime_executables(dest_dir);
     }
 
     /// Download and install all runtime binaries
@@ -1003,26 +1004,37 @@ impl RuntimeDownloader {
             _ => BinaryComponent::MySQL,
         };
 
-        // Core components (always downloaded)
-        let mut components = vec![
+        // Build the effective download list with the skip logic applied once.
+        // Caddy and PHP are always required and can never be skipped; every
+        // other component (including the DB and phpMyAdmin) is optional and is
+        // dropped when present in the skip list. This is what lets the Settings
+        // "reinstall" flow target a single component.
+        let candidates = [
             BinaryComponent::Caddy,
             BinaryComponent::Php,
             db_component,
             BinaryComponent::PhpMyAdmin,
+            BinaryComponent::PostgreSQL,
+            BinaryComponent::Adminer,
+            BinaryComponent::Ngrok,
         ];
+        let to_download: Vec<BinaryComponent> = candidates
+            .into_iter()
+            .filter(|c| {
+                let required = matches!(c, BinaryComponent::Caddy | BinaryComponent::Php);
+                required || !skip_list.contains(&c.binary_name())
+            })
+            .collect();
 
-        // Optional components (only if not in skip list)
-        if !skip_list.contains(&"postgresql") {
-            components.push(BinaryComponent::PostgreSQL);
-        }
-        if !skip_list.contains(&"adminer") {
-            components.push(BinaryComponent::Adminer);
-        }
-        if !skip_list.contains(&"ngrok") {
-            components.push(BinaryComponent::Ngrok);
-        }
-
-        let total = components.len() as u8;
+        let total = to_download.len() as u8;
+        // Number of *optional* (non-Caddy/PHP) components being installed this
+        // run. Used to decide whether a blocked ngrok should be non-fatal: only
+        // when it is not the user's sole targeted component (i.e. a bulk install
+        // rather than a targeted reinstall of ngrok alone).
+        let optional_targeted = to_download
+            .iter()
+            .filter(|c| !matches!(c, BinaryComponent::Caddy | BinaryComponent::Php))
+            .count();
 
         // Create temp directory for downloads
         let temp_dir = std::env::temp_dir().join("campp-download");
@@ -1030,113 +1042,40 @@ impl RuntimeDownloader {
             .map_err(|e| format!("Failed to create temp directory: {}", e))?;
 
         let mut downloaded_files = Vec::new();
+        // Accumulated non-fatal warning (e.g. ngrok skipped by antivirus).
+        let mut install_warning: Option<String> = None;
 
-        for (i, component) in components.iter().enumerate() {
-            let component_name = component.binary_name();
-
-            // Skip if component is in skip list (but never skip required components)
-            let required = matches!(*component, BinaryComponent::Caddy | BinaryComponent::Php);
-            if !required && skip_list.contains(&component_name) {
-                tracing::info!("Skipping {} (already installed)", component.name());
-                continue;
-            }
-
+        for (i, component) in to_download.iter().enumerate() {
             let current = (i + 1) as u8;
 
-            // Download
-            let downloaded_path = self
-                .download_component(*component, &temp_dir, &progress_cb, current, total)
-                .await?;
-
-            // Checksum is verified during download_component
-            progress_cb(DownloadProgress {
-                step: DownloadStep::Extracting,
-                percent: 0,
-                current_component: component.name().to_string(),
-                component_display: component.display_name(),
-                version: self.get_component_version(&component),
-                total_components: total,
-                downloaded_bytes: 0,
-                total_bytes: 0,
-            });
-
-            let runtime_dir = self.get_runtime_dir()?;
-            fs::create_dir_all(&runtime_dir)
-                .map_err(|e| format!("Failed to create runtime directory: {}", e))?;
-
-            // Determine extraction method based on file extension
-            let extension = downloaded_path
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("");
-
-            let is_tar_gz = downloaded_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .map(|n| n.ends_with(".tar.gz"))
-                .unwrap_or(false);
-
-            let is_tar_xz = downloaded_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .map(|n| n.ends_with(".tar.xz"))
-                .unwrap_or(false);
-
-            if is_tar_gz || extension == "gz" {
-                self.extract_tar_gz(&downloaded_path, &runtime_dir)?;
-            } else if is_tar_xz || extension == "xz" {
-                self.extract_tar_xz(&downloaded_path, &runtime_dir)?;
-            } else if extension == "zip" {
-                self.extract_zip(&downloaded_path, &runtime_dir)?;
-            } else if extension == "php" {
-                // Single PHP file (e.g., Adminer) — copy to component directory
-                let component_dir = runtime_dir.join(component.binary_name());
-                fs::create_dir_all(&component_dir)
-                    .map_err(|e| format!("Failed to create {} directory: {}", component.name(), e))?;
-                let dest_path = component_dir.join(downloaded_path.file_name().unwrap_or_default());
-                fs::copy(&downloaded_path, &dest_path)
-                    .map_err(|e| format!("Failed to copy {}: {}", component.name(), e))?;
-                // Also create a generic adminer.php for easy routing
-                if *component == BinaryComponent::Adminer {
-                    let generic_dest = component_dir.join("adminer.php");
-                    let _ = fs::copy(&downloaded_path, &generic_dest);
+            match self
+                .process_component(*component, &temp_dir, &progress_cb, current, total)
+                .await
+            {
+                Ok(path) => downloaded_files.push(path),
+                Err(e) => {
+                    // ngrok is a known antivirus false-positive (Defender flags
+                    // it as "potentially unwanted software", os error 225). In a
+                    // bulk install (more than one optional component targeted), a
+                    // blocked ngrok must not abort the core stack — record a
+                    // warning and continue. When ngrok is the user's sole
+                    // targeted optional component (a reinstall), stay fatal so
+                    // the caller can surface the error and offer a retry.
+                    if *component == BinaryComponent::Ngrok && optional_targeted > 1 {
+                        tracing::warn!(
+                            "Optional component ngrok failed, skipping (non-fatal): {}",
+                            e
+                        );
+                        install_warning = Some(
+                            "ngrok was skipped — your antivirus blocked the download. \
+                             You can retry it from Settings → Components."
+                                .to_string(),
+                        );
+                        continue;
+                    }
+                    return Err(e);
                 }
-            } else if extension.is_empty() {
-                // Bare binary - copy directly to runtime directory
-                let binary_name = downloaded_path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .ok_or("Invalid binary name")?;
-
-                let dest_path = runtime_dir.join(binary_name);
-                fs::copy(&downloaded_path, &dest_path)
-                    .map_err(|e| format!("Failed to copy binary: {}", e))?;
-
-                // Set executable permission on Unix
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    let mut perms = fs::metadata(&dest_path)
-                        .map_err(|e| format!("Failed to get metadata: {}", e))?
-                        .permissions();
-                    perms.set_mode(0o755);
-                    fs::set_permissions(&dest_path, perms)
-                        .map_err(|e| format!("Failed to set permissions: {}", e))?;
-                }
-            } else {
-                return Err(format!("Unsupported archive format: {}", extension));
             }
-
-            // Create marker file to indicate component was installed with version
-            let version = self.get_component_version(&component);
-            let marker_file = runtime_dir.join(format!("{}_installed.txt", component.binary_name()));
-            if let Some(parent) = marker_file.parent() {
-                let _ = fs::create_dir_all(parent);
-            }
-            fs::write(&marker_file, format!("version={}\ninstalled_at={:?}", version, std::time::SystemTime::now()))
-                .map_err(|e| format!("Failed to create marker file: {}", e))?;
-
-            downloaded_files.push(downloaded_path);
         }
 
         // Create all application directories (config, logs, mysql/data, projects)
@@ -1155,12 +1094,121 @@ impl RuntimeDownloader {
             total_components: total,
             downloaded_bytes: 0,
             total_bytes: 0,
+            warning: install_warning,
         });
 
         // Keep temp files for user to access if needed
         // Uncomment to cleanup: let _ = fs::remove_dir_all(temp_dir);
 
         Ok(downloaded_files)
+    }
+
+    /// Download, verify, extract, and install a single component. Returns the
+    /// downloaded archive path on success. Extracted from the
+    /// `download_all_impl` loop so the caller can decide whether an error is
+    /// fatal (see the ngrok non-fatal branch above).
+    async fn process_component(
+        &self,
+        component: BinaryComponent,
+        temp_dir: &Path,
+        progress_cb: &ProgressCallback,
+        current: u8,
+        total: u8,
+    ) -> Result<PathBuf, String> {
+        // Download (checksum is verified inside download_component)
+        let downloaded_path = self
+            .download_component(component, temp_dir, progress_cb, current, total)
+            .await?;
+
+        progress_cb(DownloadProgress {
+            step: DownloadStep::Extracting,
+            percent: 0,
+            current_component: component.name().to_string(),
+            component_display: component.display_name(),
+            version: self.get_component_version(&component),
+            total_components: total,
+            downloaded_bytes: 0,
+            total_bytes: 0,
+            warning: None,
+        });
+
+        let runtime_dir = self.get_runtime_dir()?;
+        fs::create_dir_all(&runtime_dir)
+            .map_err(|e| format!("Failed to create runtime directory: {}", e))?;
+
+        // Determine extraction method based on file extension
+        let extension = downloaded_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("");
+
+        let is_tar_gz = downloaded_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|n| n.ends_with(".tar.gz"))
+            .unwrap_or(false);
+
+        let is_tar_xz = downloaded_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|n| n.ends_with(".tar.xz"))
+            .unwrap_or(false);
+
+        if is_tar_gz || extension == "gz" {
+            self.extract_tar_gz(&downloaded_path, &runtime_dir)?;
+        } else if is_tar_xz || extension == "xz" {
+            self.extract_tar_xz(&downloaded_path, &runtime_dir)?;
+        } else if extension == "zip" {
+            self.extract_zip(&downloaded_path, &runtime_dir)?;
+        } else if extension == "php" {
+            // Single PHP file (e.g., Adminer) — copy to component directory
+            let component_dir = runtime_dir.join(component.binary_name());
+            fs::create_dir_all(&component_dir)
+                .map_err(|e| format!("Failed to create {} directory: {}", component.name(), e))?;
+            let dest_path = component_dir.join(downloaded_path.file_name().unwrap_or_default());
+            fs::copy(&downloaded_path, &dest_path)
+                .map_err(|e| format!("Failed to copy {}: {}", component.name(), e))?;
+            // Also create a generic adminer.php for easy routing
+            if component == BinaryComponent::Adminer {
+                let generic_dest = component_dir.join("adminer.php");
+                let _ = fs::copy(&downloaded_path, &generic_dest);
+            }
+        } else if extension.is_empty() {
+            // Bare binary - copy directly to runtime directory
+            let binary_name = downloaded_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .ok_or("Invalid binary name")?;
+
+            let dest_path = runtime_dir.join(binary_name);
+            fs::copy(&downloaded_path, &dest_path)
+                .map_err(|e| format!("Failed to copy binary: {}", e))?;
+
+            // Set executable permission on Unix
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mut perms = fs::metadata(&dest_path)
+                    .map_err(|e| format!("Failed to get metadata: {}", e))?
+                    .permissions();
+                perms.set_mode(0o755);
+                fs::set_permissions(&dest_path, perms)
+                    .map_err(|e| format!("Failed to set permissions: {}", e))?;
+            }
+        } else {
+            return Err(format!("Unsupported archive format: {}", extension));
+        }
+
+        // Create marker file to indicate component was installed with version
+        let version = self.get_component_version(&component);
+        let marker_file = runtime_dir.join(format!("{}_installed.txt", component.binary_name()));
+        if let Some(parent) = marker_file.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        fs::write(&marker_file, format!("version={}\ninstalled_at={:?}", version, std::time::SystemTime::now()))
+            .map_err(|e| format!("Failed to create marker file: {}", e))?;
+
+        Ok(downloaded_path)
     }
 
     /// Get the runtime directory

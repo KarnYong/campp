@@ -183,6 +183,15 @@ impl ProcessManager {
                 .map_err(|e| format!("Failed to create projects dir: {}", e))?;
         }
 
+        // Self-heal: ensure downloaded runtime binaries carry the execute bit on
+        // Unix. This fixes installs created before execute-bit handling covered
+        // versioned extraction trees (mariadb-*/mysql-*/postgresql-*), so a
+        // MariaDB/MySQL "Permission denied" startup failure is resolved without
+        // forcing the user to re-download the runtime. No-op on Windows.
+        if let Ok(app_paths) = crate::runtime::locator::get_app_data_paths() {
+            crate::runtime::locator::ensure_runtime_executables(&app_paths.runtime_dir);
+        }
+
         Ok(())
     }
 
@@ -586,7 +595,10 @@ fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths, setti
     let log_path = paths.logs_dir.join("mysql.log");
     let log_file = open_log_file_with_retry(&log_path, "MariaDB")?;
 
-    // Build MySQL command — always pass init file to keep password synced
+    // Build MySQL command — always pass init file to keep password synced.
+    // Ensure the binary is executable (tar extraction drops the exec bit on
+    // Unix); without this the spawn fails with EACCES on macOS/Linux.
+    crate::runtime::locator::ensure_executable(&paths.mysql);
     let mut cmd = configure_no_window(Command::new(&paths.mysql));
     cmd.arg("--datadir")
         .arg(&data_dir_str)
