@@ -65,7 +65,7 @@ rm -rf ~/.local/share/campp
 - **Service Management**: Start, stop, and restart services individually or all at once
 - **Port Configuration**: Customize ports for each service via Settings panel
 - **LAN Mode**: Expose services to other devices on your local network
-- **Public Tunnels (ngrok)**: Expose your local server to the internet via a public URL — ideal for testing webhooks or sharing work in progress
+- **Public Tunnels (ngrok)**: Expose your local server to the internet via a public URL — ideal for testing webhooks or sharing work in progress (**Windows only**; Linux & macOS coming soon)
 - **Editable php.ini**: Manually customize PHP configuration (e.g. add extensions)
 - **PostgreSQL Support**: Built-in PostgreSQL alongside MySQL/MariaDB
 - **Database Password Management**: Set root passwords for MySQL and PostgreSQL from Settings
@@ -85,7 +85,7 @@ rm -rf ~/.local/share/campp
 | PostgreSQL | 18.3.0 | Advanced open-source database (**optional**) |
 | phpMyAdmin | 5.2.2 | Web-based database administration interface |
 | Adminer | 5.4.2 | Lightweight database manager (**optional**) |
-| ngrok | 3.19.2 | Secure public tunneling tool (**optional**) |
+| ngrok | 3.19.2 | Secure public tunneling tool (**optional, Windows only**) |
 
 ### Runtime Sources
 
@@ -100,7 +100,7 @@ Runtime binaries are downloaded from the following sources:
 | PostgreSQL | All | [theseus-rs/postgresql-binaries](https://github.com/theseus-rs/postgresql-binaries) |
 | phpMyAdmin | All | [campp-runtime-binaries](https://github.com/KarnYong/campp-runtime-binaries) (built from [phpMyAdmin](https://www.phpmyadmin.net/)) |
 | Adminer | All | [vrana/adminer](https://github.com/vrana/adminer) |
-| ngrok | All | [ngrok.com](https://ngrok.com/) |
+| ngrok | Windows | [ngrok.com](https://ngrok.com/) |
 
 > **Note**: The `campp-runtime-binaries` repository contains pre-compiled binaries packaged for CAMPP's specific requirements.
 

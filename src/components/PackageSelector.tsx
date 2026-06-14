@@ -311,7 +311,8 @@ export function PackageSelector({ onSelectionChange, initialSelection, initialEn
         </select>
       </div>
 
-      {/* ngrok Version */}
+      {/* ngrok — Windows only (upcoming on Linux/macOS) */}
+      {currentPlatform === "windows" && (
       <div style={rowStyle(enabled.ngrok)}>
         <input
           type="checkbox"
@@ -339,6 +340,7 @@ export function PackageSelector({ onSelectionChange, initialSelection, initialEn
           ))}
         </select>
       </div>
+      )}
 
       {/* Package Info Box */}
       <div className="info-box" style={{ padding: "0.5rem", fontSize: "0.875rem" }}>

@@ -354,7 +354,7 @@ pub fn get_available_packages() -> PackagesConfig {
         guard.clone()
     };
 
-    if let Some(cfg) = &config {
+    let mut packages = if let Some(cfg) = &config {
         // Convert from config format to package format
         PackagesConfig {
             php: cfg.binaries.php.versions.iter().map(|v| PhpPackage {
@@ -450,7 +450,18 @@ pub fn get_available_packages() -> PackagesConfig {
         // Fallback to hardcoded defaults
         tracing::info!("Using default package configuration");
         get_default_packages()
+    };
+
+    // ngrok is currently a Windows-only feature (upcoming on Linux/macOS). Expose
+    // an empty list on non-Windows so every consumer — the wizard package
+    // selector, the downloader, and get_ngrok_package() — treats it as
+    // unavailable, i.e. it can't be selected, downloaded, or started.
+    #[cfg(not(target_os = "windows"))]
+    {
+        packages.ngrok.clear();
     }
+
+    packages
 }
 
 /// Get the selected package IDs from config

@@ -1553,19 +1553,58 @@ fn extract_tar_entries<R: std::io::Read>(
         let entry_path = entry.path()
             .map_err(|e| format!("Invalid entry path: {}", e))?;
         let outpath = dest_dir.join(&entry_path);
+        let entry_type = entry.header().entry_type();
 
-        if entry.header().entry_type() == tar::EntryType::Directory {
+        if entry_type.is_dir() {
             fs::create_dir_all(&outpath)
                 .map_err(|e| format!("Failed to create directory '{}': {}", outpath.display(), e))?;
-        } else {
-            if let Some(parent) = outpath.parent() {
-                fs::create_dir_all(parent)
-                    .map_err(|e| format!("Failed to create parent directory: {}", e))?;
-            }
-            let mut outfile = create_file_with_retry(&outpath)?;
-            io::copy(&mut entry, &mut outfile)
-                .map_err(|e| format!("Failed to write file '{}': {}", outpath.display(), e))?;
+            continue;
         }
+
+        // Ensure the parent directory exists for files and links.
+        if let Some(parent) = outpath.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+        }
+
+        // Symlinks and hardlinks carry no data payload — their target lives in
+        // the entry header, so naively io::copy-ing them writes a 0-byte file.
+        // Versioned shared-library links such as PostgreSQL's lib/libpq.so.5
+        // (-> libpq.so.5.18) then land as empty files, and the dynamic loader
+        // rejects them with "file too short". Recreate them as real links on
+        // Unix. (Windows uses ZIP for the affected components, so this branch is
+        // Unix-only; on Windows link entries fall through to the regular-file
+        // path below, preserving prior behavior.)
+        #[cfg(unix)]
+        {
+            if entry_type.is_symlink() {
+                let target = entry
+                    .link_name()
+                    .map_err(|e| format!("Invalid symlink target for '{}': {}", outpath.display(), e))?
+                    .ok_or_else(|| format!("Missing symlink target for '{}'", outpath.display()))?;
+                let _ = fs::remove_file(&outpath); // clear stale placeholder from a prior extract
+                std::os::unix::fs::symlink(target.as_ref(), &outpath)
+                    .map_err(|e| format!("Failed to create symlink '{}' -> '{}': {}", outpath.display(), target.display(), e))?;
+                continue;
+            }
+            if entry_type.is_hard_link() {
+                let target = entry
+                    .link_name()
+                    .map_err(|e| format!("Invalid hardlink target for '{}': {}", outpath.display(), e))?
+                    .ok_or_else(|| format!("Missing hardlink target for '{}'", outpath.display()))?;
+                let target_path = dest_dir.join(&target);
+                let _ = fs::remove_file(&outpath);
+                fs::hard_link(&target_path, &outpath)
+                    .map_err(|e| format!("Failed to create hardlink '{}' -> '{}': {}", outpath.display(), target_path.display(), e))?;
+                continue;
+            }
+        }
+
+        // Regular file (or, on non-Unix, a link entry — none of our tarballs
+        // hit that path for components that matter on Windows, which use ZIP).
+        let mut outfile = create_file_with_retry(&outpath)?;
+        io::copy(&mut entry, &mut outfile)
+            .map_err(|e| format!("Failed to write file '{}': {}", outpath.display(), e))?;
     }
 
     Ok(())

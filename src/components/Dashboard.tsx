@@ -476,7 +476,7 @@ export function Dashboard() {
               margin: "0 auto",
             }}
           >
-            {[ServiceType.Caddy, ServiceType.PhpFpm, ServiceType.MySQL, ServiceType.PostgreSQL, ServiceType.Ngrok].map((serviceType) => {
+            {[ServiceType.Caddy, ServiceType.PhpFpm, ServiceType.MySQL, ServiceType.PostgreSQL, ...(currentPlatform === "windows" ? [ServiceType.Ngrok] : [])].map((serviceType) => {
               const service = services[serviceType];
               if (!service) return null;
               let componentKey: string = serviceType === ServiceType.PhpFpm ? "php" : serviceType;
