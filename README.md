@@ -17,10 +17,10 @@ Download the latest release from [GitHub Releases](https://github.com/KarnYong/c
 **Option A: DEB package (recommended)**
 ```bash
 # Download the latest .deb
-wget https://github.com/KarnYong/campp/releases/latest/download/CAMPP-0.3.4-amd64.deb
+wget https://github.com/KarnYong/campp/releases/latest/download/CAMPP-0.3.6-amd64.deb
 
 # Install
-sudo dpkg -i CAMPP-0.3.4-amd64.deb
+sudo dpkg -i CAMPP-0.3.6-amd64.deb
 
 # If missing dependencies:
 sudo apt-get install -f
@@ -32,13 +32,13 @@ sudo apt-get install -f
 **Option B: AppImage**
 ```bash
 # Download the latest AppImage
-wget https://github.com/KarnYong/campp/releases/latest/download/CAMPP-0.3.4-amd64.AppImage
+wget https://github.com/KarnYong/campp/releases/latest/download/CAMPP-0.3.6-amd64.AppImage
 
 # Make executable
-chmod +x CAMPP-0.3.4-amd64.AppImage
+chmod +x CAMPP-0.3.6-amd64.AppImage
 
 # Run
-./CAMPP-0.3.3-amd64.AppImage
+./CAMPP-0.3.6-amd64.AppImage
 ```
 
 **To uninstall:**
@@ -65,6 +65,7 @@ rm -rf ~/.local/share/campp
 - **Service Management**: Start, stop, and restart services individually or all at once
 - **Port Configuration**: Customize ports for each service via Settings panel
 - **LAN Mode**: Expose services to other devices on your local network
+- **Public Tunnels (ngrok)**: Expose your local server to the internet via a public URL — ideal for testing webhooks or sharing work in progress
 - **Editable php.ini**: Manually customize PHP configuration (e.g. add extensions)
 - **PostgreSQL Support**: Built-in PostgreSQL alongside MySQL/MariaDB
 - **Database Password Management**: Set root passwords for MySQL and PostgreSQL from Settings
@@ -77,13 +78,14 @@ rm -rf ~/.local/share/campp
 
 | Component | Version | Description |
 |-----------|---------|-------------|
-| Caddy | 2.8.4 | Modern web server with automatic HTTPS |
+| Caddy | 2.11.3 | Modern web server with automatic HTTPS |
 | PHP-FPM | 8.5.1 (7.4.33 available on Windows) | Fast and reliable PHP runtime |
 | MySQL | 8.4.0 LTS | Enterprise-grade database (**Windows & macOS**) |
 | MariaDB | 12.3.1 | Community-developed database fork (**Linux**) |
-| PostgreSQL | 18.3 | Advanced open-source database (**optional**) |
+| PostgreSQL | 18.3.0 | Advanced open-source database (**optional**) |
 | phpMyAdmin | 5.2.2 | Web-based database administration interface |
-| Adminer | 5.1.0 | Lightweight database manager (**optional**) |
+| Adminer | 5.4.2 | Lightweight database manager (**optional**) |
+| ngrok | 3.19.2 | Secure public tunneling tool (**optional**) |
 
 ### Runtime Sources
 
@@ -98,6 +100,7 @@ Runtime binaries are downloaded from the following sources:
 | PostgreSQL | All | [theseus-rs/postgresql-binaries](https://github.com/theseus-rs/postgresql-binaries) |
 | phpMyAdmin | All | [campp-runtime-binaries](https://github.com/KarnYong/campp-runtime-binaries) (built from [phpMyAdmin](https://www.phpmyadmin.net/)) |
 | Adminer | All | [vrana/adminer](https://github.com/vrana/adminer) |
+| ngrok | All | [ngrok.com](https://ngrok.com/) |
 
 > **Note**: The `campp-runtime-binaries` repository contains pre-compiled binaries packaged for CAMPP's specific requirements.
 
