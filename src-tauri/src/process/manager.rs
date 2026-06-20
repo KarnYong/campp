@@ -593,18 +593,31 @@ fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths, setti
 
     // Open log file with retry logic
     let log_path = paths.logs_dir.join("mysql.log");
+    #[cfg(target_os = "linux")]
     let log_file = open_log_file_with_retry(&log_path, "MariaDB")?;
+    #[cfg(not(target_os = "linux"))]
+    let log_file = open_log_file_with_retry(&log_path, "MySQL")?;
 
     // Build MySQL command — always pass init file to keep password synced.
     // Ensure the binary is executable (tar extraction drops the exec bit on
     // Unix); without this the spawn fails with EACCES on macOS/Linux.
     crate::runtime::locator::ensure_executable(&paths.mysql);
+
+    // Use a custom socket path to avoid conflicts with system MySQL/MariaDB
+    // On macOS/Linux, default is /tmp/mysql.sock which conflicts with any
+    // system MySQL installation. We place it in the CAMPP logs directory.
+    let socket_path = paths.logs_dir.join("mysql.sock");
+    let socket_str = socket_path.to_string_lossy().to_string();
+
     let mut cmd = configure_no_window(Command::new(&paths.mysql));
     cmd.arg("--datadir")
         .arg(&data_dir_str)
         .arg("--port")
         .arg(service_process.port.to_string())
         .arg(format!("--bind-address={}", settings.bind_address()))
+        .arg("--socket")
+        .arg(&socket_str)
+        .arg("--mysqlx=0")  // Disable X Protocol to avoid port 33060 and mysqlx.sock conflicts
         .arg("--console")
         .arg("--skip-name-resolve")
         .arg("--init-file")
@@ -616,26 +629,37 @@ fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths, setti
         .spawn()
         .map_err(|e| {
             let log_content = fs::read_to_string(&log_path).unwrap_or_else(|_| String::from("Could not read log"));
-            format!("Failed to start MariaDB: {}\n\nMariaDB log:\n{}", e, log_content)
+            #[cfg(target_os = "linux")]
+            let db_name = "MariaDB";
+            #[cfg(not(target_os = "linux"))]
+            let db_name = "MySQL";
+            format!("Failed to start {}: {}\n\n{} log:\n{}", db_name, e, db_name, log_content)
         })?;
 
-    // Give MariaDB more time to start (it's slower than other services)
+    // Give database more time to start (it's slower than other services)
     std::thread::sleep(std::time::Duration::from_secs(3));
 
     // Check if process is still running
     match child.try_wait() {
         Ok(Some(status)) => {
             let _ = fs::remove_file(&init_file);
+            #[cfg(target_os = "linux")]
+            let db_name = "MariaDB";
+            #[cfg(not(target_os = "linux"))]
+            let db_name = "MySQL";
             Err(format!(
-                "MariaDB exited immediately with status: {:?}\n\nCheck logs at: {:?}",
-                status, log_path
+                "{} exited immediately with status: {:?}\n\nCheck logs at: {:?}",
+                db_name, status, log_path
             ))
         }
         Ok(None) => {
             // Mark user as created after successful start
             if needs_init_file {
                 let _ = fs::write(&user_created_flag, "done");
+                #[cfg(target_os = "linux")]
                 tracing::info!("MariaDB root@127.0.0.1 user created during startup");
+                #[cfg(not(target_os = "linux"))]
+                tracing::info!("MySQL root@127.0.0.1 user created during startup");
             }
             service_process.child = Some(child);
             service_process.log_file = Some(log_path);
