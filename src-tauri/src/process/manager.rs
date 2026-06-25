@@ -616,9 +616,12 @@ fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths, setti
         .arg(service_process.port.to_string())
         .arg(format!("--bind-address={}", settings.bind_address()))
         .arg("--socket")
-        .arg(&socket_str)
-        .arg("--mysqlx=0")  // Disable X Protocol to avoid port 33060 and mysqlx.sock conflicts
-        .arg("--console")
+        .arg(&socket_str);
+    // MySQL-specific: Disable X Protocol to avoid port 33060 and mysqlx.sock conflicts
+    // MariaDB (used on Linux) doesn't have X Protocol, so this is MySQL-only
+    #[cfg(not(target_os = "linux"))]
+    cmd.arg("--mysqlx=0");
+    cmd.arg("--console")
         .arg("--skip-name-resolve")
         .arg("--init-file")
         .arg(&init_file);
