@@ -20,6 +20,9 @@ pub struct Ports {
 
 fn default_postgres_port() -> u16 { 5433 }
 
+/// Theme preference: "system" (follow OS), "light", or "dark".
+fn default_theme() -> String { "system".to_string() }
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     pub web_port: u16,
@@ -40,6 +43,9 @@ pub struct AppSettings {
     pub listen_all_interfaces: bool,
     #[serde(default)]
     pub ngrok_authtoken: String,
+    /// UI theme: "system" | "light" | "dark".
+    #[serde(default = "default_theme")]
+    pub theme: String,
 }
 
 impl Default for AppSettings {
@@ -61,6 +67,7 @@ impl Default for AppSettings {
             postgres_root_password: String::new(),
             listen_all_interfaces: false,
             ngrok_authtoken: String::new(),
+            theme: default_theme(),
         }
     }
 }

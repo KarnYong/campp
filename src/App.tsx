@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Dashboard } from "./components/Dashboard";
 import { FirstRunWizard } from "./components/FirstRunWizard";
+import { applyTheme } from "./utils/theme";
 import "./App.css";
 
 function App() {
@@ -10,6 +11,10 @@ function App() {
 
   useEffect(() => {
     checkRuntimeInstalled();
+    // Apply saved theme as early as possible (persists across restarts).
+    invoke<{ theme?: string }>("get_settings")
+      .then((s) => applyTheme(s.theme))
+      .catch(() => {});
 
     // Listen for show-wizard event from menu
     const unlisten = listen("show-wizard", () => {

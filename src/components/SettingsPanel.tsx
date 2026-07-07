@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useState, useEffect, useCallback } from "react";
 import { AppSettings, PackageSelection, getDatabaseDisplayName } from "../types/services";
 import { detectPlatform } from "../utils/platform";
+import { applyTheme, themeLabel } from "../utils/theme";
 import { isAntivirusError, addDefenderExclusion } from "../utils/antivirus";
 import { NgrokAntivirusNotice } from "./NgrokAntivirusNotice";
 
@@ -307,6 +308,64 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
               <p className="success-box-text" style={{ margin: 0 }}>{success}</p>
             </div>
           )}
+
+          {/* Appearance */}
+          <div style={{ marginBottom: "1.5rem" }}>
+            <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "0.5rem" }}>Appearance</h3>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "0.5rem 0.75rem",
+                borderRadius: "0.5rem",
+                transition: "background-color 0.15s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-secondary)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+            >
+              <div>
+                <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>Theme</span>
+                <p style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "0.125rem" }}>
+                  {themeLabel(settings.theme)}
+                </p>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  borderRadius: "0.375rem",
+                  overflow: "hidden",
+                  border: "1px solid var(--border-color)",
+                }}
+              >
+                {(["system", "light", "dark"] as const).map((mode) => {
+                  const active = (settings.theme || "system") === mode;
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => {
+                        setSettings({ ...settings, theme: mode });
+                        applyTheme(mode);
+                      }}
+                      style={{
+                        padding: "0.3rem 0.75rem",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        border: "none",
+                        cursor: "pointer",
+                        transition: "all 0.15s",
+                        backgroundColor: active ? "var(--color-primary)" : "transparent",
+                        color: active ? "#fff" : "var(--text-secondary)",
+                      }}
+                    >
+                      {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
 
           {/* Port Configuration Section */}
           <div style={{ marginBottom: "1.5rem" }}>

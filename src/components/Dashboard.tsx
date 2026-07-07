@@ -6,6 +6,7 @@ import { ServiceCard } from "./ServiceCard";
 import { StatusBar } from "./StatusBar";
 import { SettingsPanel } from "./SettingsPanel";
 import { DebugMenu } from "./DebugMenu";
+import { Icon } from "./icons";
 import { detectPlatform } from "../utils/platform";
 
 export function Dashboard() {
@@ -205,27 +206,33 @@ export function Dashboard() {
         >
           <div style={{ maxWidth: "80rem", margin: "0 auto" }}>
             {/* Title Section */}
-            <div>
-              <h1
-                style={{
-                  fontSize: "1.25rem",
-                  fontWeight: 600,
-                  margin: 0,
-                  color: "var(--text-primary)",
-                }}
-              >
-                CAMPP = Caddy + MySQL + PostgreSQL + PHP
-              </h1>
-              <p
-                style={{
-                  fontSize: "0.875rem",
-                  color: "var(--text-secondary)",
-                  marginTop: "0.25rem",
-                  marginBottom: 0,
-                }}
-              >
-                Development environment for apps using {dbName} (PHP included)
-              </p>
+            <div className="app-brand">
+              <div className="brand-mark">
+                <Icon name="layers" size={20} />
+              </div>
+              <div>
+                <h1
+                  style={{
+                    fontSize: "1.25rem",
+                    fontWeight: 700,
+                    margin: 0,
+                    letterSpacing: "-0.01em",
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  CAMPP
+                </h1>
+                <p
+                  style={{
+                    fontSize: "0.8125rem",
+                    color: "var(--text-secondary)",
+                    marginTop: "0.125rem",
+                    marginBottom: 0,
+                  }}
+                >
+                  Caddy · PHP · {dbName} · phpMyAdmin · PostgreSQL
+                </p>
+              </div>
             </div>
 
             {/* Quick Actions */}
@@ -236,7 +243,7 @@ export function Dashboard() {
                 disabled={!isCaddyRunning}
                 title={isCaddyRunning ? `Open ${webServerUrl}` : "Start Caddy to enable"}
               >
-                <span style={{ fontSize: "1rem" }}>🌐</span>
+                <Icon name="globe" size={16} />
                 Open Site
                 {listenAllInterfaces && isCaddyRunning && (
                   <span style={{
@@ -260,7 +267,7 @@ export function Dashboard() {
                 disabled={!installDir && !projectRoot}
                 title={installDir || projectRoot ? `Open ${installDir || projectRoot}` : "Directory not set"}
               >
-                <span style={{ fontSize: "1rem" }}>📁</span>
+                <Icon name="folder" size={16} />
                 Projects
               </button>
               <button
@@ -269,7 +276,7 @@ export function Dashboard() {
                 disabled={!isCaddyRunning || !installedVersions.phpmyadmin}
                 title={!installedVersions.phpmyadmin ? "phpMyAdmin not installed" : isCaddyRunning ? `Open ${phpMyAdminUrl}` : "Start Caddy to enable"}
               >
-                <span style={{ fontSize: "1rem" }}>🗄️</span>
+                <Icon name="database" size={16} />
                 phpMyAdmin
               </button>
               <button
@@ -278,7 +285,7 @@ export function Dashboard() {
                 disabled={!isCaddyRunning || !installedVersions.adminer}
                 title={!installedVersions.adminer ? "Adminer not installed" : isCaddyRunning ? `Open ${adminerUrl}` : "Start Caddy to enable"}
               >
-                <span style={{ fontSize: "1rem" }}>🐘</span>
+                <Icon name="table" size={16} />
                 Adminer
               </button>
               <button
@@ -286,7 +293,7 @@ export function Dashboard() {
                 onClick={() => setShowSettings(true)}
                 title="Open Settings"
               >
-                <span style={{ fontSize: "1rem" }}>⚙️</span>
+                <Icon name="sliders" size={16} />
                 Settings
               </button>
               <button
@@ -294,7 +301,7 @@ export function Dashboard() {
                 onClick={() => setShowDebugMenu(true)}
                 title="Open Debug Menu"
               >
-                <span style={{ fontSize: "1rem" }}>🔧</span>
+                <Icon name="wrench" size={16} />
                 Debug
               </button>
               <button
@@ -308,7 +315,7 @@ export function Dashboard() {
                 }}
                 title="Read User Manual"
               >
-                <span style={{ fontSize: "1rem" }}>?</span>
+                <Icon name="help" size={16} />
                 Help
               </button>
             </div>
@@ -345,116 +352,22 @@ export function Dashboard() {
               >
                 Installed:
               </span>
-              {installedVersions.caddy && (
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    padding: "0.25rem 0.625rem",
-                    backgroundColor: "var(--bg-card)",
-                    borderRadius: "0.25rem",
-                    fontSize: "0.75rem",
-                    fontWeight: 500,
-                    color: "var(--text-primary)",
-                    border: "1px solid var(--border-color)",
-                  }}
-                >
-                  Caddy {installedVersions.caddy}
-                </span>
-              )}
-              {installedVersions.php && (
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    padding: "0.25rem 0.625rem",
-                    backgroundColor: "var(--bg-card)",
-                    borderRadius: "0.25rem",
-                    fontSize: "0.75rem",
-                    fontWeight: 500,
-                    color: "var(--text-primary)",
-                    border: "1px solid var(--border-color)",
-                  }}
-                >
-                  PHP {installedVersions.php}
-                </span>
-              )}
-              {(installedVersions.mysql || installedVersions.mariadb) && (
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    padding: "0.25rem 0.625rem",
-                    backgroundColor: "var(--bg-card)",
-                    borderRadius: "0.25rem",
-                    fontSize: "0.75rem",
-                    fontWeight: 500,
-                    color: "var(--text-primary)",
-                    border: "1px solid var(--border-color)",
-                  }}
-                >
-                  {dbName} {installedVersions.mysql || installedVersions.mariadb}
-                </span>
-              )}
-              {installedVersions.phpmyadmin && (
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    padding: "0.25rem 0.625rem",
-                    backgroundColor: "var(--bg-card)",
-                    borderRadius: "0.25rem",
-                    fontSize: "0.75rem",
-                    fontWeight: 500,
-                    color: "var(--text-primary)",
-                    border: "1px solid var(--border-color)",
-                  }}
-                >
-                  phpMyAdmin {installedVersions.phpmyadmin}
-                </span>
-              )}
-              {installedVersions.postgresql && (
-                <span
-                  style={{
-                    padding: "0.25rem 0.75rem",
-                    borderRadius: "9999px",
-                    fontSize: "0.75rem",
-                    fontWeight: 500,
-                    color: "var(--text-primary)",
-                    border: "1px solid var(--border-color)",
-                  }}
-                >
-                  PostgreSQL {installedVersions.postgresql}
-                </span>
-              )}
-              {installedVersions.adminer && (
-                <span
-                  style={{
-                    padding: "0.25rem 0.75rem",
-                    borderRadius: "9999px",
-                    fontSize: "0.75rem",
-                    fontWeight: 500,
-                    color: "var(--text-primary)",
-                    border: "1px solid var(--border-color)",
-                  }}
-                >
-                  Adminer {installedVersions.adminer}
-                </span>
-              )}
-              {installedVersions.ngrok && (
-                <span
-                  style={{
-                    padding: "0.25rem 0.75rem",
-                    borderRadius: "9999px",
-                    fontSize: "0.75rem",
-                    fontWeight: 500,
-                    color: "var(--text-primary)",
-                    border: "1px solid var(--border-color)",
-                  }}
-                >
-                  ngrok {installedVersions.ngrok}
-                </span>
-              )}
+              {[
+                installedVersions.caddy && { label: "Caddy", version: installedVersions.caddy },
+                installedVersions.php && { label: "PHP", version: installedVersions.php },
+                (installedVersions.mysql || installedVersions.mariadb) && { label: dbName, version: installedVersions.mysql || installedVersions.mariadb },
+                installedVersions.phpmyadmin && { label: "phpMyAdmin", version: installedVersions.phpmyadmin },
+                installedVersions.postgresql && { label: "PostgreSQL", version: installedVersions.postgresql },
+                installedVersions.adminer && { label: "Adminer", version: installedVersions.adminer },
+                installedVersions.ngrok && { label: "ngrok", version: installedVersions.ngrok },
+              ]
+                .filter((b): b is { label: string; version: string } => !!b)
+                .map((b) => (
+                  <span className="badge" key={b.label}>
+                    {b.label}
+                    <span className="badge__version"> {b.version}</span>
+                  </span>
+                ))}
             </div>
           </div>
         )}

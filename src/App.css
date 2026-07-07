@@ -35,9 +35,10 @@
   --success-box-text: #047857;
 }
 
-/* Dark Mode - override theme variables */
+/* Dark Mode - override theme variables.
+   Excluded when the user explicitly picked light (data-theme="light"). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     /* Dark Mode Brand Colors - more vibrant/bright */
     --color-primary: #24c8db;
     --color-success: #10b981;
@@ -69,6 +70,52 @@
     --success-box-border: #065f46;
     --success-box-text: #6ee7b7;
   }
+}
+
+/* Tell the WebView which schemes we support so native form controls
+   (<select> popups, checkboxes, scrollbars, etc.) render in the right
+   palette on every platform — esp. Linux WebKitGTK, which otherwise paints
+   dropdown popups white while the forced option text stays light. */
+:root {
+  color-scheme: light dark;
+}
+
+/* Explicit theme overrides — win over the OS preference above. */
+[data-theme="light"] {
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --color-primary: #24c8db;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+
+  --bg-app: #1a1a1a;
+  --bg-card: #262626;
+  --bg-card-secondary: #1f2937;
+  --text-primary: #f6f6f6;
+  --text-secondary: #9ca3af;
+  --border-color: #374151;
+
+  --status-stopped-bg: #374151;
+  --status-stopped-text: #9ca3af;
+  --status-running-bg: #065f46;
+  --status-running-text: #6ee7b7;
+  --status-starting-bg: #1e3a8a;
+  --status-starting-text: #93c5fd;
+  --status-stopping-bg: #9a3412;
+  --status-stopping-text: #fdba74;
+  --status-error-bg: #7f1d1d;
+  --status-error-text: #fecaca;
+
+  --error-box-bg: #450a0a;
+  --error-box-border: #7f1d1d;
+  --error-box-text: #fca5a5;
+  --success-box-bg: #064e3b;
+  --success-box-border: #065f46;
+  --success-box-text: #6ee7b7;
 }
 
 /* Base Styles */
@@ -262,6 +309,13 @@ body {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(36, 200, 219, 0.2);
+}
+
+/* Native <select> option popups: force explicit colors so the dropdown list
+   stays readable on platforms (Linux WebKitGTK) that ignore inherited color. */
+select.input option {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
 }
 
 /* Status Indicators */
@@ -475,6 +529,106 @@ body {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* Keyboard focus — visible ring on every focusable element across platforms */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Inline version/chip badge — replaces duplicated inline styles in Dashboard */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.625rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.badge__version {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+/* Themed link — replaces scattered var(--color-primary, #3b82f6) fallbacks */
+.link {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.link:hover {
+  filter: brightness(1.15);
+}
+
+/* Header brand */
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  color: #062b30;
+  background: linear-gradient(135deg, var(--color-primary), #2dd4bf);
+  box-shadow: 0 2px 8px rgba(36, 200, 219, 0.35);
+  flex-shrink: 0;
+}
+
+/* Service card status accent — colored top stripe driven by --status-accent */
+.service-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.service-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--status-accent, transparent);
+}
+
+/* Service icon container */
+.service-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.375rem;
+  background-color: var(--bg-card-secondary);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+/* Status dot for status bar */
+.status-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background-color: var(--text-secondary);
+}
+
+.status-dot--running { background-color: var(--color-success); }
+.status-dot--starting { background-color: var(--color-primary); }
+.status-dot--stopping { background-color: var(--color-warning); }
+.status-dot--error { background-color: var(--color-error); }
 
 /* Debug Menu */
 .debug-menu {

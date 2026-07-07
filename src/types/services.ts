@@ -38,6 +38,8 @@ export interface AppSettings {
   postgres_root_password: string;
   package_selection?: PackageSelection;
   listen_all_interfaces?: boolean;
+  /** UI theme: "system" | "light" | "dark". */
+  theme?: string;
 }
 
 export interface DownloadProgress {

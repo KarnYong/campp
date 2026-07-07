@@ -25,6 +25,7 @@ export function NgrokAntivirusNotice() {
     "idle"
   );
   const [message, setMessage] = useState<string>("");
+  const [showManual, setShowManual] = useState(false);
 
   useEffect(() => {
     // The two folders Defender scans during a CAMPP install: the download
@@ -113,46 +114,66 @@ export function NgrokAntivirusNotice() {
 
       {/* Manual fallback steps */}
       <div style={{ borderTop: "1px solid rgba(217, 119, 6, 0.3)", paddingTop: "0.5rem", marginTop: "0.25rem" }}>
-        <p style={{ margin: "0 0 0.375rem 0", opacity: 0.9 }}>
-          Or add the exclusion manually:
-        </p>
-        <ol style={{ margin: "0 0 0.5rem 1.25rem", padding: 0 }}>
-          <li>Open <strong>Windows Security</strong>.</li>
-          <li>Go to <strong>Virus &amp; threat protection</strong>.</li>
-          <li>
-            Click <strong>Manage settings</strong> under "Virus &amp; threat
-            protection settings".
-          </li>
-          <li>
-            Scroll down to <strong>Exclusions</strong> and click{" "}
-            <strong>Add or remove exclusions</strong>.
-          </li>
-          <li>
-            Click <strong>Add an exclusion</strong> → <strong>Folder</strong>.
-          </li>
-          <li>
-            Select the folder, then repeat for each of these:
-          </li>
-        </ol>
-        {folders.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", marginTop: "0.25rem" }}>
-            {folders.map((f) => (
-              <code
-                key={f}
-                style={{
-                  display: "block",
-                  padding: "0.25rem 0.375rem",
-                  borderRadius: "0.25rem",
-                  backgroundColor: "rgba(0, 0, 0, 0.25)",
-                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                  fontSize: "0.75rem",
-                  wordBreak: "break-all",
-                }}
-              >
-                {f}
-              </code>
-            ))}
-          </div>
+        <button
+          type="button"
+          onClick={() => setShowManual((v) => !v)}
+          aria-expanded={showManual}
+          style={{
+            background: "none",
+            border: "none",
+            padding: 0,
+            cursor: "pointer",
+            fontSize: "0.8125rem",
+            fontWeight: 500,
+            color: "#d97706",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.25rem",
+          }}
+        >
+          {showManual ? "▾" : "▸"} Add the exclusion manually
+        </button>
+        {showManual && (
+          <>
+            <ol style={{ margin: "0.5rem 0 0.5rem 1.25rem", padding: 0 }}>
+              <li>Open <strong>Windows Security</strong>.</li>
+              <li>Go to <strong>Virus &amp; threat protection</strong>.</li>
+              <li>
+                Click <strong>Manage settings</strong> under "Virus &amp; threat
+                protection settings".
+              </li>
+              <li>
+                Scroll down to <strong>Exclusions</strong> and click{" "}
+                <strong>Add or remove exclusions</strong>.
+              </li>
+              <li>
+                Click <strong>Add an exclusion</strong> → <strong>Folder</strong>.
+              </li>
+              <li>
+                Select the folder, then repeat for each of these:
+              </li>
+            </ol>
+            {folders.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", marginTop: "0.25rem" }}>
+                {folders.map((f) => (
+                  <code
+                    key={f}
+                    style={{
+                      display: "block",
+                      padding: "0.25rem 0.375rem",
+                      borderRadius: "0.25rem",
+                      backgroundColor: "rgba(0, 0, 0, 0.25)",
+                      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                      fontSize: "0.75rem",
+                      wordBreak: "break-all",
+                    }}
+                  >
+                    {f}
+                  </code>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

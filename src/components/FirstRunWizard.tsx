@@ -11,9 +11,7 @@ import { PackageSelector } from "./PackageSelector";
 import { NgrokAntivirusNotice } from "./NgrokAntivirusNotice";
 import { detectPlatform } from "../utils/platform";
 import { isAntivirusError, addDefenderExclusion } from "../utils/antivirus";
-
-// Version injected by Vite at build time from package.json
-const APP_VERSION = __APP_VERSION__;
+import pkg from "../../package.json";
 
 interface FirstRunWizardProps {
   onComplete: () => void;
@@ -495,7 +493,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
             Welcome to CAMPP
           </h1>
           <p style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: 0 }}>
-            v{APP_VERSION} &middot; {detectPlatform()}
+            v{pkg.version} &middot; {detectPlatform()}
           </p>
           <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>
             Local Web Development Stack

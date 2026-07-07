@@ -233,7 +233,7 @@ describe('Dashboard Component', () => {
       render(<Dashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('CAMPP v0.1.0')).toBeInTheDocument();
+        expect(screen.getByText(/^CAMPP v\d+\.\d+\.\d+$/)).toBeInTheDocument();
       });
     });
   });

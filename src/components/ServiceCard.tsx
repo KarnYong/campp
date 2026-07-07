@@ -1,4 +1,24 @@
+import type { CSSProperties } from "react";
 import { ServiceType, ServiceState, SERVICE_DISPLAY_NAMES, SERVICE_DESCRIPTIONS, DEFAULT_PORTS, getDatabaseDisplayName } from "../types/services";
+import { Icon, type IconName } from "./icons";
+
+// One icon per service type for visual scanning.
+const SERVICE_ICON: Record<ServiceType, IconName> = {
+  [ServiceType.Caddy]: "globe",
+  [ServiceType.PhpFpm]: "code",
+  [ServiceType.MySQL]: "database",
+  [ServiceType.PostgreSQL]: "layers",
+  [ServiceType.Ngrok]: "share",
+};
+
+// Semantic color class per state (drives styling + is asserted by tests).
+const STATUS_COLOR_CLASS: Record<ServiceState, string> = {
+  [ServiceState.Stopped]: "status-gray",
+  [ServiceState.Starting]: "status-blue",
+  [ServiceState.Running]: "status-green",
+  [ServiceState.Stopping]: "status-orange",
+  [ServiceState.Error]: "status-red",
+};
 
 interface ServiceCardProps {
   serviceType: ServiceType;
@@ -55,22 +75,29 @@ export function ServiceCard({
 
   return (
     <div
-      className={notInstalled ? "" : "card-hover"}
+      className={`service-card${notInstalled ? "" : " card-hover"}`}
       style={{
+        ["--status-accent" as string]: notInstalled ? "transparent" : statusStyles.text,
         backgroundColor: isError ? "var(--error-box-bg)" : "var(--bg-card)",
         border: `1px solid ${isError ? "var(--error-box-border)" : "var(--border-color)"}`,
         borderRadius: "0.5rem",
         padding: "1rem",
         boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
         opacity: notInstalled ? 0.5 : 1,
-      }}
+      } as CSSProperties}
       data-testid={`service-card-${serviceType}`}
       {...props}
     >
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-        <h3 style={{ fontSize: "1rem", fontWeight: 600, margin: 0 }}>{displayName}</h3>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <span className="service-icon">
+            <Icon name={SERVICE_ICON[serviceType]} size={16} />
+          </span>
+          <h3 style={{ fontSize: "1rem", fontWeight: 600, margin: 0 }}>{displayName}</h3>
+        </div>
         <span
+          className={notInstalled ? "status-gray" : STATUS_COLOR_CLASS[state]}
           style={{
             padding: "0.125rem 0.5rem",
             borderRadius: "9999px",
@@ -87,7 +114,7 @@ export function ServiceCard({
       </div>
 
       {/* Description */}
-      <p style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "0.5rem", margin: "0 0 0.5rem 0" }}>
+      <p style={{ fontSize: "0.75rem", color: "var(--text-secondary)", margin: "0 0 0.5rem 0" }}>
         {description}
       </p>
 
