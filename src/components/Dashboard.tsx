@@ -8,6 +8,7 @@ import { SettingsPanel } from "./SettingsPanel";
 import { DebugMenu } from "./DebugMenu";
 import { Icon } from "./icons";
 import { detectPlatform } from "../utils/platform";
+import logoUrl from "../assets/melivecode-logo.png";
 
 export function Dashboard() {
   const [services, setServices] = useState<Partial<ServiceMap>>({});
@@ -207,9 +208,7 @@ export function Dashboard() {
           <div style={{ maxWidth: "80rem", margin: "0 auto" }}>
             {/* Title Section */}
             <div className="app-brand">
-              <div className="brand-mark">
-                <Icon name="layers" size={20} />
-              </div>
+              <img src={logoUrl} alt="meLiveCode logo" className="brand-mark" />
               <div>
                 <h1
                   style={{

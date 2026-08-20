@@ -169,13 +169,13 @@ cgi.fix_pathinfo = 1
 ; Security settings
 expose_php = Off
 
-; OPcache settings optimized for phpMyAdmin performance
+; OPcache settings — revalidate_freq=1 so edited PHP files show on next reload
 zend_extension=opcache
 opcache.enable=1
 opcache.memory_consumption=256
 opcache.interned_strings_buffer=16
 opcache.max_accelerated_files=40000
-opcache.revalidate_freq=60
+opcache.revalidate_freq=1
 opcache.fast_shutdown=1
 opcache.enable_cli=0
 opcache.validate_timestamps=1
