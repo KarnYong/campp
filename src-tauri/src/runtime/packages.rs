@@ -631,7 +631,10 @@ fn get_default_packages() -> PackagesConfig {
                 version: "8.5.1".to_string(),
                 display_name: "PHP 8.5.1 (Latest)".to_string(),
                 windows_x64: "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.5.1-Win32-vs17-x64.zip".to_string(),
-                windows_arm64: "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.5.1-Win32-vs17-x86.zip".to_string(),
+                // No native ARM64 PHP build published; use the x64 build under
+                // Windows 11 x64 emulation (same approach as MySQL below). The
+                // previous x86 (32-bit) build was the wrong architecture.
+                windows_arm64: "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.5.1-Win32-vs17-x64.zip".to_string(),
                 linux_x64: "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.4.18-fpm-linux-x86_64.tar.gz".to_string(),
                 linux_arm64: "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.4.18-fpm-linux-aarch64.tar.gz".to_string(),
                 macos_x64: "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.4.18-fpm-macos-x86_64.tar.gz".to_string(),
@@ -690,7 +693,9 @@ fn get_default_packages() -> PackagesConfig {
                 version: "18.3.0".to_string(),
                 display_name: "PostgreSQL 18.3.0 (Latest)".to_string(),
                 windows_x64: "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.3.0/postgresql-18.3.0-x86_64-pc-windows-msvc.zip".to_string(),
-                windows_arm64: String::new(),
+                // theseus-rs publishes no Windows ARM64 build; use the x64 build
+                // under Windows 11 x64 emulation (same approach as MySQL).
+                windows_arm64: "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.3.0/postgresql-18.3.0-x86_64-pc-windows-msvc.zip".to_string(),
                 linux_x64: "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.3.0/postgresql-18.3.0-x86_64-unknown-linux-gnu.tar.gz".to_string(),
                 linux_arm64: "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.3.0/postgresql-18.3.0-aarch64-unknown-linux-gnu.tar.gz".to_string(),
                 macos_x64: "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.3.0/postgresql-18.3.0-x86_64-apple-darwin.tar.gz".to_string(),

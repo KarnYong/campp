@@ -528,8 +528,9 @@ impl RuntimeDownloader {
     fn get_extension_from_url(url: &str) -> String {
         // Get the filename from the URL
         if let Some(filename) = url.split('/').last() {
-            // Check for .tar.gz first (compound extension)
-            if filename.ends_with(".tar.gz") {
+            // Check for .tar.gz first (compound extension). .tgz is the same
+            // gzip-compressed tar (ngrok ships Linux/macOS builds as .tgz).
+            if filename.ends_with(".tar.gz") || filename.ends_with(".tgz") {
                 return "tar.gz".to_string();
             }
             // Otherwise get the extension after the last dot
@@ -593,7 +594,7 @@ impl RuntimeDownloader {
                 .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
         }
 
-        let response = request
+        let mut response = request
             .send()
             .await
             .map_err(|e| {
@@ -662,11 +663,42 @@ impl RuntimeDownloader {
         let mut file = File::create(&file_path)
             .map_err(|e| format!("Failed to create file: {}", e))?;
 
-        // Download using bytes() for simplicity
-        let bytes = response
-            .bytes()
+        // Stream the body in chunks so we can report real download progress
+        // (bytes() downloads the whole file before returning, so the bar never
+        // moved). Accumulate into a buffer too — the magic-byte and checksum
+        // checks below need the full contents.
+        let mut bytes: Vec<u8> = Vec::with_capacity(total_bytes as usize);
+        let mut received: u64 = 0;
+        let mut last_emit: u64 = 0;
+        while let Some(chunk) = response
+            .chunk()
             .await
-            .map_err(|e| format!("Failed to download bytes: {}", e))?;
+            .map_err(|e| format!("Failed to download {}: {}", component.name(), e))?
+        {
+            bytes.extend_from_slice(&chunk);
+            received += chunk.len() as u64;
+
+            // Throttle to ~every 256 KB so we don't flood the UI event loop.
+            if received - last_emit >= 262_144 {
+                last_emit = received;
+                let percent = if total_bytes > 0 {
+                    ((received as f64 / total_bytes as f64) * 100.0).min(100.0) as u8
+                } else {
+                    0
+                };
+                progress_cb(DownloadProgress {
+                    step: DownloadStep::Downloading,
+                    percent,
+                    current_component: component.name().to_string(),
+                    component_display: component.display_name(),
+                    version: version.clone(),
+                    total_components: total,
+                    downloaded_bytes: received,
+                    total_bytes,
+                    warning: None,
+                });
+            }
+        }
 
         // Verify the file is valid by checking magic bytes
         if bytes.len() < 4 {
@@ -1488,30 +1520,13 @@ fn is_executable(name: &str) -> bool {
         || name.contains("bin/")
 }
 
-/// Kill service processes that may hold file locks in the runtime directory
+/// Kill CAMPP service processes that may hold file locks in the runtime
+/// directory. Path-scoped to our runtime dir so a user's system-wide
+/// MySQL/PostgreSQL/Caddy is never killed.
 fn kill_runtime_processes() {
-    #[cfg(windows)]
-    {
-        use std::process::Command;
-        for name in &["caddy.exe", "php-cgi.exe", "mysqld.exe", "postgres.exe"] {
-            let _ = Command::new("taskkill")
-                .args(["/F", "/IM", name])
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .output();
-        }
+    if let Ok(paths) = crate::runtime::locator::get_app_data_paths() {
+        crate::process::killer::kill_existing_processes(&paths.runtime_dir);
     }
-
-    #[cfg(unix)]
-    {
-        use std::process::Command;
-        for name in &["caddy", "php-cgi", "mysqld", "postgres"] {
-            let _ = Command::new("pkill")
-                .args(["-9", name])
-                .output();
-        }
-    }
-
     std::thread::sleep(std::time::Duration::from_millis(1000));
 }
 
@@ -1608,4 +1623,30 @@ fn extract_tar_entries<R: std::io::Read>(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RuntimeDownloader;
+
+    #[test]
+    fn tgz_url_is_treated_as_tar_gz() {
+        // ngrok ships Linux/macOS as .tgz; it must map to tar.gz so the file is
+        // saved with a .tar.gz name and the extractor's tar.gz branch handles it.
+        assert_eq!(
+            RuntimeDownloader::get_extension_from_url(
+                "https://bin.ngrok.com/c/x/ngrok-v3-stable-linux-amd64.tgz"
+            ),
+            "tar.gz"
+        );
+        // Existing formats still resolve correctly.
+        assert_eq!(
+            RuntimeDownloader::get_extension_from_url("https://x/php-8.5.1.tar.gz"),
+            "tar.gz"
+        );
+        assert_eq!(
+            RuntimeDownloader::get_extension_from_url("https://x/mysql-8.4.0-winx64.zip"),
+            "zip"
+        );
+    }
 }

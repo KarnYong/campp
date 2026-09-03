@@ -847,7 +847,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
                     {progress.step === "error" && "Something went wrong."}
                   </p>
                 </div>
-                {(progress.step === "downloading" || progress.step === "extracting") && (
+                {progress.step === "downloading" && progress.totalBytes > 0 && (
                   <span style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--color-primary)" }}>
                     {progress.percent}%
                   </span>

@@ -272,13 +272,10 @@ impl ProcessManager {
 
         service_process.state = ServiceState::Stopping;
 
-        // Kill the tracked child process by handle
-        if let Some(ref mut child) = service_process.child {
-            let _ = child.kill();
-            let _ = child.wait();
-        }
-
-        // For PostgreSQL, use pg_ctl for graceful shutdown before force-killing
+        // PostgreSQL must shut down gracefully via pg_ctl BEFORE we force-kill
+        // the child handle — a SIGKILL'd postmaster forces crash recovery on the
+        // next start. Wait for it to actually stop, then the child.kill() below
+        // is just a fallback for the (rare) case pg_ctl couldn't.
         if service == ServiceType::PostgreSQL {
             if let Some(ref paths) = self.runtime_paths {
                 #[cfg(target_os = "windows")]
@@ -293,11 +290,20 @@ impl ProcessManager {
                         .arg(&paths.pgsql_data_dir)
                         .arg("-m")
                         .arg("fast")
+                        .arg("-w") // wait for shutdown to complete
+                        .arg("-t")
+                        .arg("30") // ...up to 30s
                         .stdout(Stdio::null())
                         .stderr(Stdio::null())
                         .output();
                 }
             }
+        }
+
+        // Force-kill the tracked child by handle (fallback / non-Postgres path).
+        if let Some(ref mut child) = service_process.child {
+            let _ = child.kill();
+            let _ = child.wait();
         }
 
         // For MySQL/MariaDB on Windows, also kill by PID to handle spawned child processes
@@ -407,7 +413,7 @@ impl ProcessManager {
 /// Start Caddy web server
 fn start_caddy(service_process: &mut ServiceProcess, paths: &RuntimePaths, php_port: u16, mysql_port: u16, settings: &crate::config::AppSettings) -> Result<(), String> {
     // Kill any existing Caddy processes to avoid port conflicts
-    kill_existing_processes("caddy");
+    kill_existing_processes(&paths.caddy);
 
     // Generate phpMyAdmin config only if phpMyAdmin is installed
     if paths.phpmyadmin.join("index.php").exists() {
@@ -459,8 +465,7 @@ fn start_caddy(service_process: &mut ServiceProcess, paths: &RuntimePaths, php_p
 /// Start PHP-FPM (using PHP-CGI for simplicity in MVP)
 fn start_php_fpm(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> Result<(), String> {
     // Kill any existing PHP processes to avoid port conflicts
-    kill_existing_processes("php-fpm");
-    kill_existing_processes("php-cgi");
+    kill_existing_processes(&paths.php_cgi);
 
     // Generate php.ini only if it doesn't exist (first run)
     // Users can manually edit php.ini in the runtime directory
@@ -540,20 +545,9 @@ fn start_php_fpm(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> 
 /// These are drop-in replacements for each other, but have different
 /// initialization requirements and binary names.
 fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths, settings: &crate::config::AppSettings) -> Result<(), String> {
-    // Kill any existing database server processes to avoid port conflicts
-    #[cfg(target_os = "linux")]
-    {
-        // Linux: Kill MariaDB processes (mariadbd)
-        // Also kill mysqld in case of mixed installations
-        kill_existing_processes("mariadbd");
-        kill_existing_processes("mysqld");
-    }
-
-    #[cfg(not(target_os = "linux"))]
-    {
-        // Windows/macOS: Kill MySQL processes (mysqld)
-        kill_existing_processes("mysqld");
-    }
+    // Kill any leftover CAMPP database server (mariadbd/mysqld) to avoid port
+    // conflicts. Path-scoped: never touches a system-wide MySQL/MariaDB.
+    kill_existing_processes(&paths.mysql);
 
     // Initialize MySQL data directory if needed
     initialize_mysql_data_dir(paths)?;
@@ -682,9 +676,9 @@ fn initialize_mysql_data_dir(paths: &RuntimePaths) -> Result<(), String> {
 
 /// Start PostgreSQL database server
 fn start_postgresql(service_process: &mut ServiceProcess, paths: &RuntimePaths, settings: &crate::config::AppSettings) -> Result<(), String> {
-    // Kill any existing PostgreSQL processes
-    kill_existing_processes("postgres");
-    kill_existing_processes("pg_ctl");
+    // Kill any leftover CAMPP PostgreSQL processes (postgres + pg_ctl, all under
+    // pgsql_dir). Path-scoped: never touches a system-wide PostgreSQL.
+    kill_existing_processes(&paths.pgsql_dir);
 
     // Check that PostgreSQL binaries exist
     #[cfg(target_os = "windows")]
@@ -885,7 +879,7 @@ fn start_ngrok(
     )?;
 
     // Kill any existing ngrok processes
-    kill_existing_processes("ngrok");
+    kill_existing_processes(&paths.ngrok);
 
     // Open log file
     let log_path = paths.logs_dir.join("ngrok.log");
@@ -974,9 +968,11 @@ fn reload_postgresql_conf(paths: &RuntimePaths) {
     }
 }
 
-/// Kill any existing processes with the given name to avoid port conflicts
-fn kill_existing_processes(process_name: &str) {
-    super::killer::kill_existing_processes(process_name)
+/// Kill any leftover CAMPP runtime processes running from `path_marker` (a
+/// runtime binary or subdirectory) to avoid port conflicts. Path-scoped so a
+/// user's system-wide DB/web server is never touched.
+fn kill_existing_processes(path_marker: &std::path::Path) {
+    super::killer::kill_existing_processes(path_marker)
 }
 
 impl Default for ProcessManager {

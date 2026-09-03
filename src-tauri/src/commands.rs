@@ -313,52 +313,10 @@ pub async fn do_reset_installation(pm: Arc<Mutex<ProcessManager>>) -> Result<Str
 }
 
 fn kill_runtime_processes() {
-    #[cfg(windows)]
-    {
-        let _ = std::process::Command::new("taskkill")
-            .args(["/F", "/IM", "caddy.exe"])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .output();
-        let _ = std::process::Command::new("taskkill")
-            .args(["/F", "/IM", "php-cgi.exe"])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .output();
-        let _ = std::process::Command::new("taskkill")
-            .args(["/F", "/IM", "mysqld.exe"])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .output();
-        let _ = std::process::Command::new("taskkill")
-            .args(["/F", "/IM", "postgres.exe"])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .output();
-        let _ = std::process::Command::new("taskkill")
-            .args(["/F", "/IM", "ngrok.exe"])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .output();
-    }
-
-    #[cfg(unix)]
-    {
-        let _ = std::process::Command::new("pkill")
-            .args(["-9", "caddy"])
-            .output();
-        let _ = std::process::Command::new("pkill")
-            .args(["-9", "php-cgi"])
-            .output();
-        let _ = std::process::Command::new("pkill")
-            .args(["-9", "mysqld"])
-            .output();
-        let _ = std::process::Command::new("pkill")
-            .args(["-9", "postgres"])
-            .output();
-        let _ = std::process::Command::new("pkill")
-            .args(["-9", "ngrok"])
-            .output();
+    // Path-scoped to our runtime dir so a user's system-wide
+    // MySQL/PostgreSQL/Caddy is never killed (see process::killer).
+    if let Ok(paths) = crate::runtime::locator::get_app_data_paths() {
+        crate::process::killer::kill_existing_processes(&paths.runtime_dir);
     }
 
     // Give processes time to fully exit and release file locks
@@ -657,10 +615,17 @@ fn apply_postgres_password(manager: &crate::ProcessManager, password: &str) {
     {
         let lib_dir = paths.pgsql_dir.join("lib");
         let lib_path = lib_dir.to_string_lossy().to_string();
+        // Linux uses LD_LIBRARY_PATH; macOS uses DYLD_LIBRARY_PATH. Set both so
+        // psql finds bundled libpq on either OS.
         if let Ok(existing) = std::env::var("LD_LIBRARY_PATH") {
             cmd.env("LD_LIBRARY_PATH", format!("{}:{}", lib_path, existing));
         } else {
             cmd.env("LD_LIBRARY_PATH", &lib_path);
+        }
+        if let Ok(existing) = std::env::var("DYLD_LIBRARY_PATH") {
+            cmd.env("DYLD_LIBRARY_PATH", format!("{}:{}", lib_path, existing));
+        } else {
+            cmd.env("DYLD_LIBRARY_PATH", &lib_path);
         }
     }
 

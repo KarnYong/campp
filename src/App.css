@@ -469,6 +469,20 @@ select.input option {
   border-width: 3px;
 }
 
+/* Small spinner sized to sit inline inside a button (uses the button's text
+   color so it works on Start/Stop's colored backgrounds). */
+.btn-spinner {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-right: 0.375rem;
+  vertical-align: -0.1rem;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
 /* Keyboard shortcut */
 .kbd {
   display: inline-block;

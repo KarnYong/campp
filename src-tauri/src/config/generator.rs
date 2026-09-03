@@ -3,6 +3,14 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
 
+/// Escape a string for embedding in a PHP single-quoted literal ('...').
+/// Backslash must be escaped first, then the quote — order matters, or the
+/// escaping backslashes get double-escaped. Used for DB passwords in the
+/// phpMyAdmin and Adminer configs.
+fn escape_php_single_quoted(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('\'', "\\'")
+}
+
 pub fn generate_caddyfile(path: &PathBuf, paths: &RuntimePaths, port: u16, php_port: u16, bind_address: &str) -> Result<(), String> {
     let projects_raw = paths.projects_dir
         .to_str()
@@ -269,7 +277,7 @@ pub fn generate_phpmyadmin_config(paths: &RuntimePaths, mysql_port: u16, mysql_r
     let upload_dir_str = upload_dir.to_string_lossy().replace('\\', "/");
 
     let allow_no_password = if mysql_root_password.is_empty() { "true" } else { "false" };
-    let escaped_password = mysql_root_password.replace('\'', "\\'");
+    let escaped_password = escape_php_single_quoted(mysql_root_password);
 
     let config_content = format!(r#"<?php
 /**
@@ -431,8 +439,8 @@ pub fn generate_adminer_config(
     let adminer_dir = &paths.adminer;
     let index_path = adminer_dir.join("index.php");
 
-    let escaped_mysql_pw = mysql_root_password.replace('\\', "\\\\").replace('\'', "\\'");
-    let escaped_pg_pw = postgres_root_password.replace('\\', "\\\\").replace('\'', "\\'");
+    let escaped_mysql_pw = escape_php_single_quoted(mysql_root_password);
+    let escaped_pg_pw = escape_php_single_quoted(postgres_root_password);
 
     let content = format!(r##"<?php
 // CAMPP Adminer Launcher - Pre-configured database connections
@@ -592,4 +600,23 @@ tunnels:
         .map_err(|e| format!("Failed to write ngrok config: {}", e))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::escape_php_single_quoted;
+
+    #[test]
+    fn escapes_quote_and_backslash_for_php_single_quotes() {
+        // Plain password: unchanged.
+        assert_eq!(escape_php_single_quoted("s3cret"), "s3cret");
+        // Quote: escaped so it can't terminate the '...' literal.
+        assert_eq!(escape_php_single_quoted("a'b"), "a\\'b");
+        // Backslash: doubled. The old quote-only escape left this broken.
+        assert_eq!(escape_php_single_quoted("a\\b"), "a\\\\b");
+        // Trailing backslash used to escape the closing quote → syntax error.
+        assert_eq!(escape_php_single_quoted("pass\\"), "pass\\\\");
+        // Backslash must be escaped BEFORE the quote, not after.
+        assert_eq!(escape_php_single_quoted("a\\'b"), "a\\\\\\'b");
+    }
 }

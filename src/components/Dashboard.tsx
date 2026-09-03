@@ -12,6 +12,11 @@ import logoUrl from "../assets/melivecode-logo.png";
 
 export function Dashboard() {
   const [services, setServices] = useState<Partial<ServiceMap>>({});
+  // Which action is in flight per service. start_service/stop_service block
+  // until the backend finishes (holding the process lock, so the poll can't
+  // observe the transient Starting/Stopping state) — track it here so the card
+  // can show a spinner immediately on click.
+  const [busy, setBusy] = useState<Partial<Record<ServiceType, "start" | "stop" | "restart">>>({});
   const [showSettings, setShowSettings] = useState(false);
   const [showDebugMenu, setShowDebugMenu] = useState(false);
   const [projectRoot, setProjectRoot] = useState<string>("");
@@ -34,6 +39,15 @@ export function Dashboard() {
 
   // Check if Caddy is running
   const isCaddyRunning = services[ServiceType.Caddy]?.state === ServiceState.Running;
+
+  // Settings (ports, passwords, project root) can't be changed safely while any
+  // service is up or transitioning — gate the Settings button until all stopped.
+  const anyServiceActive = Object.values(services).some(
+    (s) =>
+      s?.state === ServiceState.Running ||
+      s?.state === ServiceState.Starting ||
+      s?.state === ServiceState.Stopping
+  );
 
   const refreshStatuses = useCallback(async () => {
     let currentStatuses: Partial<ServiceMap> = {};
@@ -101,7 +115,15 @@ export function Dashboard() {
     loadInstalledVersions();
   }, [loadInstalledVersions]);
 
+  const clearBusy = (serviceType: ServiceType) =>
+    setBusy((b) => {
+      const next = { ...b };
+      delete next[serviceType];
+      return next;
+    });
+
   const startService = async (serviceType: ServiceType) => {
+    setBusy((b) => ({ ...b, [serviceType]: "start" }));
     try {
       await invoke("start_service", { service: serviceType });
       await refreshStatuses();
@@ -114,12 +136,15 @@ export function Dashboard() {
         alert(`Failed to start ${serviceType}:\n${error}`);
       }
       await refreshStatuses();
+    } finally {
+      clearBusy(serviceType);
     }
   };
 
   const saveNgrokTokenAndStart = async () => {
     if (!ngrokTokenInput.trim()) return;
     setNgrokTokenSaving(true);
+    setBusy((b) => ({ ...b, [ServiceType.Ngrok]: "start" }));
     try {
       const settings = await invoke<any>("get_settings");
       settings.ngrok_authtoken = ngrokTokenInput.trim();
@@ -133,10 +158,12 @@ export function Dashboard() {
       alert(`Failed to save authtoken:\n${error}`);
     } finally {
       setNgrokTokenSaving(false);
+      clearBusy(ServiceType.Ngrok);
     }
   };
 
   const stopService = async (serviceType: ServiceType) => {
+    setBusy((b) => ({ ...b, [serviceType]: "stop" }));
     try {
       await invoke("stop_service", { service: serviceType });
       await refreshStatuses();
@@ -144,10 +171,13 @@ export function Dashboard() {
       console.error(`Failed to stop ${serviceType}:`, error);
       alert(`Failed to stop ${serviceType}:\n${error}`);
       await refreshStatuses();
+    } finally {
+      clearBusy(serviceType);
     }
   };
 
   const restartService = async (serviceType: ServiceType) => {
+    setBusy((b) => ({ ...b, [serviceType]: "restart" }));
     try {
       await invoke("restart_service", { service: serviceType });
       await refreshStatuses();
@@ -155,6 +185,8 @@ export function Dashboard() {
       console.error(`Failed to restart ${serviceType}:`, error);
       alert(`Failed to restart ${serviceType}:\n${error}`);
       await refreshStatuses();
+    } finally {
+      clearBusy(serviceType);
     }
   };
 
@@ -290,7 +322,8 @@ export function Dashboard() {
               <button
                 className="btn-quick-action"
                 onClick={() => setShowSettings(true)}
-                title="Open Settings"
+                disabled={anyServiceActive}
+                title={anyServiceActive ? "Stop all services to change settings" : "Open Settings"}
               >
                 <Icon name="sliders" size={16} />
                 Settings
@@ -404,6 +437,7 @@ export function Dashboard() {
                   port={service.port}
                   error={service.error_message}
                   notInstalled={isNotInstalled}
+                  busyAction={busy[serviceType]}
                   tunnelUrl={serviceType === ServiceType.Ngrok ? ngrokUrl : undefined}
                   onStart={() => startService(serviceType)}
                   onStop={() => stopService(serviceType)}

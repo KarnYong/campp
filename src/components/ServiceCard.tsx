@@ -26,6 +26,9 @@ interface ServiceCardProps {
   port?: number;
   error?: string;
   notInstalled?: boolean;
+  /** Action currently in flight (set optimistically on click) — drives the
+   *  spinner/disabled state immediately, before the backend reports back. */
+  busyAction?: "start" | "stop" | "restart";
   tunnelUrl?: string | null;
   onStart: () => void;
   onStop: () => void;
@@ -39,6 +42,7 @@ export function ServiceCard({
   port = DEFAULT_PORTS[serviceType],
   error,
   notInstalled = false,
+  busyAction,
   tunnelUrl,
   onStart,
   onStop,
@@ -53,6 +57,9 @@ export function ServiceCard({
   const isRunning = state === ServiceState.Running;
   const isTransitioning = state === ServiceState.Starting || state === ServiceState.Stopping;
   const isError = state === ServiceState.Error;
+  // Loading = a click is in flight (busyAction) OR the backend reports a
+  // transition. Disables the buttons and shows a spinner on whichever is active.
+  const loading = !!busyAction || isTransitioning;
 
   const getStatusStyles = () => {
     switch (state) {
@@ -195,29 +202,44 @@ export function ServiceCard({
         ) : !isRunning ? (
           <button
             onClick={onStart}
-            disabled={isTransitioning}
+            disabled={loading}
             className="btn-start"
             data-testid={`start-button-${serviceType}`}
           >
-            Start
+            {loading ? (
+              <>
+                <span className="btn-spinner" aria-hidden="true" />
+                {busyAction === "stop" || state === ServiceState.Stopping ? "Stopping…" : "Starting…"}
+              </>
+            ) : (
+              "Start"
+            )}
           </button>
         ) : (
           <>
             <button
               onClick={onStop}
-              disabled={isTransitioning}
+              disabled={loading}
               className="btn-stop"
               data-testid={`stop-button-${serviceType}`}
             >
-              Stop
+              {loading && busyAction !== "restart" ? (
+                <><span className="btn-spinner" aria-hidden="true" />Stopping…</>
+              ) : (
+                "Stop"
+              )}
             </button>
             <button
               onClick={onRestart}
-              disabled={isTransitioning}
+              disabled={loading}
               className="btn-restart"
               data-testid={`restart-button-${serviceType}`}
             >
-              Restart
+              {loading && busyAction === "restart" ? (
+                <><span className="btn-spinner" aria-hidden="true" />Restarting…</>
+              ) : (
+                "Restart"
+              )}
             </button>
           </>
         )}
