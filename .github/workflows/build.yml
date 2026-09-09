@@ -428,6 +428,29 @@ jobs:
           Copy-Item "src-tauri/MANUAL.html","src-tauri/runtime-config.json","src-tauri/runtime-config.schema.json" $stage
           Compress-Archive -Path "$stage/*" -DestinationPath "src-tauri/target/release/CAMPP-$version-x64-portable.zip" -Force
 
+      - name: Pre-populate runtime (offline portable)
+        shell: pwsh
+        run: |
+          # Reuse the app's own downloader/extractor to fill runtime/ next to the
+          # exe. GUI-subsystem app => Start-Process -Wait to actually block and
+          # get the exit code. Working dir = src-tauri so runtime-config.json is found.
+          $exe = Resolve-Path "src-tauri/target/release/CAMPP.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList "--prepare-runtime" `
+                 -WorkingDirectory (Resolve-Path "src-tauri") -Wait -PassThru -NoNewWindow
+          if ($p.ExitCode -ne 0) { throw "prepare-runtime failed with exit code $($p.ExitCode)" }
+          $runtime = "src-tauri/target/release/runtime"
+          if (-not (Test-Path $runtime)) { throw "runtime/ was not created at $runtime" }
+          Write-Host "=== runtime/ contents ==="
+          Get-ChildItem -Path $runtime -Recurse -File | ForEach-Object { Write-Host $_.FullName }
+
+      - name: Create Windows offline portable zip (with runtimes)
+        shell: pwsh
+        run: |
+          $version = "${{ steps.get_version.outputs.version }}"
+          $stage = "portable/CAMPP"
+          Copy-Item "src-tauri/target/release/runtime" $stage -Recurse -Force
+          Compress-Archive -Path "$stage/*" -DestinationPath "src-tauri/target/release/CAMPP-$version-x64-portable-offline.zip" -Force
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -436,6 +459,7 @@ jobs:
             src-tauri/target/release/bundle/msi/*.msi
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/CAMPP-*-portable.zip
+            src-tauri/target/release/CAMPP-*-portable-offline.zip
           if-no-files-found: error
 
       - name: List Windows artifacts

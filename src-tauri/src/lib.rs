@@ -29,6 +29,50 @@ impl AppState {
     }
 }
 
+/// Headless entry point: download + extract the core runtime stack (Caddy +
+/// PHP + default DB + phpMyAdmin) into the `runtime/` dir next to the exe, then
+/// return a process exit code. Used by CI to build the offline "portable with
+/// runtimes" release. Optional extras (PostgreSQL, Adminer, ngrok) stay
+/// download-on-demand. ponytail: reuses RuntimeDownloader so the fragile
+/// extract/marker/checksum logic lives in exactly one place instead of being
+/// reimplemented in the CI YAML.
+pub fn prepare_runtime() -> i32 {
+    // runtime-config.json ships next to the exe in a bundle, but in CI we run
+    // the raw target/release binary — try the exe dir first, then the cwd.
+    let dirs = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .into_iter()
+        .chain(std::env::current_dir().ok());
+    for dir in dirs {
+        if dir.join("runtime-config.json").exists() {
+            crate::runtime::packages::load_config_from_resource_dir(&dir);
+            break;
+        }
+    }
+
+    let downloader = match crate::runtime::downloader::RuntimeDownloader::new() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("prepare-runtime: cannot init downloader: {e}");
+            return 1;
+        }
+    };
+
+    let skip: &[&str] = &["postgresql", "adminer", "ngrok"];
+    let cb: crate::runtime::downloader::ProgressCallback = Box::new(|_| {});
+    match tauri::async_runtime::block_on(downloader.download_all_with_skip(cb, skip)) {
+        Ok(files) => {
+            eprintln!("prepare-runtime: installed {} component archive(s)", files.len());
+            0
+        }
+        Err(e) => {
+            eprintln!("prepare-runtime failed: {e}");
+            1
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt::init();
