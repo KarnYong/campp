@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
+import { PasswordInput } from "./PasswordInput";
 import { invoke } from "@tauri-apps/api/core";
 import { PackagesConfig, PackageSelection, PhpPackage, MySQLPackage, PhpMyAdminPackage, getDatabaseDisplayName } from "../types/services";
 import { detectPlatform } from "../utils/platform";
+import { LOGOS } from "../assets/logos";
 
 interface PackageSelectorProps {
   onSelectionChange: (selection: PackageSelection) => void;
@@ -90,15 +92,15 @@ export function PackageSelector({ onSelectionChange, initialSelection, initialEn
 
   if (loading) {
     return (
-      <div style={{ textAlign: "center", color: "var(--text-secondary)", fontSize: "0.875rem", padding: "1rem" }}>
-        Loading available packages...
+      <div className="wiz-loading">
+        <span className="spinner" /> Loading available packages...
       </div>
     );
   }
 
   if (!packages) {
     return (
-      <div style={{ textAlign: "center", color: "var(--color-error)", fontSize: "0.875rem" }}>
+      <div className="error-box error-box-text">
         Failed to load available packages
       </div>
     );
@@ -107,250 +109,108 @@ export function PackageSelector({ onSelectionChange, initialSelection, initialEn
   const enabledCount = Object.values(enabled).filter(Boolean).length;
   const dbName = getDatabaseDisplayName(currentPlatform);
   const dbKey = currentPlatform === "linux" ? "mariadb" : "mysql";
-  const isDbEnabled = enabled[dbKey];
 
-  const checkboxStyle = (isDisabled: boolean): React.CSSProperties => ({
-    width: "1rem",
-    height: "1rem",
-    cursor: isDisabled ? "default" : "pointer",
-    accentColor: "var(--color-primary)",
-  });
+  type Opt = { id: string; display_name: string; eol?: boolean; lts?: boolean; recommended?: boolean };
+  const optLabel = (pkg: Opt) =>
+    `${pkg.display_name}${pkg.eol ? " (EOL)" : ""}${pkg.lts ? " (LTS)" : ""}${pkg.recommended ? " ★" : ""}`;
 
-  const rowStyle = (isEnabled: boolean): React.CSSProperties => ({
-    display: "flex",
-    alignItems: "center",
-    gap: "0.375rem",
-    opacity: isEnabled ? 1 : 0.5,
-  });
-
-  const selectStyle = (isEnabled: boolean): React.CSSProperties => ({
-    padding: "0.25rem 0.375rem",
-    fontSize: "0.8125rem",
-    flex: 1,
-    minWidth: 0,
-    cursor: isEnabled ? "pointer" : "not-allowed",
-  });
-
-  const pwStyle = (isEnabled: boolean): React.CSSProperties => ({
-    padding: "0.25rem 0.375rem",
-    fontSize: "0.8125rem",
-    width: "6.5rem",
-    cursor: isEnabled ? "text" : "not-allowed",
-  });
+  const rows: {
+    key: string;
+    name: string;
+    tag?: string;
+    required?: boolean;
+    options?: Opt[];
+    value?: string;
+    onChange?: (v: string) => void;
+    password?: { value: string; onChange?: (v: string) => void };
+  }[] = [
+    { key: "caddy", name: "Caddy", tag: "Web server", required: true },
+    { key: "php", name: "PHP", tag: "PHP-FPM", required: true, options: packages.php as PhpPackage[], value: selection.php, onChange: handlePhpChange },
+    {
+      key: dbKey,
+      name: dbName,
+      tag: "Database",
+      options: (dbKey === "mariadb" ? packages.mariadb : packages.mysql) as MySQLPackage[],
+      value: dbKey === "mariadb" ? selection.mariadb : selection.mysql,
+      onChange: (v) => setSelection({ ...selection, [dbKey]: v }),
+      password: { value: mysqlPassword || "", onChange: onMysqlPasswordChange },
+    },
+    { key: "phpmyadmin", name: "phpMyAdmin", tag: "DB admin", options: packages.phpmyadmin as PhpMyAdminPackage[], value: selection.phpmyadmin, onChange: handlePhpMyAdminChange },
+    {
+      key: "postgresql",
+      name: "PostgreSQL",
+      tag: "Database",
+      options: packages.postgresql as MySQLPackage[],
+      value: selection.postgresql,
+      onChange: (v) => setSelection({ ...selection, postgresql: v }),
+      password: { value: postgresPassword || "", onChange: onPostgresPasswordChange },
+    },
+    { key: "adminer", name: "Adminer", tag: "DB admin", options: packages.adminer as PhpMyAdminPackage[], value: selection.adminer, onChange: (v) => setSelection({ ...selection, adminer: v }) },
+    // ngrok — Windows only (upcoming on Linux/macOS)
+    ...(currentPlatform === "windows"
+      ? [{ key: "ngrok", name: "ngrok", tag: "Dev tunnel", options: (packages.ngrok || []) as MySQLPackage[], value: selection.ngrok, onChange: (v: string) => setSelection({ ...selection, ngrok: v }) }]
+      : []),
+  ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-      {/* Caddy (always enabled) */}
-      <div style={rowStyle(true)}>
-        <input type="checkbox" checked={true} disabled={true} style={checkboxStyle(true)} />
-        <label style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--text-primary)" }}>
-          Caddy
-        </label>
-        <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)", fontWeight: 400 }}>
-          (Required)
-        </span>
-        <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginLeft: "auto" }}>
-          v2.11.3
-        </span>
+    <div className="wiz-stack">
+      <div className="list-box">
+        {rows.map((r) => {
+          const on = r.required || !!enabled[r.key];
+          return (
+            <div key={r.key} className={`list-row wiz-pkg${on ? "" : " wiz-pkg--off"}`}>
+              <span className="logo-tile logo-tile--sm"><img src={LOGOS[r.key]} alt="" /></span>
+              <div className="list-row__main">
+                <span>{r.name}</span>
+                <span className="wiz-muted">{r.required ? "Required" : r.tag}</span>
+              </div>
+              <div className="wiz-pkg__controls">
+                {r.options ? (
+                  <select
+                    aria-label={`${r.name} version`}
+                    value={r.value}
+                    onChange={(e) => r.onChange?.(e.target.value)}
+                    disabled={!on}
+                    className="input wiz-pkg__select"
+                  >
+                    {r.options.map((pkg) => (
+                      <option key={pkg.id} value={pkg.id}>{optLabel(pkg)}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="wiz-muted mono">v2.11.3</span>
+                )}
+                {r.password && (
+                  <PasswordInput
+                    aria-label={`${r.name} root password`}
+                    value={r.password.value}
+                    onChange={(e) => r.password!.onChange?.(e.target.value)}
+                    placeholder="Root password"
+                    disabled={!on}
+                    className="wiz-pkg__pw"
+                  />
+                )}
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={on}
+                aria-label={`Install ${r.name}`}
+                className={`switch${r.required ? " switch--locked" : ""}`}
+                disabled={r.required}
+                title={r.required ? "Required, cannot be turned off" : undefined}
+                onClick={() => handleToggle(r.key, !on)}
+              >
+                <span className="switch__knob" />
+              </button>
+            </div>
+          );
+        })}
       </div>
 
-      {/* PHP Version */}
-      <div style={rowStyle(true)}>
-        <input
-          type="checkbox"
-          checked={true}
-          disabled={true}
-          style={checkboxStyle(true)}
-        />
-        <label style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--text-primary)" }}>
-          PHP
-        </label>
-        <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)", fontWeight: 400 }}>
-          (Required)
-        </span>
-        <select
-          value={selection.php}
-          onChange={(e) => handlePhpChange(e.target.value)}
-          disabled={!enabled.php}
-          className="input"
-          style={selectStyle(enabled.php)}
-        >
-          {packages.php.map((pkg: PhpPackage) => (
-            <option key={pkg.id} value={pkg.id}>
-              {pkg.display_name}{pkg.eol && " (EOL)"}{pkg.recommended && " ★"}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Database Version + Password */}
-      <div style={rowStyle(isDbEnabled)}>
-        <input
-          type="checkbox"
-          checked={isDbEnabled}
-          onChange={(e) => handleToggle(dbKey, e.target.checked)}
-          style={checkboxStyle(false)}
-        />
-        <label style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--text-primary)" }}>
-          {dbName}
-        </label>
-        <select
-          value={dbKey === "mariadb" ? selection.mariadb : selection.mysql}
-          onChange={(e) => {
-            if (dbKey === "mariadb") {
-              setSelection({ ...selection, mariadb: e.target.value });
-            } else {
-              setSelection({ ...selection, mysql: e.target.value });
-            }
-          }}
-          disabled={!isDbEnabled}
-          className="input"
-          style={selectStyle(isDbEnabled)}
-        >
-          {(dbKey === "mariadb" ? packages.mariadb : packages.mysql).map((pkg: MySQLPackage) => (
-            <option key={pkg.id} value={pkg.id}>
-              {pkg.display_name}{pkg.lts && " (LTS)"}{pkg.recommended && " ★"}
-            </option>
-          ))}
-        </select>
-        <input
-          type="password"
-          value={mysqlPassword || ""}
-          onChange={(e) => onMysqlPasswordChange?.(e.target.value)}
-          placeholder="Password"
-          disabled={!isDbEnabled}
-          className="input"
-          style={pwStyle(isDbEnabled)}
-        />
-      </div>
-
-      {/* phpMyAdmin Version */}
-      <div style={rowStyle(enabled.phpmyadmin)}>
-        <input
-          type="checkbox"
-          checked={enabled.phpmyadmin}
-          onChange={(e) => handleToggle("phpmyadmin", e.target.checked)}
-          style={checkboxStyle(false)}
-        />
-        <label style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--text-primary)" }}>
-          phpMyAdmin
-        </label>
-        <select
-          value={selection.phpmyadmin}
-          onChange={(e) => handlePhpMyAdminChange(e.target.value)}
-          disabled={!enabled.phpmyadmin}
-          className="input"
-          style={selectStyle(enabled.phpmyadmin)}
-        >
-          {packages.phpmyadmin.map((pkg: PhpMyAdminPackage) => (
-            <option key={pkg.id} value={pkg.id}>
-              {pkg.display_name}{pkg.recommended && " ★"}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* PostgreSQL Version + Password */}
-      <div style={rowStyle(enabled.postgresql)}>
-        <input
-          type="checkbox"
-          checked={enabled.postgresql}
-          onChange={(e) => handleToggle("postgresql", e.target.checked)}
-          style={checkboxStyle(false)}
-        />
-        <label style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--text-primary)" }}>
-          PostgreSQL
-        </label>
-        <select
-          value={selection.postgresql}
-          onChange={(e) => setSelection({ ...selection, postgresql: e.target.value })}
-          disabled={!enabled.postgresql}
-          className="input"
-          style={selectStyle(enabled.postgresql)}
-        >
-          {packages.postgresql.map((pkg: MySQLPackage) => (
-            <option key={pkg.id} value={pkg.id}>
-              {pkg.display_name}{pkg.recommended && " ★"}
-            </option>
-          ))}
-        </select>
-        <input
-          type="password"
-          value={postgresPassword || ""}
-          onChange={(e) => onPostgresPasswordChange?.(e.target.value)}
-          placeholder="Password"
-          disabled={!enabled.postgresql}
-          className="input"
-          style={pwStyle(enabled.postgresql)}
-        />
-      </div>
-
-      {/* Adminer Version */}
-      <div style={rowStyle(enabled.adminer)}>
-        <input
-          type="checkbox"
-          checked={enabled.adminer}
-          onChange={(e) => handleToggle("adminer", e.target.checked)}
-          style={checkboxStyle(false)}
-        />
-        <label style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--text-primary)" }}>
-          Adminer
-        </label>
-        <select
-          value={selection.adminer}
-          onChange={(e) => setSelection({ ...selection, adminer: e.target.value })}
-          disabled={!enabled.adminer}
-          className="input"
-          style={selectStyle(enabled.adminer)}
-        >
-          {packages.adminer.map((pkg: PhpMyAdminPackage) => (
-            <option key={pkg.id} value={pkg.id}>
-              {pkg.display_name}{pkg.recommended && " ★"}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* ngrok — Windows only (upcoming on Linux/macOS) */}
-      {currentPlatform === "windows" && (
-      <div style={rowStyle(enabled.ngrok)}>
-        <input
-          type="checkbox"
-          checked={enabled.ngrok}
-          onChange={(e) => handleToggle("ngrok", e.target.checked)}
-          style={checkboxStyle(false)}
-        />
-        <label style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--text-primary)" }}>
-          ngrok
-        </label>
-        <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)", fontWeight: 400 }}>
-          (Dev Tunnel)
-        </span>
-        <select
-          value={selection.ngrok}
-          onChange={(e) => setSelection({ ...selection, ngrok: e.target.value })}
-          disabled={!enabled.ngrok}
-          className="input"
-          style={selectStyle(enabled.ngrok)}
-        >
-          {(packages.ngrok || []).map((pkg: MySQLPackage) => (
-            <option key={pkg.id} value={pkg.id}>
-              {pkg.display_name}{pkg.recommended && " ★"}
-            </option>
-          ))}
-        </select>
-      </div>
-      )}
-
-      {/* Package Info Box */}
-      <div className="info-box" style={{ padding: "0.5rem", fontSize: "0.875rem" }}>
-        <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", margin: "0 0 0.375rem 0" }}>
-          {enabledCount} of {Object.keys(enabled).length} components selected.
-        </p>
-        <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", margin: 0 }}>
-          <strong>Note:</strong> EOL versions may have security vulnerabilities.
-        </p>
-      </div>
+      <p className="wiz-muted wiz-small">
+        {enabledCount} of {Object.keys(enabled).length} components selected · ★ recommended · EOL versions may have security vulnerabilities.
+      </p>
     </div>
   );
 }

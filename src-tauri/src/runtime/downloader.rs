@@ -1037,10 +1037,12 @@ impl RuntimeDownloader {
         };
 
         // Build the effective download list with the skip logic applied once.
-        // Caddy and PHP are always required and can never be skipped; every
-        // other component (including the DB and phpMyAdmin) is optional and is
-        // dropped when present in the skip list. This is what lets the Settings
-        // "reinstall" flow target a single component.
+        // Caddy and PHP are required: they are only skipped when already
+        // installed, so a skip list can never leave the stack without them.
+        // Every other component (including the DB and phpMyAdmin) is optional
+        // and is dropped when present in the skip list. This is what lets the
+        // Settings "reinstall" flow target a single component.
+        let installed = self.get_installed_components();
         let candidates = [
             BinaryComponent::Caddy,
             BinaryComponent::Php,
@@ -1053,7 +1055,8 @@ impl RuntimeDownloader {
         let to_download: Vec<BinaryComponent> = candidates
             .into_iter()
             .filter(|c| {
-                let required = matches!(c, BinaryComponent::Caddy | BinaryComponent::Php);
+                let required = matches!(c, BinaryComponent::Caddy | BinaryComponent::Php)
+                    && !installed.contains_key(c.binary_name());
                 required || !skip_list.contains(&c.binary_name())
             })
             .collect();

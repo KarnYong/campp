@@ -53,7 +53,7 @@ describe('ServiceCard Component', () => {
           {...mockHandlers}
         />
       );
-      expect(screen.getByText('Port: 8080')).toBeInTheDocument();
+      expect(screen.getByText(':8080')).toBeInTheDocument();
     });
 
     it('should have proper data-testid attributes for testing', () => {
@@ -330,7 +330,7 @@ describe('ServiceCard Component', () => {
       );
 
       expect(screen.getByText('Caddy')).toBeInTheDocument();
-      expect(screen.getByText('Port: 8080')).toBeInTheDocument();
+      expect(screen.getByText(':8080')).toBeInTheDocument();
       expect(screen.getByText('Web Server')).toBeInTheDocument();
     });
 
@@ -345,7 +345,7 @@ describe('ServiceCard Component', () => {
       );
 
       expect(screen.getByText('PHP-FPM')).toBeInTheDocument();
-      expect(screen.getByText('Port: 9000')).toBeInTheDocument();
+      expect(screen.getByText(':9000')).toBeInTheDocument();
       expect(screen.getByText('PHP Runtime')).toBeInTheDocument();
     });
 
@@ -360,7 +360,7 @@ describe('ServiceCard Component', () => {
       );
 
       expect(screen.getByText('MySQL')).toBeInTheDocument();
-      expect(screen.getByText('Port: 3307')).toBeInTheDocument();
+      expect(screen.getByText(':3307')).toBeInTheDocument();
       expect(screen.getByText('Database Server')).toBeInTheDocument();
     });
   });

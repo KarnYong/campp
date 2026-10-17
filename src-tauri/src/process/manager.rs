@@ -6,7 +6,25 @@ use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-const DEFAULT_INDEX_PHP: &str = r#"<?php phpinfo(); ?>"#;
+/// What older CAMPP versions wrote as index.php; replaced by the welcome page only if untouched.
+const LEGACY_INDEX_PHP: &str = r#"<?php phpinfo(); ?>"#;
+const DEFAULT_INFO_PHP: &str = "<?php phpinfo();\n";
+const WELCOME_PHP: &str = include_str!("welcome.php");
+const WELCOME_LOGO_B64: &str = include_str!("welcome_logo.b64");
+
+/// Create the welcome index.php and info.php in the projects root when missing.
+/// Never overwrites user files, except an untouched legacy phpinfo index.php.
+fn ensure_default_pages(projects_dir: &Path) {
+    let index_php = projects_dir.join("index.php");
+    let is_legacy = fs::read_to_string(&index_php).map(|s| s.trim() == LEGACY_INDEX_PHP).unwrap_or(false);
+    if !index_php.exists() || is_legacy {
+        let _ = fs::write(&index_php, WELCOME_PHP.replace("{{LOGO}}", WELCOME_LOGO_B64.trim()));
+    }
+    let info_php = projects_dir.join("info.php");
+    if !info_php.exists() {
+        let _ = fs::write(&info_php, DEFAULT_INFO_PHP);
+    }
+}
 
 // Windows-specific: Constant to hide console window
 #[cfg(target_os = "windows")]
@@ -208,11 +226,7 @@ impl ProcessManager {
         // Clone the paths we need before the mutable borrow
         let paths = self.runtime_paths.as_ref().ok_or("Runtime paths not initialized")?.clone();
 
-        // Ensure default index.php exists in projects directory
-        let index_php = paths.projects_dir.join("index.php");
-        if !index_php.exists() {
-            let _ = fs::write(&index_php, DEFAULT_INDEX_PHP);
-        }
+        ensure_default_pages(&paths.projects_dir);
 
         // Pre-check: ngrok requires Caddy to be running
         if service == ServiceType::Ngrok {
@@ -508,6 +522,7 @@ fn start_php_fpm(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> 
     } else {
         // PHP-CGI (Windows) uses -b for FastCGI mode
         configure_no_window(Command::new(&paths.php_cgi))
+            .env("PHP_FCGI_MAX_REQUESTS", "0") // 0 = unlimited; nothing respawns php-cgi, default 500 kills it
             .arg("-b")
             .arg(format!("127.0.0.1:{}", service_process.port))
             .arg("-c")

@@ -147,6 +147,7 @@ pub fn run() {
             commands::check_existing_components,
             commands::get_runtime_dir,
             commands::get_download_dir,
+            commands::get_logs_dir,
             commands::get_install_dir,
             commands::open_folder,
             commands::open_manual,

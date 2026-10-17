@@ -15,9 +15,71 @@ on:
 permissions:
   contents: write
 
+# Never run two builds for the same tag/branch at once (racing release uploads).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Check versions match (package.json, tauri.conf.json, Cargo.toml, tag)
+        id: version
+        run: |
+          set -euo pipefail
+          PKG=$(node -p "require('./package.json').version")
+          TAURI=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          CARGO=$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)
+          echo "package.json=$PKG tauri.conf.json=$TAURI Cargo.toml=$CARGO"
+          if [ "$PKG" != "$TAURI" ] || [ "$PKG" != "$CARGO" ]; then
+            echo "::error::Version mismatch: package.json=$PKG tauri.conf.json=$TAURI Cargo.toml=$CARGO"
+            exit 1
+          fi
+
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            TAG="$GITHUB_REF_NAME"
+            # v0.3.13 or v0.3.13-beta.1 must match version 0.3.13
+            BASE="${TAG#v}"; BASE="${BASE%%-*}"
+            if [ "$BASE" != "$PKG" ]; then
+              echo "::error::Tag $TAG does not match version $PKG"
+              exit 1
+            fi
+          else
+            # Manual run: never reuse the branch name (e.g. "main") as a release tag.
+            TAG="v${PKG}-build.${GITHUB_RUN_NUMBER}"
+          fi
+
+          case "$TAG" in *-*) PRERELEASE=true ;; *) PRERELEASE=false ;; esac
+          echo "version=$PKG" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "Release tag: $TAG (prerelease=$PRERELEASE)"
+
+      - name: Typecheck frontend
+        run: npx tsc --noEmit
+
   build-macos:
-    runs-on: macos-14
+    needs: verify
+    runs-on: macos-15
     timeout-minutes: 180
 
     env:
@@ -39,6 +101,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
       - name: Install frontend dependencies
         run: npm ci
@@ -364,6 +431,7 @@ jobs:
             src-tauri/target/universal-apple-darwin/release/bundle/macos/CAMPP-*-portable.zip
           if-no-files-found: error
   build-windows:
+    needs: verify
     runs-on: windows-latest
 
     steps:
@@ -378,6 +446,11 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
       - name: Install frontend dependencies
         run: npm ci
@@ -469,6 +542,7 @@ jobs:
           Get-ChildItem -Path src-tauri/target/release/bundle -Recurse -File | ForEach-Object { Write-Host $_.FullName }
 
   build-linux:
+    needs: verify
     runs-on: ubuntu-22.04
 
     steps:
@@ -483,6 +557,11 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
       - name: Install system dependencies
         run: |
@@ -557,7 +636,7 @@ jobs:
             src-tauri/target/release/bundle/appimage/*.AppImage
             src-tauri/target/release/bundle/rpm/*.rpm
             src-tauri/target/release/CAMPP-*-portable.tar.gz
-          if-no-files-found: warn
+          if-no-files-found: error
 
       - name: List Linux artifacts
         run: |
@@ -565,7 +644,7 @@ jobs:
           find src-tauri/target/release/bundle -type f | sort || true
 
   create-release:
-    needs: [build-macos, build-windows, build-linux]
+    needs: [verify, build-macos, build-windows, build-linux]
     if: |
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
       (github.event_name == 'workflow_dispatch' && inputs.create_release == true)
@@ -597,10 +676,10 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.ref_name }}
-          name: CAMPP ${{ github.ref_name }}
+          tag_name: ${{ needs.verify.outputs.tag }}
+          name: CAMPP ${{ needs.verify.outputs.tag }}
           draft: true
-          prerelease: false
+          prerelease: ${{ needs.verify.outputs.prerelease == 'true' }}
           generate_release_notes: true
           files: |
             release-assets/*

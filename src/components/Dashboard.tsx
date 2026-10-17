@@ -1,14 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
+import { showAlert } from "./Dialog";
+import { LOGOS } from "../assets/logos";
+import { PasswordInput } from "./PasswordInput";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useState, useEffect, useCallback } from "react";
-import { ServiceMap, ServiceType, ServiceState, getDatabaseDisplayName } from "../types/services";
+import { ServiceMap, ServiceType, ServiceState } from "../types/services";
 import { ServiceCard } from "./ServiceCard";
 import { StatusBar } from "./StatusBar";
 import { SettingsPanel } from "./SettingsPanel";
-import { DebugMenu } from "./DebugMenu";
+import { DebugPage } from "./DebugPage";
 import { Icon } from "./icons";
 import { detectPlatform } from "../utils/platform";
 import logoUrl from "../assets/melivecode-logo.png";
+import phpMyAdminLogo from "../assets/logos/phpmyadmin.svg";
+import adminerLogo from "../assets/logos/adminer.svg";
 
 export function Dashboard() {
   const [services, setServices] = useState<Partial<ServiceMap>>({});
@@ -17,8 +22,7 @@ export function Dashboard() {
   // observe the transient Starting/Stopping state) — track it here so the card
   // can show a spinner immediately on click.
   const [busy, setBusy] = useState<Partial<Record<ServiceType, "start" | "stop" | "restart">>>({});
-  const [showSettings, setShowSettings] = useState(false);
-  const [showDebugMenu, setShowDebugMenu] = useState(false);
+  const [view, setView] = useState<"services" | "settings" | "debug">("services");
   const [projectRoot, setProjectRoot] = useState<string>("");
   const [installDir, setInstallDir] = useState<string>("");
   const [installedVersions, setInstalledVersions] = useState<Record<string, string>>({});
@@ -29,7 +33,6 @@ export function Dashboard() {
   const [ngrokTokenSaving, setNgrokTokenSaving] = useState(false);
 
   const currentPlatform = detectPlatform();
-  const dbName = getDatabaseDisplayName(currentPlatform);
 
   // Get Caddy port from services
   const caddyPort = services[ServiceType.Caddy]?.port || 8080;
@@ -133,7 +136,7 @@ export function Dashboard() {
         setNgrokTokenInput("");
         setShowNgrokTokenModal(true);
       } else {
-        alert(`Failed to start ${serviceType}:\n${error}`);
+        void showAlert(`Failed to start ${serviceType}`, String(error));
       }
       await refreshStatuses();
     } finally {
@@ -155,7 +158,7 @@ export function Dashboard() {
       await invoke("start_service", { service: ServiceType.Ngrok });
       await refreshStatuses();
     } catch (error) {
-      alert(`Failed to save authtoken:\n${error}`);
+      void showAlert("Failed to save authtoken", String(error));
     } finally {
       setNgrokTokenSaving(false);
       clearBusy(ServiceType.Ngrok);
@@ -169,7 +172,7 @@ export function Dashboard() {
       await refreshStatuses();
     } catch (error) {
       console.error(`Failed to stop ${serviceType}:`, error);
-      alert(`Failed to stop ${serviceType}:\n${error}`);
+      void showAlert(`Failed to stop ${serviceType}`, String(error));
       await refreshStatuses();
     } finally {
       clearBusy(serviceType);
@@ -183,7 +186,7 @@ export function Dashboard() {
       await refreshStatuses();
     } catch (error) {
       console.error(`Failed to restart ${serviceType}:`, error);
-      alert(`Failed to restart ${serviceType}:\n${error}`);
+      void showAlert(`Failed to restart ${serviceType}`, String(error));
       await refreshStatuses();
     } finally {
       clearBusy(serviceType);
@@ -217,218 +220,150 @@ export function Dashboard() {
     }
   };
 
+  const serviceOrder = [ServiceType.Caddy, ServiceType.PhpFpm, ServiceType.MySQL, ServiceType.PostgreSQL, ...(currentPlatform === "windows" ? [ServiceType.Ngrok] : [])];
+
+  const isInstalled = (serviceType: ServiceType) =>
+    serviceType === ServiceType.MySQL
+      ? !!(installedVersions.mysql || installedVersions.mariadb)
+      : !!installedVersions[serviceType === ServiceType.PhpFpm ? "php" : serviceType];
+
+  const anyRunning = Object.values(services).some((s) => s?.state === ServiceState.Running);
+  const anyBusy = Object.keys(busy).length > 0;
+
+  // ngrok is left out of "Start all": it needs an authtoken and exposes the site publicly.
+  const startAll = async () => {
+    for (const t of serviceOrder) {
+      if (t !== ServiceType.Ngrok && isInstalled(t) && services[t]?.state !== ServiceState.Running) {
+        await startService(t);
+      }
+    }
+  };
+
+  const stopAll = async () => {
+    for (const t of [...serviceOrder].reverse()) {
+      if (services[t]?.state === ServiceState.Running) await stopService(t);
+    }
+  };
+
   return (
     <>
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "flex",
-          flexDirection: "column",
-          backgroundColor: "var(--bg-app)",
-          color: "var(--text-primary)",
-        }}
-        data-testid="dashboard"
-      >
-        {/* Header */}
-        <header
-          style={{
-            backgroundColor: "var(--bg-card)",
-            borderBottom: "1px solid var(--border-color)",
-            padding: "0.75rem 1.5rem",
-          }}
-        >
-          <div style={{ maxWidth: "80rem", margin: "0 auto" }}>
-            {/* Title Section */}
-            <div className="app-brand">
-              <img src={logoUrl} alt="meLiveCode logo" className="brand-mark" />
-              <div>
-                <h1
-                  style={{
-                    fontSize: "1.25rem",
-                    fontWeight: 700,
-                    margin: 0,
-                    letterSpacing: "-0.01em",
-                    color: "var(--text-primary)",
-                  }}
-                >
-                  CAMPP
-                </h1>
-                <p
-                  style={{
-                    fontSize: "0.8125rem",
-                    color: "var(--text-secondary)",
-                    marginTop: "0.125rem",
-                    marginBottom: 0,
-                  }}
-                >
-                  Caddy · PHP · {dbName} · phpMyAdmin · PostgreSQL
-                </p>
-              </div>
+      <div className="app-shell" data-testid="dashboard">
+        <aside className="sidebar">
+          <div className="sidebar__brand">
+            <img src={logoUrl} alt="meLiveCode logo" />
+            <div>
+              <h1>CAMPP</h1>
+              <span>Local dev stack</span>
             </div>
+          </div>
 
-            {/* Quick Actions */}
-            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
+          <nav className="sidebar__nav" aria-label="Main">
+            <button
+              type="button"
+              className={`nav-item${view === "services" ? " nav-item--active" : ""}`}
+              aria-current={view === "services" ? "page" : undefined}
+              onClick={() => setView("services")}
+            >
+              <Icon name="layers" size={16} />
+              Services
+            </button>
+            <button
+              type="button"
+              className={`nav-item${view === "settings" ? " nav-item--active" : ""}`}
+              aria-current={view === "settings" ? "page" : undefined}
+              onClick={() => setView("settings")}
+              disabled={anyServiceActive && view !== "settings"}
+              title={anyServiceActive ? "Stop all services to change settings" : "Open Settings"}
+            >
+              <Icon name="sliders" size={16} />
+              Settings
+            </button>
+            <button
+              type="button"
+              className={`nav-item${view === "debug" ? " nav-item--active" : ""}`}
+              aria-current={view === "debug" ? "page" : undefined}
+              onClick={() => setView("debug")}
+            >
+              <Icon name="wrench" size={16} />
+              Debug
+            </button>
+          </nav>
+
+          <div className="sidebar__footer">
+            <StatusBar services={services} data-testid="status-bar" />
+            <button
+              type="button"
+              className="nav-item"
+              onClick={async () => {
+                try {
+                  await invoke("open_manual");
+                } catch (err) {
+                  console.error("Failed to open manual:", err);
+                }
+              }}
+              title="Read User Manual"
+            >
+              <Icon name="help" size={16} />
+              User manual
+            </button>
+          </div>
+        </aside>
+
+        <main className="main">
+          {view === "settings" ? (
+            <SettingsPanel
+              onClose={() => setView("services")}
+              onSettingsChanged={async () => {
+                await refreshStatuses();
+                await loadInstalledVersions();
+              }}
+            />
+          ) : view === "debug" ? (
+            <DebugPage services={services} />
+          ) : (<>
+          <header className="main__header">
+            <div>
+              <h2>Services</h2>
+              <p>
+                {listenAllInterfaces ? (
+                  <>Listening on all interfaces <span className="lan-badge">LAN</span></>
+                ) : (
+                  <>Local stack on <span className="mono">127.0.0.1</span></>
+                )}
+              </p>
+            </div>
+            <div className="main__actions">
               <button
-                className="btn-quick-action"
+                type="button"
+                className="btn-secondary btn-sm"
                 onClick={openWebServer}
                 disabled={!isCaddyRunning}
                 title={isCaddyRunning ? `Open ${webServerUrl}` : "Start Caddy to enable"}
               >
-                <Icon name="globe" size={16} />
-                Open Site
-                {listenAllInterfaces && isCaddyRunning && (
-                  <span style={{
-                    fontSize: "0.6rem",
-                    backgroundColor: "rgba(255, 180, 0, 0.15)",
-                    color: "var(--color-warning)",
-                    padding: "0.1rem 0.35rem",
-                    borderRadius: "0.25rem",
-                    marginLeft: "0.35rem",
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.03em",
-                  }}>
-                    LAN
-                  </span>
-                )}
+                <Icon name="globe" size={15} />
+                Open site
               </button>
               <button
-                className="btn-quick-action"
-                onClick={openProjectRoot}
-                disabled={!installDir && !projectRoot}
-                title={installDir || projectRoot ? `Open ${installDir || projectRoot}` : "Directory not set"}
+                type="button"
+                className="btn-primary btn-sm"
+                onClick={anyRunning ? stopAll : startAll}
+                disabled={anyBusy}
               >
-                <Icon name="folder" size={16} />
-                Projects
-              </button>
-              <button
-                className="btn-quick-action"
-                onClick={openPhpMyAdmin}
-                disabled={!isCaddyRunning || !installedVersions.phpmyadmin}
-                title={!installedVersions.phpmyadmin ? "phpMyAdmin not installed" : isCaddyRunning ? `Open ${phpMyAdminUrl}` : "Start Caddy to enable"}
-              >
-                <Icon name="database" size={16} />
-                phpMyAdmin
-              </button>
-              <button
-                className="btn-quick-action"
-                onClick={async () => { try { await openUrl(adminerUrl); } catch (error) { console.error("Failed to open Adminer URL:", error); } }}
-                disabled={!isCaddyRunning || !installedVersions.adminer}
-                title={!installedVersions.adminer ? "Adminer not installed" : isCaddyRunning ? `Open ${adminerUrl}` : "Start Caddy to enable"}
-              >
-                <Icon name="table" size={16} />
-                Adminer
-              </button>
-              <button
-                className="btn-quick-action"
-                onClick={() => setShowSettings(true)}
-                disabled={anyServiceActive}
-                title={anyServiceActive ? "Stop all services to change settings" : "Open Settings"}
-              >
-                <Icon name="sliders" size={16} />
-                Settings
-              </button>
-              <button
-                className="btn-quick-action"
-                onClick={() => setShowDebugMenu(true)}
-                title="Open Debug Menu"
-              >
-                <Icon name="wrench" size={16} />
-                Debug
-              </button>
-              <button
-                className="btn-quick-action"
-                onClick={async () => {
-                  try {
-                    await invoke("open_manual");
-                  } catch (err) {
-                    console.error("Failed to open manual:", err);
-                  }
-                }}
-                title="Read User Manual"
-              >
-                <Icon name="help" size={16} />
-                Help
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d={anyRunning ? "M6 6h12v12H6z" : "M7 4.5v15l13-7.5z"} />
+                </svg>
+                {anyRunning ? "Stop all" : "Start all"}
               </button>
             </div>
-          </div>
-        </header>
+          </header>
 
-        {/* Installed Versions Bar */}
-        {Object.keys(installedVersions).length > 0 && (
-          <div
-            style={{
-              backgroundColor: "var(--bg-card-secondary)",
-              borderBottom: "1px solid var(--border-color)",
-              padding: "0.5rem 1rem",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.75rem",
-                flexWrap: "wrap",
-                maxWidth: "96rem",
-                margin: "0 auto",
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "0.75rem",
-                  fontWeight: 500,
-                  color: "var(--text-secondary)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                }}
-              >
-                Installed:
-              </span>
-              {[
-                installedVersions.caddy && { label: "Caddy", version: installedVersions.caddy },
-                installedVersions.php && { label: "PHP", version: installedVersions.php },
-                (installedVersions.mysql || installedVersions.mariadb) && { label: dbName, version: installedVersions.mysql || installedVersions.mariadb },
-                installedVersions.phpmyadmin && { label: "phpMyAdmin", version: installedVersions.phpmyadmin },
-                installedVersions.postgresql && { label: "PostgreSQL", version: installedVersions.postgresql },
-                installedVersions.adminer && { label: "Adminer", version: installedVersions.adminer },
-                installedVersions.ngrok && { label: "ngrok", version: installedVersions.ngrok },
-              ]
-                .filter((b): b is { label: string; version: string } => !!b)
-                .map((b) => (
-                  <span className="badge" key={b.label}>
-                    {b.label}
-                    <span className="badge__version"> {b.version}</span>
-                  </span>
-                ))}
-            </div>
-          </div>
-        )}
-
-        {/* Main Content - Service Grid */}
-        <main
-          style={{
-            flex: 1,
-            padding: "1rem 1.5rem",
-          }}
-        >
-          <div
-            className="service-grid-responsive"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-              gap: "1rem",
-              maxWidth: "80rem",
-              margin: "0 auto",
-            }}
-          >
-            {[ServiceType.Caddy, ServiceType.PhpFpm, ServiceType.MySQL, ServiceType.PostgreSQL, ...(currentPlatform === "windows" ? [ServiceType.Ngrok] : [])].map((serviceType) => {
+          <section className="service-list" aria-label="Services">
+            {serviceOrder.map((serviceType) => {
               const service = services[serviceType];
               if (!service) return null;
-              let componentKey: string = serviceType === ServiceType.PhpFpm ? "php" : serviceType;
-              // For MySQL service, check platform-specific key (mysql or mariadb)
-              const isNotInstalled = serviceType === ServiceType.MySQL
-                ? !installedVersions.mysql && !installedVersions.mariadb
-                : !installedVersions[componentKey];
+              const version = serviceType === ServiceType.MySQL
+                ? installedVersions.mysql || installedVersions.mariadb
+                : installedVersions[serviceType === ServiceType.PhpFpm ? "php" : serviceType];
               return (
                 <ServiceCard
                   key={serviceType}
@@ -436,7 +371,8 @@ export function Dashboard() {
                   state={service.state as ServiceState}
                   port={service.port}
                   error={service.error_message}
-                  notInstalled={isNotInstalled}
+                  notInstalled={!isInstalled(serviceType)}
+                  version={version}
                   busyAction={busy[serviceType]}
                   tunnelUrl={serviceType === ServiceType.Ngrok ? ngrokUrl : undefined}
                   onStart={() => startService(serviceType)}
@@ -445,112 +381,102 @@ export function Dashboard() {
                 />
               );
             })}
-          </div>
+          </section>
+
+          <section className="quick-grid" aria-label="Quick open">
+            <button
+              type="button"
+              className="quick-card"
+              onClick={openWebServer}
+              disabled={!isCaddyRunning}
+              title={isCaddyRunning ? `Open ${webServerUrl}` : "Start Caddy to enable"}
+            >
+              <span className="quick-card__icon"><Icon name="globe" size={16} /></span>
+              <span className="quick-card__text">
+                <span>Website</span>
+                <span className="mono">{webServerUrl.replace("http://", "")}</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              className="quick-card"
+              onClick={openPhpMyAdmin}
+              disabled={!isCaddyRunning || !installedVersions.phpmyadmin}
+              title={!installedVersions.phpmyadmin ? "phpMyAdmin not installed" : isCaddyRunning ? `Open ${phpMyAdminUrl}` : "Start Caddy to enable"}
+            >
+              <span className="logo-tile logo-tile--sm"><img src={phpMyAdminLogo} alt="" /></span>
+              <span className="quick-card__text">
+                <span>phpMyAdmin</span>
+                <span className="mono">/phpmyadmin</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              className="quick-card"
+              onClick={async () => { try { await openUrl(adminerUrl); } catch (error) { console.error("Failed to open Adminer URL:", error); } }}
+              disabled={!isCaddyRunning || !installedVersions.adminer}
+              title={!installedVersions.adminer ? "Adminer not installed" : isCaddyRunning ? `Open ${adminerUrl}` : "Start Caddy to enable"}
+            >
+              <span className="logo-tile logo-tile--sm"><img src={adminerLogo} alt="" /></span>
+              <span className="quick-card__text">
+                <span>Adminer</span>
+                <span className="mono">/adminer</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              className="quick-card"
+              onClick={openProjectRoot}
+              disabled={!installDir && !projectRoot}
+              title={installDir || projectRoot ? `Open ${installDir || projectRoot}` : "Directory not set"}
+            >
+              <span className="quick-card__icon"><Icon name="folder" size={16} /></span>
+              <span className="quick-card__text">
+                <span>Projects folder</span>
+                <span className="mono">{installDir || projectRoot || "Not set"}</span>
+              </span>
+            </button>
+          </section>
+          </>)}
         </main>
-
-        {/* Status Bar */}
-        <StatusBar services={services} data-testid="status-bar" />
-
-        {/* Settings Panel */}
-        {showSettings && (
-          <SettingsPanel
-            onClose={() => setShowSettings(false)}
-            onSettingsChanged={async () => {
-              await refreshStatuses();
-              await loadInstalledVersions();
-            }}
-          />
-        )}
-
-        {/* Debug Menu */}
-        {showDebugMenu && (
-          <DebugMenu
-            onClose={() => setShowDebugMenu(false)}
-            onOpenRuntimeFolder={async () => {
-              try {
-                const runtimeDir = await invoke<string>("get_runtime_dir");
-                await invoke("open_folder", { path: runtimeDir });
-              } catch (error) {
-                console.error("Failed to open folder:", error);
-                alert("Failed to open folder: " + error);
-              }
-            }}
-            onOpenDownloadFolder={async () => {
-              try {
-                const downloadDir = await invoke<string>("get_download_dir");
-                await invoke("open_folder", { path: downloadDir });
-              } catch (error) {
-                console.error("Failed to open download folder:", error);
-                alert("Failed to open download folder: " + error);
-              }
-            }}
-            onResetInstallation={async () => {
-              alert("This will reset your installation. All services will be stopped and all binaries, databases, and settings will be deleted. Your projects folder will be kept.");
-              if (!confirm("Are you sure you want to reset?")) return;
-              try {
-                await invoke("reset_installation");
-                window.location.reload();
-              } catch (error) {
-                console.error("Failed to reset:", error);
-                alert("Failed to reset: " + error);
-              }
-            }}
-          />
-        )}
 
         {/* Ngrok Authtoken Modal */}
         {showNgrokTokenModal && (
-          <div
-            style={{
-              position: "fixed",
-              inset: 0,
-              backgroundColor: "rgba(0, 0, 0, 0.5)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-            }}
-            onClick={() => setShowNgrokTokenModal(false)}
-          >
+          <div className="modal-overlay" onClick={() => setShowNgrokTokenModal(false)}>
             <div
-              style={{
-                backgroundColor: "var(--bg-card)",
-                borderRadius: "0.75rem",
-                padding: "1.5rem",
-                maxWidth: "28rem",
-                width: "90%",
-                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-                border: "1px solid var(--border-color)",
-              }}
+              className="modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="ngrok-token-title"
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 style={{ fontSize: "1.125rem", fontWeight: 600, margin: "0 0 0.5rem 0", color: "var(--text-primary)" }}>
-                ngrok Authtoken Required
-              </h2>
-              <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", margin: "0 0 1rem 0", lineHeight: 1.5 }}>
-                To share your local server via ngrok, you need a free authtoken.
-                Sign up at{" "}
-                <a
-                  href="https://dashboard.ngrok.com/signup"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: "var(--color-primary, #3b82f6)" }}
-                >
-                  ngrok.com
-                </a>{" "}
-                and copy your authtoken from the{" "}
-                <a
-                  href="https://dashboard.ngrok.com/get-started/your-authtoken"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: "var(--color-primary, #3b82f6)" }}
-                >
-                  dashboard
-                </a>.
-              </p>
-              <div style={{ marginBottom: "1rem" }}>
-                <input
-                  type="password"
+              <header className="modal__head">
+                <span className="logo-tile"><img src={LOGOS.ngrok} alt="" /></span>
+                <div>
+                  <h3 id="ngrok-token-title">ngrok authtoken required</h3>
+                  <p>Needed once to share your local server.</p>
+                </div>
+              </header>
+              <div className="modal__body">
+                <p className="wiz-muted">
+                  Sign up free at{" "}
+                  <a className="link" href="https://dashboard.ngrok.com/signup" target="_blank" rel="noopener noreferrer">
+                    ngrok.com
+                  </a>{" "}
+                  and copy your authtoken from the{" "}
+                  <a
+                    className="link"
+                    href="https://dashboard.ngrok.com/get-started/your-authtoken"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    dashboard
+                  </a>
+                  .
+                </p>
+                <PasswordInput
+                  className="mono"
+                  aria-label="ngrok authtoken"
                   value={ngrokTokenInput}
                   onChange={(e) => setNgrokTokenInput(e.target.value)}
                   placeholder="Paste your authtoken here"
@@ -558,50 +484,21 @@ export function Dashboard() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") saveNgrokTokenAndStart();
                   }}
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem 0.75rem",
-                    borderRadius: "0.375rem",
-                    border: "1px solid var(--border-color)",
-                    backgroundColor: "var(--bg-card-secondary)",
-                    color: "var(--text-primary)",
-                    fontSize: "0.875rem",
-                    boxSizing: "border-box",
-                  }}
                 />
               </div>
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-                <button
-                  onClick={() => setShowNgrokTokenModal(false)}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    borderRadius: "0.375rem",
-                    border: "1px solid var(--border-color)",
-                    backgroundColor: "transparent",
-                    color: "var(--text-secondary)",
-                    fontSize: "0.875rem",
-                    cursor: "pointer",
-                  }}
-                >
+              <footer className="modal__foot">
+                <button type="button" className="btn-secondary btn-sm" onClick={() => setShowNgrokTokenModal(false)}>
                   Cancel
                 </button>
                 <button
+                  type="button"
+                  className="btn-primary btn-sm"
                   onClick={saveNgrokTokenAndStart}
                   disabled={!ngrokTokenInput.trim() || ngrokTokenSaving}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    borderRadius: "0.375rem",
-                    border: "none",
-                    backgroundColor: ngrokTokenInput.trim() ? "var(--color-primary, #3b82f6)" : "var(--bg-card-secondary)",
-                    color: ngrokTokenInput.trim() ? "#fff" : "var(--text-secondary)",
-                    fontSize: "0.875rem",
-                    cursor: ngrokTokenInput.trim() ? "pointer" : "not-allowed",
-                    fontWeight: 500,
-                  }}
                 >
                   {ngrokTokenSaving ? "Saving..." : "Save & Start ngrok"}
                 </button>
-              </div>
+              </footer>
             </div>
           </div>
         )}

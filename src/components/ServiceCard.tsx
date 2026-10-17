@@ -1,15 +1,5 @@
-import type { CSSProperties } from "react";
 import { ServiceType, ServiceState, SERVICE_DISPLAY_NAMES, SERVICE_DESCRIPTIONS, DEFAULT_PORTS, getDatabaseDisplayName } from "../types/services";
-import { Icon, type IconName } from "./icons";
-
-// One icon per service type for visual scanning.
-const SERVICE_ICON: Record<ServiceType, IconName> = {
-  [ServiceType.Caddy]: "globe",
-  [ServiceType.PhpFpm]: "code",
-  [ServiceType.MySQL]: "database",
-  [ServiceType.PostgreSQL]: "layers",
-  [ServiceType.Ngrok]: "share",
-};
+import { LOGOS } from "../assets/logos";
 
 // Semantic color class per state (drives styling + is asserted by tests).
 const STATUS_COLOR_CLASS: Record<ServiceState, string> = {
@@ -20,12 +10,15 @@ const STATUS_COLOR_CLASS: Record<ServiceState, string> = {
   [ServiceState.Error]: "status-red",
 };
 
+const BUSY_LABEL = { start: "starting", stop: "stopping", restart: "restarting" } as const;
+
 interface ServiceCardProps {
   serviceType: ServiceType;
   state: ServiceState;
   port?: number;
   error?: string;
   notInstalled?: boolean;
+  version?: string;
   /** Action currently in flight (set optimistically on click) — drives the
    *  spinner/disabled state immediately, before the backend reports back. */
   busyAction?: "start" | "stop" | "restart";
@@ -42,6 +35,7 @@ export function ServiceCard({
   port = DEFAULT_PORTS[serviceType],
   error,
   notInstalled = false,
+  version,
   busyAction,
   tunnelUrl,
   onStart,
@@ -53,197 +47,96 @@ export function ServiceCard({
     ? getDatabaseDisplayName()
     : SERVICE_DISPLAY_NAMES[serviceType];
   const description = SERVICE_DESCRIPTIONS[serviceType];
+  const logo = {
+    [ServiceType.Caddy]: LOGOS.caddy,
+    [ServiceType.PhpFpm]: LOGOS.php,
+    [ServiceType.MySQL]: displayName === "MariaDB" ? LOGOS.mariadb : LOGOS.mysql,
+    [ServiceType.PostgreSQL]: LOGOS.postgresql,
+    [ServiceType.Ngrok]: LOGOS.ngrok,
+  }[serviceType];
 
   const isRunning = state === ServiceState.Running;
   const isTransitioning = state === ServiceState.Starting || state === ServiceState.Stopping;
   const isError = state === ServiceState.Error;
   // Loading = a click is in flight (busyAction) OR the backend reports a
-  // transition. Disables the buttons and shows a spinner on whichever is active.
+  // transition. Disables the controls and shows a spinner on the status.
   const loading = !!busyAction || isTransitioning;
-
-  const getStatusStyles = () => {
-    switch (state) {
-      case ServiceState.Stopped:
-        return { bg: "var(--status-stopped-bg)", text: "var(--status-stopped-text)" };
-      case ServiceState.Starting:
-        return { bg: "var(--status-starting-bg)", text: "var(--status-starting-text)" };
-      case ServiceState.Running:
-        return { bg: "var(--status-running-bg)", text: "var(--status-running-text)" };
-      case ServiceState.Stopping:
-        return { bg: "var(--status-stopping-bg)", text: "var(--status-stopping-text)" };
-      case ServiceState.Error:
-        return { bg: "var(--status-error-bg)", text: "var(--status-error-text)" };
-      default:
-        return { bg: "var(--status-stopped-bg)", text: "var(--status-stopped-text)" };
-    }
-  };
-
-  const statusStyles = getStatusStyles();
 
   return (
     <div
-      className={`service-card${notInstalled ? "" : " card-hover"}`}
-      style={{
-        ["--status-accent" as string]: notInstalled ? "transparent" : statusStyles.text,
-        backgroundColor: isError ? "var(--error-box-bg)" : "var(--bg-card)",
-        border: `1px solid ${isError ? "var(--error-box-border)" : "var(--border-color)"}`,
-        borderRadius: "0.5rem",
-        padding: "1rem",
-        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
-        opacity: notInstalled ? 0.5 : 1,
-      } as CSSProperties}
+      className={`service-row${notInstalled ? " service-row--missing" : ""}`}
       data-testid={`service-card-${serviceType}`}
       {...props}
     >
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <span className="service-icon">
-            <Icon name={SERVICE_ICON[serviceType]} size={16} />
-          </span>
-          <h3 style={{ fontSize: "1rem", fontWeight: 600, margin: 0 }}>{displayName}</h3>
+      <span className="logo-tile">
+        <img src={logo} alt="" />
+      </span>
+
+      <div className="service-row__main">
+        <div className="service-row__title">
+          <h3>{displayName}</h3>
+          <span>{description}</span>
+          {version && <span className="mono">{version}</span>}
         </div>
-        <span
-          className={notInstalled ? "status-gray" : STATUS_COLOR_CLASS[state]}
-          style={{
-            padding: "0.125rem 0.5rem",
-            borderRadius: "9999px",
-            fontSize: "0.65rem",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            backgroundColor: notInstalled ? "var(--bg-card-secondary)" : statusStyles.bg,
-            color: notInstalled ? "var(--text-secondary)" : statusStyles.text,
-          }}
-          data-testid={`service-state-${serviceType}`}
-        >
-          {notInstalled ? "Not Installed" : state}
-        </span>
-      </div>
-
-      {/* Description */}
-      <p style={{ fontSize: "0.75rem", color: "var(--text-secondary)", margin: "0 0 0.5rem 0" }}>
-        {description}
-      </p>
-
-      {/* Port Info */}
-      <div
-        style={{
-          display: "flex",
-          gap: "0.75rem",
-          padding: "0.5rem 0",
-          borderTop: "1px solid var(--border-color)",
-          borderBottom: "1px solid var(--border-color)",
-          fontSize: "0.75rem",
-          color: "var(--text-secondary)",
-        }}
-      >
-        <span>Port: {port}</span>
-      </div>
-
-      {/* Tunnel URL (ngrok only) */}
-      {serviceType === ServiceType.Ngrok && isRunning && (
-        <div style={{ marginTop: "0.5rem" }}>
-          {tunnelUrl ? (
-            <div style={{
-              padding: "0.5rem",
-              backgroundColor: "rgba(16, 185, 129, 0.1)",
-              border: "1px solid rgba(16, 185, 129, 0.3)",
-              borderRadius: "0.375rem",
-              fontSize: "0.75rem",
-              wordBreak: "break-all",
-            }}>
-              <strong style={{ color: "var(--text-primary)" }}>Public URL:</strong>{" "}
-              <a href={tunnelUrl} target="_blank" rel="noopener noreferrer"
-                style={{ color: "var(--color-primary, #3b82f6)", textDecoration: "underline" }}>
-                {tunnelUrl}
-              </a>
-            </div>
+        {serviceType === ServiceType.Ngrok && isRunning && (
+          tunnelUrl ? (
+            <a className="service-row__url mono" href={tunnelUrl} target="_blank" rel="noopener noreferrer">{tunnelUrl}</a>
           ) : (
-            <div style={{
-              padding: "0.5rem",
-              backgroundColor: "var(--bg-card-secondary)",
-              borderRadius: "0.375rem",
-              fontSize: "0.75rem",
-              color: "var(--text-secondary)",
-              fontStyle: "italic",
-            }}>
-              Connecting...
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Error Message */}
-      {!notInstalled && isError && error && (
-        <div
-          style={{
-            marginTop: "0.5rem",
-            padding: "0.5rem",
-            borderRadius: "0.375rem",
-            backgroundColor: "var(--status-error-bg)",
-            border: "1px solid var(--status-error-bg)",
-            color: "var(--status-error-text)",
-            fontSize: "0.75rem",
-            wordBreak: "break-word",
-          }}
-          title={error}
-        >
-          <strong style={{ display: "block", marginBottom: "0.125rem" }}>Error:</strong>
-          {error.length > 100 ? error.substring(0, 100) + "..." : error}
-        </div>
-      )}
-
-      {/* Action Buttons */}
-      <div style={{ display: "flex", gap: "0.375rem", marginTop: "0.5rem" }}>
-        {notInstalled ? (
-          <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontStyle: "italic" }}>
-            Install from Settings
-          </span>
-        ) : !isRunning ? (
-          <button
-            onClick={onStart}
-            disabled={loading}
-            className="btn-start"
-            data-testid={`start-button-${serviceType}`}
-          >
-            {loading ? (
-              <>
-                <span className="btn-spinner" aria-hidden="true" />
-                {busyAction === "stop" || state === ServiceState.Stopping ? "Stopping…" : "Starting…"}
-              </>
-            ) : (
-              "Start"
-            )}
-          </button>
-        ) : (
-          <>
-            <button
-              onClick={onStop}
-              disabled={loading}
-              className="btn-stop"
-              data-testid={`stop-button-${serviceType}`}
-            >
-              {loading && busyAction !== "restart" ? (
-                <><span className="btn-spinner" aria-hidden="true" />Stopping…</>
-              ) : (
-                "Stop"
-              )}
-            </button>
-            <button
-              onClick={onRestart}
-              disabled={loading}
-              className="btn-restart"
-              data-testid={`restart-button-${serviceType}`}
-            >
-              {loading && busyAction === "restart" ? (
-                <><span className="btn-spinner" aria-hidden="true" />Restarting…</>
-              ) : (
-                "Restart"
-              )}
-            </button>
-          </>
+            <span className="service-row__note">Connecting…</span>
+          )
+        )}
+        {!notInstalled && isError && error && (
+          <p className="service-row__error" title={error}>
+            {error.length > 100 ? error.substring(0, 100) + "..." : error}
+          </p>
         )}
       </div>
+
+      <span className="port-chip mono">:{port}</span>
+
+      <span
+        className={`service-status ${notInstalled ? "status-gray" : STATUS_COLOR_CLASS[state]}`}
+        data-testid={`service-state-${serviceType}`}
+      >
+        {loading ? <span className="btn-spinner" aria-hidden="true" /> : <span className="status-dot" />}
+        {notInstalled ? "Not Installed" : busyAction ? BUSY_LABEL[busyAction] : state}
+      </span>
+
+      {notInstalled ? (
+        <span className="service-row__note">Install from Settings</span>
+      ) : (
+        <>
+          {isRunning ? (
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={onRestart}
+              disabled={loading}
+              aria-label={`Restart ${displayName}`}
+              title="Restart"
+              data-testid={`restart-button-${serviceType}`}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
+              </svg>
+            </button>
+          ) : (
+            <span className="icon-btn-spacer" />
+          )}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={isRunning}
+            aria-label={`${isRunning ? "Stop" : "Start"} ${displayName}`}
+            className="switch"
+            onClick={isRunning ? onStop : onStart}
+            disabled={loading}
+            data-testid={`${isRunning ? "stop" : "start"}-button-${serviceType}`}
+          >
+            <span className="switch__knob" />
+          </button>
+        </>
+      )}
     </div>
   );
 }

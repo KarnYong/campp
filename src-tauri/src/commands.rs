@@ -374,6 +374,13 @@ pub async fn get_install_dir() -> Result<String, String> {
     }
 }
 
+/// Get the logs directory path (service logs)
+#[tauri::command]
+pub async fn get_logs_dir() -> Result<String, String> {
+    let paths = crate::runtime::locator::get_app_data_paths()?;
+    Ok(paths.logs_dir.to_string_lossy().to_string())
+}
+
 /// Get the download directory path (where ZIP files are stored)
 #[tauri::command]
 pub async fn get_download_dir() -> Result<String, String> {

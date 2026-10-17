@@ -6,16 +6,6 @@ interface StatusBarProps {
   [key: string]: any; // Allow additional props like data-testid
 }
 
-function dotClass(state?: string): string {
-  switch (state) {
-    case "running": return "status-dot--running";
-    case "starting": return "status-dot--starting";
-    case "stopping": return "status-dot--stopping";
-    case "error": return "status-dot--error";
-    default: return "";
-  }
-}
-
 function serviceName(t: ServiceType): string {
   return t === ServiceType.MySQL ? getDatabaseDisplayName() : SERVICE_DISPLAY_NAMES[t];
 }
@@ -25,42 +15,21 @@ export function StatusBar({ services, ...props }: StatusBarProps) {
   const totalCount = Object.keys(services).length;
 
   return (
-    <div
-      style={{
-        backgroundColor: "var(--bg-card)",
-        borderTop: "1px solid var(--border-color)",
-        padding: "0.5rem 1.5rem",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        gap: "1rem",
-        fontSize: "0.75rem",
-        color: "var(--text-secondary)",
-      }}
-      {...props}
-    >
-      <div style={{ display: "flex", gap: "0.875rem", alignItems: "center", flexWrap: "wrap" }}>
-        {(Object.keys(services) as ServiceType[]).map((t) => {
-          const s = services[t];
-          const label = serviceName(t);
-          return (
-            <span
-              key={t}
-              style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-              title={`${label}: ${s?.state ?? "unknown"}`}
-            >
-              <span className={`status-dot ${dotClass(s?.state)}`} />
-              {label}
-            </span>
-          );
-        })}
-        <span style={{ display: "flex", alignItems: "center" }}>
-          {runningCount}/{totalCount} running
-        </span>
+    <div className="stack-card" {...props}>
+      <div className="stack-card__head">
+        <span>Stack</span>
+        <span className="mono">{runningCount}/{totalCount} running</span>
       </div>
-      <div style={{ display: "flex", gap: "1.5rem", alignItems: "center" }}>
-        <span>CAMPP v{pkg.version}</span>
+      <div className="stack-card__bars">
+        {(Object.keys(services) as ServiceType[]).map((t) => (
+          <span
+            key={t}
+            className={`stack-card__bar stack-card__bar--${services[t]?.state ?? "stopped"}`}
+            title={`${serviceName(t)}: ${services[t]?.state ?? "unknown"}`}
+          />
+        ))}
       </div>
+      <span className="stack-card__version mono">CAMPP v{pkg.version}</span>
     </div>
   );
 }

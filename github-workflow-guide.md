@@ -63,7 +63,16 @@ gh workflow run build.yml -f create_release=true
 gh workflow run build.yml -f create_release=false
 ```
 
-Note: The release tag name will default to the branch name (e.g., `main`).
+Note: Manual runs create a draft **pre-release** tagged `v<version>-build.<run number>` (e.g. `v0.3.13-build.42`), never the branch name.
+
+## Release checks
+
+Before any platform builds, a `verify` job:
+- fails if `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` versions differ,
+- fails if the pushed tag doesn't match that version (`v0.3.13` or `v0.3.13-beta.1` for `0.3.13`),
+- runs the TypeScript typecheck.
+
+Tags containing `-` (e.g. `-beta.1`, `-rc.1`) are marked as pre-releases automatically.
 
 ---
 

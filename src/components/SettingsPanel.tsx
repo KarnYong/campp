@@ -1,10 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
+import { showAlert, showConfirm } from "./Dialog";
+import { PasswordInput } from "./PasswordInput";
 import { useState, useEffect, useCallback } from "react";
-import { AppSettings, PackageSelection, getDatabaseDisplayName } from "../types/services";
+import { AppSettings, getDatabaseDisplayName } from "../types/services";
 import { detectPlatform } from "../utils/platform";
 import { applyTheme, themeLabel } from "../utils/theme";
-import { isAntivirusError, addDefenderExclusion } from "../utils/antivirus";
 import { NgrokAntivirusNotice } from "./NgrokAntivirusNotice";
+import { ReinstallDialog } from "./ReinstallDialog";
+import { LOGOS } from "../assets/logos";
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -52,11 +55,9 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
   const [success, setSuccess] = useState<string | null>(null);
   const [components, setComponents] = useState<ComponentInfo[]>([]);
   const [componentAction, setComponentAction] = useState<string | null>(null);
-  // Last component-level error (install/uninstall) plus the component it was
-  // for, so the AV "fix & retry" button can replay that action.
+  // Last uninstall error (install errors are shown inside ReinstallDialog).
   const [componentError, setComponentError] = useState<string | null>(null);
-  const [failedComponentKey, setFailedComponentKey] = useState<string | null>(null);
-  const [isFixingComponentAv, setIsFixingComponentAv] = useState(false);
+  const [installTarget, setInstallTarget] = useState<ComponentInfo | null>(null);
 
   const loadSettings = useCallback(async () => {
     try {
@@ -109,7 +110,6 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
       await invoke("save_settings", { settings });
       setSuccess("Settings saved successfully!");
       onSettingsChanged?.();
-      setTimeout(() => onClose(), 2000);
     } catch (e) {
       setError(`Failed to save settings: ${e}`);
     } finally {
@@ -120,16 +120,17 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
   const handleUninstall = async (componentKey: string) => {
     clearComponentError();
     if (componentKey === "php" || componentKey === "mysql" || componentKey === "mariadb") {
+      const name = componentKey === "php" ? "PHP" : getDatabaseDisplayName();
       const msg = componentKey === "php"
         ? "PHP is required by Caddy for serving PHP files and phpMyAdmin. Uninstall anyway?"
         : `${getDatabaseDisplayName()} is required by phpMyAdmin. Uninstall anyway?`;
-      if (!confirm(msg)) return;
+      if (!(await showConfirm(`Uninstall ${name}?`, msg, "Uninstall", true))) return;
     }
 
     // Prevent uninstalling last component
     const installedCount = components.filter(c => c.installed).length;
     if (installedCount <= 1) {
-      alert("At least one component must remain installed.");
+      await showAlert("Can't uninstall", "At least one component must remain installed.");
       return;
     }
 
@@ -139,626 +140,276 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
       await invoke("uninstall_component", { component: componentKey });
       await refreshComponents();
     } catch (e) {
-      const msg = e as string;
-      setComponentError(`Failed to uninstall: ${msg}`);
-      setFailedComponentKey(componentKey);
+      setComponentError(`Failed to uninstall: ${e}`);
     } finally {
       setComponentAction(null);
     }
   };
 
-  const handleReinstall = async (componentKey: string) => {
+  // Install/reinstall happen in ReinstallDialog (version picker + progress).
+  const openInstallDialog = (componentKey: string) => {
     clearComponentError();
-    const actionKey = `reinstall-${componentKey}`;
-    setComponentAction(actionKey);
-    try {
-      const settings = await invoke<AppSettings>("get_settings");
-      const packageSelection: PackageSelection = settings.package_selection || {
-        php: "php-8.5",
-        mysql: "mysql-8.4",
-        mariadb: "mariadb-12.3",
-        phpmyadmin: "phpmyadmin-5.2",
-        postgresql: "postgresql-18.3",
-        adminer: "adminer-5.1",
-        ngrok: "ngrok-3",
-      };
-
-      // Download only this component by skipping all others
-      const allComponents = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer"];
-      const skipList = allComponents.filter(c => c !== componentKey);
-
-      await invoke("download_runtime_with_skip", {
-        packageSelection,
-        skipList,
-      });
-      await refreshComponents();
-    } catch (e) {
-      const msg = e as string;
-      setComponentError(`Failed to reinstall: ${msg}`);
-      setFailedComponentKey(componentKey);
-    } finally {
-      setComponentAction(null);
-    }
-  };
-
-  const handleInstall = async (componentKey: string) => {
-    await handleReinstall(componentKey);
+    setInstallTarget(components.find((c) => c.key === componentKey) ?? null);
   };
 
   // Clear a stale error when a new action starts.
-  const clearComponentError = () => {
-    setComponentError(null);
-    setFailedComponentKey(null);
-  };
-
-  // AV "fix & retry" for the failed component (Windows Defender blocking ngrok).
-  const handleComponentAvFixAndRetry = async () => {
-    if (!failedComponentKey) return;
-    setIsFixingComponentAv(true);
-    try {
-      await addDefenderExclusion();
-    } catch (e) {
-      setComponentError(`Failed to add Defender exclusion: ${e}`);
-      setIsFixingComponentAv(false);
-      return;
-    }
-    setIsFixingComponentAv(false);
-    await handleReinstall(failedComponentKey);
-  };
+  const clearComponentError = () => setComponentError(null);
 
   if (loading) {
-    return (
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          backgroundColor: "rgba(0, 0, 0, 0.5)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 1000,
-        }}
-      >
-        <div
-          style={{
-            backgroundColor: "var(--bg-card)",
-            borderRadius: "0.75rem",
-            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
-            maxWidth: "28rem",
-            width: "100%",
-            maxHeight: "90vh",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-secondary)" }}>
-            Loading settings...
-          </div>
-        </div>
-      </div>
-    );
+    return <p className="page-loading">Loading settings…</p>;
   }
 
+  const isInstalled = (key: string) => !!components.find((c) => c.key === key)?.installed;
+  const ports: { id: string; field: keyof AppSettings; label: string; hint: string; key: string }[] = [
+    { id: "web-port", field: "web_port", label: "Web server", hint: "Caddy", key: "caddy" },
+    { id: "php-port", field: "php_port", label: "PHP-FPM", hint: "Internal FastCGI", key: "php" },
+    { id: "mysql-port", field: "mysql_port", label: getDatabaseDisplayName(), hint: "Database", key: dbComponentKey },
+    { id: "postgres-port", field: "postgres_port", label: "PostgreSQL", hint: "Database", key: "postgresql" },
+  ];
+
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
-      onClick={onClose}
-      {...props}
-    >
-      <div
-        style={{
-          backgroundColor: "var(--bg-card)",
-          borderRadius: "0.75rem",
-          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
-          width: "100%",
-          maxWidth: "28rem",
-          maxHeight: "90vh",
-          display: "flex",
-          flexDirection: "column",
-          animation: "slide-in 0.2s ease-out",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "1.25rem 1.5rem",
-            borderBottom: "1px solid var(--border-color)",
-          }}
-        >
-          <h2 style={{ fontSize: "1.25rem", fontWeight: 600, margin: 0 }}>Settings</h2>
-          <button
-            style={{
-              backgroundColor: "transparent",
-              border: "none",
-              fontSize: "1.5rem",
-              color: "var(--text-secondary)",
-              cursor: "pointer",
-              padding: 0,
-              lineHeight: 1,
-            }}
-            onClick={onClose}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-error)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-secondary)"; }}
-          >
-            ×
-          </button>
+    <div className="page" {...props}>
+      <header className="main__header">
+        <div>
+          <h2>Settings</h2>
+          <p>Changes apply the next time services start.</p>
         </div>
-
-        {/* Content */}
-        <div style={{ padding: "1.5rem", overflowY: "auto", flex: 1 }}>
-          {error && (
-            <div className="error-box" style={{ marginBottom: "1rem" }}>
-              <p className="error-box-text" style={{ margin: "0 0 0.5rem 0" }}>{error}</p>
-            </div>
-          )}
-          {success && (
-            <div className="success-box" style={{ marginBottom: "1rem" }}>
-              <p className="success-box-text" style={{ margin: 0 }}>{success}</p>
-            </div>
-          )}
-
-          {/* Appearance */}
-          <div style={{ marginBottom: "1.5rem" }}>
-            <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "0.5rem" }}>Appearance</h3>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "0.5rem 0.75rem",
-                borderRadius: "0.5rem",
-                transition: "background-color 0.15s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-secondary)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
-            >
-              <div>
-                <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>Theme</span>
-                <p style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "0.125rem" }}>
-                  {themeLabel(settings.theme)}
-                </p>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  borderRadius: "0.375rem",
-                  overflow: "hidden",
-                  border: "1px solid var(--border-color)",
-                }}
-              >
-                {(["system", "light", "dark"] as const).map((mode) => {
-                  const active = (settings.theme || "system") === mode;
-                  return (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => {
-                        setSettings({ ...settings, theme: mode });
-                        applyTheme(mode);
-                      }}
-                      style={{
-                        padding: "0.3rem 0.75rem",
-                        fontSize: "0.75rem",
-                        fontWeight: 600,
-                        border: "none",
-                        cursor: "pointer",
-                        transition: "all 0.15s",
-                        backgroundColor: active ? "var(--color-primary)" : "transparent",
-                        color: active ? "#fff" : "var(--text-secondary)",
-                      }}
-                    >
-                      {mode.charAt(0).toUpperCase() + mode.slice(1)}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Port Configuration Section */}
-          <div style={{ marginBottom: "1.5rem" }}>
-            <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "0.5rem" }}>Port Configuration</h3>
-            <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", marginBottom: "1rem" }}>
-              Configure the ports used by each service. Changes will be applied when services restart.
-            </p>
-
-            {/* Web Server Port */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: "0.75rem",
-                padding: "0.5rem",
-                borderRadius: "0.5rem",
-                opacity: components.find(c => c.key === "caddy")?.installed ? 1 : 0.5,
-                transition: "background-color 0.15s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-secondary)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
-            >
-              <label htmlFor="web-port" style={{ fontSize: "0.875rem", fontWeight: 500 }}>
-                Web Server Port
-              </label>
-              <input
-                id="web-port"
-                type="number"
-                value={settings.web_port}
-                onChange={(e) => handlePortChange("web_port", e.target.value)}
-                min={1}
-                max={65535}
-                disabled={!components.find(c => c.key === "caddy")?.installed}
-                className="input"
-                style={{ width: "180px" }}
-              />
-            </div>
-
-            {/* PHP-FPM Port */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: "0.75rem",
-                padding: "0.5rem",
-                borderRadius: "0.5rem",
-                opacity: components.find(c => c.key === "php")?.installed ? 1 : 0.5,
-                transition: "background-color 0.15s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-secondary)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
-            >
-              <label htmlFor="php-port" style={{ fontSize: "0.875rem", fontWeight: 500 }}>
-                PHP-FPM Port
-              </label>
-              <input
-                id="php-port"
-                type="number"
-                value={settings.php_port}
-                onChange={(e) => handlePortChange("php_port", e.target.value)}
-                min={1}
-                max={65535}
-                disabled={!components.find(c => c.key === "php")?.installed}
-                className="input"
-                style={{ width: "180px" }}
-              />
-            </div>
-
-            {/* MySQL/MariaDB Port */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "0.5rem",
-                borderRadius: "0.5rem",
-                opacity: components.find(c => c.key === dbComponentKey)?.installed ? 1 : 0.5,
-                transition: "background-color 0.15s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-secondary)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
-            >
-              <label htmlFor="mysql-port" style={{ fontSize: "0.875rem", fontWeight: 500 }}>
-                {getDatabaseDisplayName()} Port
-              </label>
-              <input
-                id="mysql-port"
-                type="number"
-                value={settings.mysql_port}
-                onChange={(e) => handlePortChange("mysql_port", e.target.value)}
-                min={1}
-                max={65535}
-                disabled={!components.find(c => c.key === dbComponentKey)?.installed}
-                className="input"
-                style={{ width: "180px" }}
-              />
-            </div>
-
-            {/* PostgreSQL Port */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "0.5rem 0.75rem",
-                borderRadius: "0.5rem",
-                opacity: components.find(c => c.key === "postgresql")?.installed ? 1 : 0.5,
-                transition: "background-color 0.15s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-secondary)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
-            >
-              <label htmlFor="postgres-port" style={{ fontSize: "0.875rem", fontWeight: 500 }}>
-                PostgreSQL Port
-              </label>
-              <input
-                id="postgres-port"
-                type="number"
-                value={settings.postgres_port}
-                onChange={(e) => handlePortChange("postgres_port", e.target.value)}
-                min={1}
-                max={65535}
-                disabled={!components.find(c => c.key === "postgresql")?.installed}
-                className="input"
-                style={{ width: "180px" }}
-              />
-            </div>
-          </div>
-
-          {/* Network Configuration */}
-          <div style={{ marginTop: "1rem", marginBottom: "0.5rem" }}>
-            <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "0.5rem" }}>Network</h3>
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "0.5rem 0.75rem",
-              borderRadius: "0.5rem",
-              transition: "background-color 0.15s",
-            }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-secondary)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
-            >
-              <div>
-                <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>Mode</span>
-                <p style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "0.125rem" }}>
-                  {settings.listen_all_interfaces
-                    ? "Accessible from other devices on your network"
-                    : "Accessible only from this computer"}
-                </p>
-              </div>
-              <div style={{
-                display: "flex",
-                borderRadius: "0.375rem",
-                overflow: "hidden",
-                border: "1px solid var(--border-color)",
-              }}>
-                <button
-                  type="button"
-                  onClick={() => setSettings({ ...settings, listen_all_interfaces: false })}
-                  style={{
-                    padding: "0.3rem 0.75rem",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    border: "none",
-                    cursor: "pointer",
-                    transition: "all 0.15s",
-                    backgroundColor: !settings.listen_all_interfaces ? "var(--color-primary)" : "transparent",
-                    color: !settings.listen_all_interfaces ? "#fff" : "var(--text-secondary)",
-                  }}
-                >
-                  LOCAL
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!settings.listen_all_interfaces && !confirm(
-                      "LAN mode exposes your development services to all devices on your network.\n\n" +
-                      "Only use this on trusted, private networks. Are you sure?"
-                    )) {
-                      return;
-                    }
-                    setSettings({ ...settings, listen_all_interfaces: true });
-                  }}
-                  style={{
-                    padding: "0.3rem 0.75rem",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    border: "none",
-                    cursor: "pointer",
-                    transition: "all 0.15s",
-                    backgroundColor: settings.listen_all_interfaces ? "var(--color-primary)" : "transparent",
-                    color: settings.listen_all_interfaces ? "#fff" : "var(--text-secondary)",
-                  }}
-                >
-                  LAN
-                </button>
-              </div>
-            </div>
-            {settings.listen_all_interfaces && (
-              <div style={{
-                marginTop: "0.5rem",
-                padding: "0.5rem 0.75rem",
-                borderRadius: "0.375rem",
-                backgroundColor: "rgba(255, 180, 0, 0.1)",
-                border: "1px solid var(--color-warning)",
-              }}>
-                <p style={{ fontSize: "0.75rem", color: "var(--color-warning)" }}>
-                  Ensure your firewall is configured appropriately when using LAN mode.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Ngrok Configuration — only visible when ngrok is installed */}
-          {components.find(c => c.key === "ngrok")?.installed && (
-            <div style={{ marginBottom: "1.5rem" }}>
-              <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "0.5rem" }}>ngrok Tunnel</h3>
-              <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", marginBottom: "0.75rem" }}>
-                Required for sharing your local server publicly. Get a free token at{" "}
-                <a href="https://dashboard.ngrok.com/signup" target="_blank" rel="noopener noreferrer"
-                  style={{ color: "var(--color-primary, #3b82f6)" }}>
-                  ngrok.com
-                </a>.
-              </p>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <label style={{ fontSize: "0.875rem", fontWeight: 500, whiteSpace: "nowrap" }}>
-                  Authtoken
-                </label>
-                <input
-                  type="password"
-                  value={settings.ngrok_authtoken || ""}
-                  onChange={(e) => setSettings({ ...settings, ngrok_authtoken: e.target.value })}
-                  placeholder="Paste your ngrok authtoken"
-                  style={{
-                    flex: 1,
-                    padding: "0.375rem 0.5rem",
-                    borderRadius: "0.25rem",
-                    border: "1px solid var(--border-color)",
-                    backgroundColor: "var(--bg-card-secondary)",
-                    color: "var(--text-primary)",
-                    fontSize: "0.875rem",
-                  }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Components Section */}
-          <div style={{ marginBottom: "1.5rem" }}>
-            <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "0.5rem" }}>Components</h3>
-            <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", marginBottom: "0.75rem" }}>
-              Manage installed software components.
-            </p>
-            {detectPlatform() === "windows" && (
-              <NgrokAntivirusNotice />
-            )}
-            {componentError && (
-              <div className="error-box" style={{ marginBottom: "0.75rem", padding: "0.625rem 0.75rem", fontSize: "0.8125rem" }}>
-                <p className="error-box-text" style={{ margin: "0 0 0.375rem 0", whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.4 }}>
-                  {componentError}
-                </p>
-                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                  {isAntivirusError(componentError) && detectPlatform() === "windows" && failedComponentKey && (
-                    <button
-                      onClick={handleComponentAvFixAndRetry}
-                      disabled={isFixingComponentAv || !!componentAction}
-                      className="btn-primary"
-                      style={{ fontSize: "0.75rem", padding: "0.3rem 0.6rem" }}
-                    >
-                      {isFixingComponentAv ? "Adding exclusion…" : "Add Defender exclusion & retry"}
-                    </button>
-                  )}
-                  <button
-                    onClick={clearComponentError}
-                    style={{
-                      padding: "0.25rem 0.5rem",
-                      borderRadius: "0.25rem",
-                      border: "1px solid var(--color-error)",
-                      backgroundColor: "transparent",
-                      color: "var(--color-error)",
-                      fontSize: "0.75rem",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            )}
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              {components.map((comp) => {
-                const isActing = componentAction === `uninstall-${comp.key}` || componentAction === `reinstall-${comp.key}`;
-                const installedCount = components.filter(c => c.installed).length;
-                const canUninstall = comp.installed && installedCount > 1;
-
-                return (
-                  <div
-                    key={comp.key}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "0.5rem",
-                      borderRadius: "0.5rem",
-                      backgroundColor: "var(--bg-card-secondary)",
-                      border: "1px solid var(--border-color)",
-                    }}
-                  >
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.125rem" }}>
-                      <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>{comp.displayName}</span>
-                      {comp.installed && comp.version ? (
-                        <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>v{comp.version}</span>
-                      ) : (
-                        <span style={{ fontSize: "0.75rem", color: "var(--color-warning)", fontStyle: "italic" }}>Not installed</span>
-                      )}
-                    </div>
-                    <div style={{ display: "flex", gap: "0.375rem", alignItems: "center" }}>
-                      {isActing && (
-                        <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>Working...</span>
-                      )}
-                      {comp.installed ? (
-                        <>
-                          <button
-                            onClick={() => handleReinstall(comp.key)}
-                            disabled={!!componentAction}
-                            className="btn-secondary"
-                            style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
-                          >
-                            Reinstall
-                          </button>
-                          <button
-                            onClick={() => handleUninstall(comp.key)}
-                            disabled={!!componentAction || !canUninstall}
-                            className="btn-secondary"
-                            title={!canUninstall ? "At least one component must remain installed" : undefined}
-                            style={{
-                              fontSize: "0.75rem",
-                              padding: "0.25rem 0.5rem",
-                              borderColor: "var(--color-error)",
-                              color: "var(--color-error)",
-                              opacity: !canUninstall ? 0.4 : 1,
-                            }}
-                          >
-                            Uninstall
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          onClick={() => handleInstall(comp.key)}
-                          disabled={!!componentAction}
-                          className="btn-primary"
-                          style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
-                        >
-                          Install
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: "0.75rem",
-            padding: "1rem 1.5rem",
-            borderTop: "1px solid var(--border-color)",
-          }}
-        >
-          <button
-            className="btn-secondary"
-            onClick={onClose}
-            disabled={saving}
-          >
+        <div className="main__actions">
+          <button type="button" className="btn-secondary btn-sm" onClick={onClose} disabled={saving}>
             Cancel
           </button>
-          <button
-            className="btn-primary"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? "Saving..." : "Save"}
+          <button type="button" className="btn-primary btn-sm" onClick={handleSave} disabled={saving}>
+            {saving ? "Saving…" : "Save changes"}
           </button>
         </div>
-      </div>
+      </header>
+
+      {error && (
+        <div className="error-box">
+          <p className="error-box-text">{error}</p>
+        </div>
+      )}
+      {success && (
+        <div className="success-box">
+          <p className="success-box-text">{success}</p>
+        </div>
+      )}
+
+      {/* Appearance */}
+      <section className="card-section card-section--row" aria-labelledby="s-appearance">
+        <div className="card-section__head">
+          <h3 id="s-appearance">Appearance</h3>
+          <p>{themeLabel(settings.theme)}</p>
+        </div>
+        <div className="seg" role="group" aria-label="Theme">
+          {(["system", "light", "dark"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              aria-pressed={(settings.theme || "system") === mode}
+              onClick={() => {
+                setSettings({ ...settings, theme: mode });
+                applyTheme(mode);
+              }}
+            >
+              {mode.charAt(0).toUpperCase() + mode.slice(1)}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* Ports */}
+      <section className="card-section" aria-labelledby="s-ports">
+        <div className="card-section__head">
+          <h3 id="s-ports">Ports</h3>
+          <p>Non-default ports, so CAMPP runs without admin rights.</p>
+        </div>
+        <div className="tile-grid">
+          {ports.map((p) => {
+            const installed = isInstalled(p.key);
+            return (
+              <div key={p.id} className={`tile${installed ? "" : " tile--disabled"}`}>
+                <span className="logo-tile logo-tile--sm"><img src={LOGOS[p.key]} alt="" /></span>
+                <label htmlFor={p.id} className="tile__label">
+                  <span>{p.label}</span>
+                  <span>{installed ? p.hint : "Not installed"}</span>
+                </label>
+                <input
+                  id={p.id}
+                  type="number"
+                  className="input input--port mono"
+                  value={settings[p.field] as number}
+                  onChange={(e) => handlePortChange(p.field, e.target.value)}
+                  min={1}
+                  max={65535}
+                  disabled={!installed}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Network */}
+      <section className="card-section" aria-labelledby="s-network">
+        <div className="card-section--row">
+          <div className="card-section__head">
+            <h3 id="s-network">Network</h3>
+            <p>
+              {settings.listen_all_interfaces
+                ? "Reachable from other devices on your network"
+                : "Reachable only from this computer"}
+            </p>
+          </div>
+          <div className="seg" role="group" aria-label="Network mode">
+            <button
+              type="button"
+              aria-pressed={!settings.listen_all_interfaces}
+              onClick={() => setSettings({ ...settings, listen_all_interfaces: false })}
+            >
+              Local only
+            </button>
+            <button
+              type="button"
+              aria-pressed={!!settings.listen_all_interfaces}
+              onClick={async () => {
+                if (!settings.listen_all_interfaces && !(await showConfirm(
+                  "Enable LAN mode?",
+                  "LAN mode exposes your development services to all devices on your network. " +
+                  "Only use this on trusted, private networks.",
+                  "Enable LAN mode",
+                  true
+                ))) {
+                  return;
+                }
+                setSettings({ ...settings, listen_all_interfaces: true });
+              }}
+            >
+              LAN
+            </button>
+          </div>
+        </div>
+        {settings.listen_all_interfaces && (
+          <div className="warn-box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 3l9.5 17H2.5z" />
+              <path d="M12 10v4M12 17h.01" />
+            </svg>
+            <span>LAN mode exposes your dev services to every device on this network. Use it only on trusted networks and check your firewall.</span>
+          </div>
+        )}
+      </section>
+
+      {/* ngrok — only visible when ngrok is installed */}
+      {isInstalled("ngrok") && (
+        <section className="card-section card-section--row" aria-labelledby="s-ngrok">
+          <div className="card-section__head">
+            <h3 id="s-ngrok">ngrok tunnel</h3>
+            <p>
+              Share your local site publicly. Get a free token at{" "}
+              <a className="link" href="https://dashboard.ngrok.com/signup" target="_blank" rel="noopener noreferrer">ngrok.com</a>.
+            </p>
+          </div>
+          <div className="field">
+            <label htmlFor="ngrok-token">Authtoken</label>
+            <PasswordInput
+              id="ngrok-token"
+              className="mono"
+              value={settings.ngrok_authtoken || ""}
+              onChange={(e) => setSettings({ ...settings, ngrok_authtoken: e.target.value })}
+              placeholder="Paste your ngrok authtoken"
+            />
+          </div>
+        </section>
+      )}
+
+      {/* Components */}
+      <section className="card-section" aria-labelledby="s-components">
+        <div className="card-section__head">
+          <h3 id="s-components">Components</h3>
+          <p>Install, reinstall or remove the software CAMPP runs.</p>
+        </div>
+        {componentError && (
+          <div className="error-box">
+            <p className="error-box-text" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", marginBottom: "0.5rem" }}>
+              {componentError}
+            </p>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <button type="button" onClick={clearComponentError} className="btn-secondary btn-xs btn-danger">
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="list-box">
+          {components.map((comp) => {
+            const isActing = componentAction === `uninstall-${comp.key}`;
+            const canUninstall = comp.installed && components.filter((c) => c.installed).length > 1;
+            return (
+              <div key={comp.key} className="list-row">
+                <span className="logo-tile logo-tile--sm"><img src={LOGOS[comp.key]} alt="" /></span>
+                <div className="list-row__main">
+                  <span>{comp.displayName}</span>
+                  {comp.installed && comp.version ? (
+                    <span className="mono">v{comp.version}</span>
+                  ) : (
+                    <span className="list-row__warn">Not installed</span>
+                  )}
+                </div>
+                {isActing && (
+                  <span className="list-row__busy">
+                    <span className="btn-spinner" aria-hidden="true" />
+                    Working…
+                  </span>
+                )}
+                {comp.installed ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => openInstallDialog(comp.key)}
+                      disabled={!!componentAction}
+                      className="btn-secondary btn-xs"
+                    >
+                      Reinstall
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUninstall(comp.key)}
+                      disabled={!!componentAction || !canUninstall}
+                      className="btn-secondary btn-xs btn-danger"
+                      title={!canUninstall ? "At least one component must remain installed" : undefined}
+                    >
+                      Uninstall
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => openInstallDialog(comp.key)}
+                    disabled={!!componentAction}
+                    className="btn-primary btn-xs"
+                  >
+                    Install
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {detectPlatform() === "windows" && <NgrokAntivirusNotice />}
+      </section>
+
+      {installTarget && (
+        <ReinstallDialog
+          componentKey={installTarget.key}
+          displayName={installTarget.displayName}
+          currentVersion={installTarget.installed ? installTarget.version : null}
+          onClose={(changed) => {
+            setInstallTarget(null);
+            if (changed) refreshComponents();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -58,23 +58,9 @@ export function NgrokAntivirusNotice() {
   };
 
   return (
-    <div
-      style={{
-        marginTop: "0.75rem",
-        padding: "0.75rem",
-        borderRadius: "0.5rem",
-        border: "1px solid #d97706",
-        backgroundColor: "rgba(217, 119, 6, 0.12)",
-        color: "var(--text-primary)",
-        fontSize: "0.8125rem",
-        lineHeight: 1.5,
-        textAlign: "left",
-      }}
-    >
-      <div style={{ fontWeight: 600, color: "#d97706", marginBottom: "0.375rem" }}>
-        ⚠ ngrok may be blocked by Windows Defender
-      </div>
-      <p style={{ margin: "0 0 0.5rem 0" }}>
+    <div className="av-notice">
+      <div className="av-notice__title">⚠ ngrok may be blocked by Windows Defender</div>
+      <p>
         ngrok is sometimes flagged as <em>"potentially unwanted software"</em> (a
         false positive). If the install fails with a virus or permission error,
         add the CAMPP folders to Defender's exclusions first, then retry.
@@ -82,15 +68,10 @@ export function NgrokAntivirusNotice() {
 
       {/* One-click automatic exclusion */}
       <button
+        type="button"
         onClick={handleAddExclusion}
         disabled={status === "adding"}
-        className="btn-primary"
-        style={{
-          width: "100%",
-          marginBottom: "0.5rem",
-          fontSize: "0.8125rem",
-          padding: "0.5rem",
-        }}
+        className="btn-primary btn-xs av-notice__btn"
       >
         {status === "adding"
           ? "Adding exclusion… (accept the UAC prompt)"
@@ -99,43 +80,24 @@ export function NgrokAntivirusNotice() {
           : "Add Defender exclusion automatically"}
       </button>
       {message && (
-        <p
-          style={{
-            margin: "0 0 0.5rem 0",
-            fontSize: "0.75rem",
-            color:
-              status === "error" ? "var(--color-error, #e06c75)" : "#fbbf24",
-            whiteSpace: "pre-wrap",
-          }}
-        >
+        <p className={status === "error" ? "text-bad wiz-small" : "text-ok wiz-small"} style={{ whiteSpace: "pre-wrap" }}>
           {message}
         </p>
       )}
 
       {/* Manual fallback steps */}
-      <div style={{ borderTop: "1px solid rgba(217, 119, 6, 0.3)", paddingTop: "0.5rem", marginTop: "0.25rem" }}>
+      <div className="av-notice__manual">
         <button
           type="button"
+          className="av-notice__toggle"
           onClick={() => setShowManual((v) => !v)}
           aria-expanded={showManual}
-          style={{
-            background: "none",
-            border: "none",
-            padding: 0,
-            cursor: "pointer",
-            fontSize: "0.8125rem",
-            fontWeight: 500,
-            color: "#d97706",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.25rem",
-          }}
         >
           {showManual ? "▾" : "▸"} Add the exclusion manually
         </button>
         {showManual && (
           <>
-            <ol style={{ margin: "0.5rem 0 0.5rem 1.25rem", padding: 0 }}>
+            <ol>
               <li>Open <strong>Windows Security</strong>.</li>
               <li>Go to <strong>Virus &amp; threat protection</strong>.</li>
               <li>
@@ -154,20 +116,9 @@ export function NgrokAntivirusNotice() {
               </li>
             </ol>
             {folders.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", marginTop: "0.25rem" }}>
+              <div className="wiz-stack">
                 {folders.map((f) => (
-                  <code
-                    key={f}
-                    style={{
-                      display: "block",
-                      padding: "0.25rem 0.375rem",
-                      borderRadius: "0.25rem",
-                      backgroundColor: "rgba(0, 0, 0, 0.25)",
-                      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                      fontSize: "0.75rem",
-                      wordBreak: "break-all",
-                    }}
-                  >
+                  <code key={f} className="av-notice__path mono">
                     {f}
                   </code>
                 ))}
