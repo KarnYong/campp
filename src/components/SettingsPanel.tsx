@@ -101,7 +101,18 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
     setSettings({ ...settings, [field]: numValue });
   };
 
+  const isInstalled = (key: string) => !!components.find((c) => c.key === key)?.installed;
+
   const handleSave = async () => {
+    // A blank root password would silently open the database to anyone with access.
+    if (isInstalled(dbComponentKey) && !settings.mysql_root_password.trim()) {
+      setError(`${getDatabaseDisplayName()} root password can't be empty.`);
+      return;
+    }
+    if (isInstalled("postgresql") && !settings.postgres_root_password.trim()) {
+      setError("PostgreSQL root password can't be empty.");
+      return;
+    }
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -159,7 +170,6 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
     return <p className="page-loading">Loading settings…</p>;
   }
 
-  const isInstalled = (key: string) => !!components.find((c) => c.key === key)?.installed;
   const ports: { id: string; field: keyof AppSettings; label: string; hint: string; key: string }[] = [
     { id: "web-port", field: "web_port", label: "Web server", hint: "Caddy", key: "caddy" },
     { id: "php-port", field: "php_port", label: "PHP-FPM", hint: "Internal FastCGI", key: "php" },
@@ -320,6 +330,39 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
               placeholder="Paste your ngrok authtoken"
             />
           </div>
+        </section>
+      )}
+
+      {/* Database passwords: services are stopped while Settings is open, so the
+          new password is applied on the next database start. */}
+      {(isInstalled(dbComponentKey) || isInstalled("postgresql")) && (
+        <section className="card-section" aria-labelledby="s-db-passwords">
+          <div className="card-section__head">
+            <h3 id="s-db-passwords">Database passwords</h3>
+            <p>Root password for each database. Applied the next time the database starts.</p>
+          </div>
+          {isInstalled(dbComponentKey) && (
+            <div className="field">
+              <label htmlFor="mysql-password">{getDatabaseDisplayName()} root password</label>
+              <PasswordInput
+                id="mysql-password"
+                value={settings.mysql_root_password || ""}
+                onChange={(e) => setSettings({ ...settings, mysql_root_password: e.target.value })}
+                autoComplete="new-password"
+              />
+            </div>
+          )}
+          {isInstalled("postgresql") && (
+            <div className="field">
+              <label htmlFor="postgres-password">PostgreSQL root password</label>
+              <PasswordInput
+                id="postgres-password"
+                value={settings.postgres_root_password || ""}
+                onChange={(e) => setSettings({ ...settings, postgres_root_password: e.target.value })}
+                autoComplete="new-password"
+              />
+            </div>
+          )}
         </section>
       )}
 

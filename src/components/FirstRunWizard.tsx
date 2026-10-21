@@ -35,24 +35,24 @@ interface ExistingComponent {
 // Package versions for display
 const packages = {
   php: [
-    { id: "php-8.5", version: "8.5.1" },
-    { id: "php-8.4", version: "8.4.16" },
-    { id: "php-8.3", version: "8.3.29" },
-    { id: "php-8.2", version: "8.2.30" },
+    { id: "php-8.5", version: "8.5.12" },
+    { id: "php-8.4", version: "8.4.27" },
+    { id: "php-8.3", version: "8.3.36" },
+    { id: "php-8.2", version: "8.2.35" },
     { id: "php-7.4", version: "7.4.33" },
   ],
   mysql: [
-    { id: "mysql-8.4", version: "8.4.0" },
-    { id: "mysql-8.0", version: "8.0.40" },
+    { id: "mysql-8.4", version: "8.4.11" },
+    { id: "mysql-8.0", version: "8.0.46" },
   ],
   mariadb: [
-    { id: "mariadb-12.3", version: "12.3.1" },
+    { id: "mariadb-12.3", version: "12.3.3" },
   ],
   phpmyadmin: [
-    { id: "phpmyadmin-5.2", version: "5.2.2" },
+    { id: "phpmyadmin-5.2", version: "5.2.3" },
   ],
   postgresql: [
-    { id: "postgresql-18.3", version: "18.3.0" },
+    { id: "postgresql-18.3", version: "18.6.1" },
   ],
   adminer: [
     { id: "adminer-5.1", version: "5.1.0" },

@@ -198,12 +198,11 @@ pub async fn save_settings(settings: crate::config::AppSettings, state: State<'_
         let mut manager = pm.lock()
             .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
 
-        // If PostgreSQL password changed, remove .password_set flag so it gets re-applied on start
+        // If PostgreSQL password changed, remove .password_set flag so it gets re-applied on start.
+        // Not via manager.get_runtime_paths(): that stays None until a service has started,
+        // which is the usual state when Settings is open (it requires all services stopped).
         if postgres_changed {
-            if let Some(paths) = manager.get_runtime_paths() {
-                let flag = paths.pgsql_data_dir.join(".password_set");
-                let _ = fs::remove_file(&flag);
-            }
+            clear_postgres_password_flag();
         }
 
         // Get the current running services before updating ports
@@ -524,11 +523,7 @@ fn apply_mysql_password(manager: &crate::ProcessManager, password: &str) {
         return;
     }
 
-    let password_sql = if password.is_empty() {
-        "''".to_string()
-    } else {
-        format!("'{}'", password.replace('\'', "\\'"))
-    };
+    let password_sql = crate::process::manager::mysql_string_literal(password);
 
     // mysql client is in the same bin/ directory as mysqld
     let mysql_bin_dir = paths.mysql.parent().unwrap_or_else(|| std::path::Path::new(""));
@@ -572,16 +567,26 @@ fn apply_mysql_password(manager: &crate::ProcessManager, password: &str) {
     }
 }
 
+/// Remove PostgreSQL's `.password_set` marker so the saved root password is
+/// (re)applied on the next start.
+fn clear_postgres_password_flag() {
+    if let Ok(app_paths) = crate::runtime::locator::get_app_data_paths() {
+        let _ = fs::remove_file(app_paths.pgsql_data_dir.join(".password_set"));
+    }
+}
+
 fn apply_postgres_password(manager: &crate::ProcessManager, password: &str) {
     let paths = match manager.get_runtime_paths() {
         Some(p) => p,
-        None => return,
+        None => {
+            clear_postgres_password_flag();
+            return;
+        }
     };
 
     if manager.status(ServiceType::PostgreSQL) != ServiceState::Running {
         // Service not running — remove flag so password gets set on next start
-        let flag = paths.pgsql_data_dir.join(".password_set");
-        let _ = fs::remove_file(&flag);
+        clear_postgres_password_flag();
         tracing::info!("PostgreSQL not running, password will be applied on next start");
         return;
     }
@@ -898,6 +903,29 @@ pub async fn get_ngrok_public_url() -> Result<Option<String>, String> {
     }
 }
 
+/// Path as a display string, without the Windows verbatim prefix (`\\?\C:\...`)
+/// that Tauri's resource_dir() returns.
+fn display_path(p: &std::path::Path) -> String {
+    let s = p.to_string_lossy();
+    if let Some(unc) = s.strip_prefix(r"\\?\UNC\") {
+        return format!(r"\\{}", unc);
+    }
+    s.strip_prefix(r"\\?\").unwrap_or(&s).to_string()
+}
+
+#[cfg(test)]
+mod display_path_tests {
+    use super::display_path;
+    use std::path::Path;
+
+    #[test]
+    fn strips_verbatim_prefix() {
+        assert_eq!(display_path(Path::new(r"\\?\C:\CAMPP")), r"C:\CAMPP");
+        assert_eq!(display_path(Path::new(r"\\?\UNC\server\share")), r"\\server\share");
+        assert_eq!(display_path(Path::new(r"C:\CAMPP")), r"C:\CAMPP");
+    }
+}
+
 /// Get debug info for troubleshooting (version, paths, config status)
 #[tauri::command]
 pub async fn get_debug_info(app: tauri::AppHandle) -> serde_json::Value {
@@ -905,25 +933,28 @@ pub async fn get_debug_info(app: tauri::AppHandle) -> serde_json::Value {
 
     let version = env!("CARGO_PKG_VERSION").to_string();
 
-    let resource_dir = app.path().resource_dir()
-        .map(|p| p.to_string_lossy().to_string())
+    let resource_path = app.path().resource_dir();
+    let config_in_resource = resource_path.as_ref()
+        .map(|p| p.join("runtime-config.json").exists())
+        .unwrap_or(false);
+    let resource_dir = resource_path.as_deref()
+        .map(display_path)
         .unwrap_or_else(|e| format!("ERROR: {}", e));
-    let config_in_resource = std::path::Path::new(&resource_dir).join("runtime-config.json").exists();
 
     let exe_path = std::env::current_exe()
-        .map(|p| p.to_string_lossy().to_string())
+        .map(|p| display_path(&p))
         .unwrap_or_else(|e| format!("ERROR: {}", e));
 
     let mut runtime_dir = "ERROR".to_string();
     if let Ok(dl) = RuntimeDownloader::new() {
         runtime_dir = dl.get_runtime_dir()
-            .map(|p| p.to_string_lossy().to_string())
+            .map(|p| display_path(&p))
             .unwrap_or_else(|e| e);
     }
 
     let config_loaded = crate::runtime::packages::get_config().is_some();
 
-    let resource_files: Vec<String> = std::fs::read_dir(&resource_dir)
+    let resource_files: Vec<String> = resource_path.as_ref().map_err(|_| ()).and_then(|p| std::fs::read_dir(p).map_err(|_| ()))
         .map(|entries| entries.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().to_string()).collect())
         .unwrap_or_default();
 

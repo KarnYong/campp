@@ -577,26 +577,7 @@ fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths, setti
 
     // Always create init file to keep password in sync with settings
     let init_file = paths.logs_dir.join("mysql_init_user.sql");
-    let password_sql = if settings.mysql_root_password.is_empty() {
-        "''".to_string()
-    } else {
-        format!("'{}'", settings.mysql_root_password.replace('\'', "\\'"))
-    };
-    let mut init_sql = format!(
-        "CREATE USER IF NOT EXISTS 'root'@'127.0.0.1' IDENTIFIED BY {};\n\
-        ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY {};\n\
-        GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1' WITH GRANT OPTION;\n",
-        password_sql, password_sql
-    );
-    if settings.listen_all_interfaces {
-        init_sql.push_str(&format!(
-            "CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY {};\n\
-            ALTER USER 'root'@'%' IDENTIFIED BY {};\n\
-            GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;\n",
-            password_sql, password_sql
-        ));
-    }
-    init_sql.push_str("FLUSH PRIVILEGES;\n");
+    let init_sql = mysql_init_sql(&settings.mysql_root_password, settings.listen_all_interfaces);
     fs::write(&init_file, init_sql)
         .map_err(|e| format!("Failed to create init file: {}", e))?;
 
@@ -964,6 +945,46 @@ fn wait_for_postgres_ready(psql_bin: &Path, port: u16, pgsql_dir: &Path, timeout
     false
 }
 
+/// Quote a value as a MySQL/MariaDB string literal. Backslash is an escape
+/// character in MySQL strings, so it is escaped along with the quote;
+/// otherwise a password ending in `\` breaks the init file and the server won't start.
+pub(crate) fn mysql_string_literal(s: &str) -> String {
+    format!("'{}'", s.replace('\\', "\\\\").replace('\'', "\\'"))
+}
+
+/// SQL run via `--init-file` on every MySQL/MariaDB start, keeping every root
+/// account on the saved password.
+fn mysql_init_sql(password: &str, listen_all_interfaces: bool) -> String {
+    let pw = mysql_string_literal(password);
+    let mut sql = format!(
+        "CREATE USER IF NOT EXISTS 'root'@'127.0.0.1' IDENTIFIED BY {pw};\n\
+        ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY {pw};\n\
+        GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1' WITH GRANT OPTION;\n"
+    );
+    // root@localhost is the socket/named-pipe account. Both initializers create it
+    // with no usable password (MySQL --initialize-insecure: empty; mariadb-install-db:
+    // unix_socket, so any process running as this OS user gets in). Put it on the
+    // same password. MariaDB spells it out so unix_socket is replaced, not kept as an OR.
+    #[cfg(target_os = "linux")]
+    sql.push_str(&format!(
+        "ALTER USER IF EXISTS 'root'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD({pw});\n"
+    ));
+    #[cfg(not(target_os = "linux"))]
+    sql.push_str(&format!("ALTER USER IF EXISTS 'root'@'localhost' IDENTIFIED BY {pw};\n"));
+    if listen_all_interfaces {
+        sql.push_str(&format!(
+            "CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY {pw};\n\
+            ALTER USER 'root'@'%' IDENTIFIED BY {pw};\n\
+            GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;\n"
+        ));
+    } else {
+        // Left over from earlier LAN mode: keep it in sync so an old password never lingers.
+        sql.push_str(&format!("ALTER USER IF EXISTS 'root'@'%' IDENTIFIED BY {pw};\n"));
+    }
+    sql.push_str("FLUSH PRIVILEGES;\n");
+    sql
+}
+
 /// Signal PostgreSQL to reload its configuration files
 fn reload_postgresql_conf(paths: &RuntimePaths) {
     #[cfg(target_os = "windows")]
@@ -973,12 +994,20 @@ fn reload_postgresql_conf(paths: &RuntimePaths) {
 
     if pg_ctl.exists() {
         let data_dir_str = paths.pgsql_data_dir.to_string_lossy().to_string();
-        let _ = configure_no_window(Command::new(&pg_ctl))
-            .arg("reload")
+        let mut cmd = configure_no_window(Command::new(&pg_ctl));
+        cmd.arg("reload")
             .arg("-D").arg(&data_dir_str)
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
+            .stderr(Stdio::null());
+        // pg_ctl links the bundled libpq. Without it the reload fails on Linux/macOS and
+        // the server keeps the "trust" pg_hba.conf (no password) until its next restart.
+        #[cfg(unix)]
+        {
+            let lib_path = paths.pgsql_dir.join("lib").to_string_lossy().to_string();
+            cmd.env("LD_LIBRARY_PATH", &lib_path);
+            cmd.env("DYLD_LIBRARY_PATH", &lib_path);
+        }
+        let _ = cmd.status();
         tracing::info!("PostgreSQL config reloaded (switched to scram-sha-256)");
     }
 }
@@ -999,6 +1028,25 @@ impl Default for ProcessManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mysql_string_literal_escapes_quote_and_backslash() {
+        assert_eq!(mysql_string_literal(""), "''");
+        assert_eq!(mysql_string_literal("abc"), "'abc'");
+        assert_eq!(mysql_string_literal("a'b"), r"'a\'b'");
+        assert_eq!(mysql_string_literal(r"ends\"), r"'ends\\'");
+    }
+
+    #[test]
+    fn mysql_init_sql_sets_password_on_every_root_account() {
+        let sql = mysql_init_sql("s3cret", false);
+        for host in ["127.0.0.1", "localhost", "%"] {
+            assert!(sql.contains(&format!("'root'@'{host}'")), "missing root@{host}");
+        }
+        assert_eq!(sql.matches("'s3cret'").count(), 4);
+        assert!(!sql.contains("CREATE USER IF NOT EXISTS 'root'@'%'"), "LAN off must not create root@%");
+        assert!(mysql_init_sql("s3cret", true).contains("CREATE USER IF NOT EXISTS 'root'@'%'"));
+    }
 
     #[test]
     fn test_process_manager_new() {

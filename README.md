@@ -1,143 +1,146 @@
 # CAMPP
 
-A cross-platform local web development stack desktop application. CAMPP bundles Caddy (web server), PHP-FPM (PHP runtime), MySQL/MariaDB (database), and phpMyAdmin with no external dependencies after installation.
+A cross-platform local web development stack desktop application. CAMPP bundles Caddy (web server), PHP-FPM (PHP runtime), MySQL/MariaDB and PostgreSQL (databases), plus phpMyAdmin and Adminer, with no admin rights and no external dependencies after installation.
 
 ## Installation
 
-Download the latest release from [GitHub Releases](https://github.com/KarnYong/campp/releases).
+Download the latest release from [GitHub Releases](https://github.com/KarnYong/campp/releases/latest).
 
 ### Windows
 
-1. Download `CAMPP-<version>-x64.exe` (NSIS installer) or `CAMPP-<version>-x64.msi`
-2. Run the installer — no admin permissions required
-3. Launch CAMPP from the Start Menu or desktop shortcut
+| File | What it is |
+|------|------------|
+| `CAMPP-<version>-x64.exe` | NSIS installer (recommended) |
+| `CAMPP-<version>-x64.msi` | MSI installer |
+| `CAMPP-<version>-x64-portable.zip` | Portable, no install, downloads runtimes on first run |
+| `CAMPP-<version>-x64-portable-offline.zip` | Portable with runtimes bundled, works fully offline |
 
-### Linux (Ubuntu/Debian)
+1. Run the installer. No admin permissions are required.
+2. If SmartScreen warns, click **More info → Run anyway**.
+3. Launch CAMPP from the Start Menu or desktop shortcut.
 
-**Option A: DEB package (recommended)**
+For the portable zips, extract anywhere you can write to and run `CAMPP.exe`.
+
+### Linux (Ubuntu/Debian/Fedora)
+
+**DEB package (recommended)**
 ```bash
-# Download the latest .deb
-wget https://github.com/KarnYong/campp/releases/latest/download/CAMPP-0.3.6-amd64.deb
-
-# Install
-sudo dpkg -i CAMPP-0.3.6-amd64.deb
-
-# If missing dependencies:
-sudo apt-get install -f
-
-# Run
-/opt/campp/CAMPP
+sudo apt install ./CAMPP-<version>-amd64.deb
 ```
 
-**Option B: AppImage**
+**RPM package**
 ```bash
-# Download the latest AppImage
-wget https://github.com/KarnYong/campp/releases/latest/download/CAMPP-0.3.6-amd64.AppImage
-
-# Make executable
-chmod +x CAMPP-0.3.6-amd64.AppImage
-
-# Run
-./CAMPP-0.3.6-amd64.AppImage
+sudo dnf install ./CAMPP-<version>-amd64.rpm
 ```
 
-**To uninstall:**
+**AppImage**
 ```bash
-sudo dpkg -r CAMPP
+chmod +x CAMPP-<version>-amd64.AppImage
+./CAMPP-<version>-amd64.AppImage
+```
+
+**Portable tarball**
+```bash
+tar -xzf CAMPP-<version>-amd64-portable.tar.gz
+./CAMPP/CAMPP
+```
+
+**To uninstall (DEB):**
+```bash
+sudo apt remove campp
 rm -rf ~/.local/share/campp
 ```
 
 ### macOS
 
-1. Download `CAMPP-<version>-universal.dmg` (works on both Apple Silicon and Intel)
+1. Download `CAMPP-<version>-universal.dmg` (Apple Silicon and Intel)
    - Or `CAMPP-<version>-arm64.dmg` (Apple Silicon) / `CAMPP-<version>-x64.dmg` (Intel)
-2. Open the DMG and drag CAMPP to Applications
-3. On first launch, right-click the app and select Open (required for unsigned apps)
-
-> **Note**: macOS builds are signed and notarized. If you encounter gatekeeper issues, right-click the app and select Open.
+   - Or `CAMPP-<version>-universal-portable.zip` (no DMG)
+2. Open the DMG and drag CAMPP to Applications.
+3. Launch CAMPP. macOS builds are signed and notarized. If Gatekeeper still complains, right-click the app and choose **Open**.
 
 ## Features
 
-- **Zero Configuration**: Works out of the box with sensible defaults
-- **No Admin Required**: Uses non-default ports to avoid conflicts
-- **Self-Contained**: All binaries bundled, no separate installations needed
-- **Modern UI**: Clean desktop interface built with Tauri + React + TypeScript
-- **Service Management**: Start, stop, and restart services individually or all at once
-- **Port Configuration**: Customize ports for each service via Settings panel
-- **LAN Mode**: Expose services to other devices on your local network
-- **Public Tunnels (ngrok)**: Expose your local server to the internet via a public URL — ideal for testing webhooks or sharing work in progress (**Windows only**; Linux & macOS coming soon)
-- **Editable php.ini**: Manually customize PHP configuration (e.g. add extensions)
-- **PostgreSQL Support**: Built-in PostgreSQL alongside MySQL/MariaDB
-- **Database Password Management**: Set root passwords for MySQL and PostgreSQL from Settings
-- **Optional Components**: Choose which components to install (phpMyAdmin, Adminer, MySQL, PostgreSQL)
-- **Quick Actions**: Open project folder, phpMyAdmin, or logs with one click
-- **PHP Version Choice**: Select PHP 8.5.1 or PHP 7.4.33 (Windows) for legacy application support
-- **Platform-Appropriate Database**: MySQL 8.4.0 LTS on Windows/macOS, MariaDB 12.3.1 on Linux
+- **Zero configuration**: works out of the box with sensible defaults
+- **No admin required**: uses non-default ports to avoid conflicts with system services
+- **Self-contained**: every binary lives in CAMPP's own folder, with no separate installations
+- **Version choice**: choose PHP, database, and tool versions in the setup wizard
+- **Optional components**: install only what you need (MySQL/MariaDB, PostgreSQL, phpMyAdmin, Adminer, ngrok), and add or remove components later from Settings
+- **Service management**: start, stop, and restart services individually, or all at once
+- **Port configuration**: change each service's port in Settings
+- **LAN mode**: make services reachable from other devices on your network
+- **Public tunnels (ngrok)**: share your local site at a public URL, handy for webhooks and demos (**Windows only**)
+- **Database root passwords**: set during setup for MySQL/MariaDB and PostgreSQL. You can change them later in **Settings → Database passwords**.
+- **Adminer launcher**: one-click sign-in to your local MySQL or PostgreSQL
+- **Quick open**: website, phpMyAdmin, Adminer, and projects folder are one click away
+- **Themes**: System, Light, and Dark
+- **Debug page**: paths, port checks, copyable diagnostics, and a full reset
 
 ## Included Components
 
-| Component | Version | Description |
-|-----------|---------|-------------|
-| Caddy | 2.11.3 | Modern web server with automatic HTTPS |
-| PHP-FPM | 8.5.1 (7.4.33 available on Windows) | Fast and reliable PHP runtime |
-| MySQL | 8.4.0 LTS | Enterprise-grade database (**Windows & macOS**) |
-| MariaDB | 12.3.1 | Community-developed database fork (**Linux**) |
-| PostgreSQL | 18.3.0 | Advanced open-source database (**optional**) |
-| phpMyAdmin | 5.2.2 | Web-based database administration interface |
-| Adminer | 5.4.2 | Lightweight database manager (**optional**) |
-| ngrok | 3.19.2 | Secure public tunneling tool (**optional, Windows only**) |
+The default (recommended) version is listed first. Other versions can be picked during setup or reinstall.
+
+| Component | Versions | Platforms |
+|-----------|----------|-----------|
+| Caddy | **2.11.7**, 2.11.4 | All |
+| PHP-FPM | **8.5**, 8.4, 8.3, 8.2 | All |
+| PHP (legacy) | 7.4.33 | Windows only |
+| MySQL | **8.4.11 LTS**, 8.0.46 | Windows, macOS |
+| MariaDB | **12.3.3 LTS**, 11.8.9, 11.4.13, 10.11.19 | Linux (x64) |
+| PostgreSQL | **18.6.1**, 17.11, 16.15, 15.19 | All (optional) |
+| phpMyAdmin | **5.2.3** | All (optional) |
+| Adminer | **5.4.2**, 6.1.2 | All (optional) |
+| ngrok | **3.19.2** | Windows (optional) |
+
+On Linux and macOS, the PHP 8.5 package is a static build from static-php-cli.
 
 ### Runtime Sources
 
-Runtime binaries are downloaded from the following sources:
+| Component | Source |
+|-----------|--------|
+| Caddy | [caddyserver/caddy releases](https://github.com/caddyserver/caddy/releases/) |
+| PHP | [campp-runtime-binaries](https://github.com/KarnYong/campp-runtime-binaries) (built from [PHP for Windows](https://downloads.php.net/~windows/releases/) and [static-php-cli](https://dl.static-php.dev/static-php-cli/bulk/)) |
+| MySQL | [campp-runtime-binaries](https://github.com/KarnYong/campp-runtime-binaries) (from [MySQL Downloads](https://dev.mysql.com/downloads/mysql/)) |
+| MariaDB | [MariaDB Archive](https://archive.mariadb.org/) |
+| PostgreSQL | [theseus-rs/postgresql-binaries](https://github.com/theseus-rs/postgresql-binaries) |
+| phpMyAdmin | [campp-runtime-binaries](https://github.com/KarnYong/campp-runtime-binaries) (from [phpMyAdmin](https://www.phpmyadmin.net/)) |
+| Adminer | [vrana/adminer](https://github.com/vrana/adminer) |
+| ngrok | [ngrok.com](https://ngrok.com/) |
 
-| Component | Platform | Source |
-|-----------|----------|--------|
-| Caddy | All | [caddyserver/caddy releases](https://github.com/caddyserver/caddy/releases/) |
-| PHP-FPM | Windows/macOS/Linux | [campp-runtime-binaries](https://github.com/KarnYong/campp-runtime-binaries) (built from [PHP for Windows](https://downloads.php.net/~windows/releases/) and [static-php-cli](https://dl.static-php.dev/static-php-cli/bulk/)) |
-| MySQL | Windows/macOS | [campp-runtime-binaries](https://github.com/KarnYong/campp-runtime-binaries) (built from [MySQL Downloads](https://dev.mysql.com/downloads/mysql/)) |
-| MariaDB | Linux | [MariaDB Archive](https://archive.mariadb.org/) |
-| PostgreSQL | All | [theseus-rs/postgresql-binaries](https://github.com/theseus-rs/postgresql-binaries) |
-| phpMyAdmin | All | [campp-runtime-binaries](https://github.com/KarnYong/campp-runtime-binaries) (built from [phpMyAdmin](https://www.phpmyadmin.net/)) |
-| Adminer | All | [vrana/adminer](https://github.com/vrana/adminer) |
-| ngrok | Windows | [ngrok.com](https://ngrok.com/) |
-
-> **Note**: The `campp-runtime-binaries` repository contains pre-compiled binaries packaged for CAMPP's specific requirements.
+Versions and download URLs are defined in `src-tauri/runtime-config.json`.
 
 ## Default Configuration
 
 | Service | Port | Access |
 |---------|------|--------|
-| Web Server | 8080 | http://localhost:8080 |
+| Web server (Caddy) | 8080 | http://localhost:8080 |
 | PHP-FPM | 9000 | Internal (FastCGI) |
-| Database (MySQL/MariaDB) | 3307 | localhost:3307 |
-| PostgreSQL | 5433 | localhost:5433 |
+| MySQL / MariaDB | 3307 | 127.0.0.1:3307 |
+| PostgreSQL | 5433 | 127.0.0.1:5433 |
 | phpMyAdmin | 8080 | http://localhost:8080/phpmyadmin |
 | Adminer | 8080 | http://localhost:8080/adminer/ |
 
-**Default Database Credentials**: `root` / (empty password) — for both MySQL/MariaDB and PostgreSQL
+**Database credentials**: user `root`, with the password you set in the setup wizard. The same applies to MySQL/MariaDB and PostgreSQL.
 
-**Port Customization**: You can change ports in Settings (⚙️). Running services will automatically restart when you save.
+**Changing ports**: stop all services first, then edit ports in **Settings**. Changes take effect the next time services start.
 
 ## Getting Started
 
-1. **Install**: Run the downloaded installer
-2. **First Run**: The app will download required binaries on first launch (~500MB)
-3. **Start Services**: Click "Start All" or start individual services from the dashboard
-4. **View Projects**: Access http://localhost:8080 to view your projects
-5. **Manage Database**: Access http://localhost:8080/phpmyadmin or http://localhost:8080/adminer/ for database management
+1. **Install** CAMPP from the release that matches your platform.
+2. **First run**: the setup wizard lets you choose components and versions and set database root passwords. It then downloads the runtimes (several hundred MB). The offline portable zip skips the download.
+3. **Start services**: click **Start all** on the dashboard, or start services one at a time.
+4. **Build sites**: put your files in the projects folder (**Quick open → Projects folder**), then browse http://localhost:8080.
+5. **Manage databases**: use phpMyAdmin or Adminer from **Quick open**.
+
+The full user manual (`src-tauri/MANUAL.html`) ships with the app. Open it with **User manual** in the sidebar.
 
 ## Development
 
 ```bash
-# Install dependencies
-npm install
-
-# Start development server
-npm run tauri dev
-
-# Build for production
-npm run tauri build
+npm install          # Install dependencies
+npm run tauri dev    # Run the app in development mode
+npm run tauri build  # Build installers
+npm test             # Frontend tests (vitest)
 ```
 
 ### Rust Backend (src-tauri/)
@@ -147,31 +150,39 @@ cd src-tauri
 cargo build    # Build Rust backend
 cargo test     # Run Rust tests
 cargo clippy   # Lint Rust code
+cargo clean    # Remove build output (target/ grows to several GB)
 ```
+
+### Releasing
+
+Bump the version in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml` (CI checks that they match), then push a `v*` tag. GitHub Actions builds the Windows, macOS, and Linux installers and portable packages. See `github-workflow-guide.md`.
 
 ## Project Structure
 
 ```
 campp/
 ├── src/                    # React + TypeScript frontend
-│   ├── components/        # UI components
-│   ├── hooks/             # Custom React hooks
-│   └── types/             # TypeScript definitions
+│   ├── components/         # UI components (Dashboard, Settings, Debug, wizard)
+│   ├── assets/logos/       # Component logos
+│   ├── hooks/              # Custom React hooks
+│   └── types/              # TypeScript definitions
 ├── src-tauri/              # Rust backend
 │   ├── src/
-│   │   ├── process/       # Process management
-│   │   ├── config/        # Configuration generation
-│   │   ├── runtime/       # Binary download system
-│   │   └── database/      # MariaDB integration
-│   └── templates/         # Service config templates
-└── .github/workflows/     # CI/CD (build & release)
+│   │   ├── process/        # Process management + welcome page
+│   │   ├── config/         # Config generation (Caddyfile, php.ini, my.ini, Adminer)
+│   │   ├── runtime/        # Package list, download & locate binaries
+│   │   ├── database/       # MySQL/MariaDB & PostgreSQL init
+│   │   └── commands.rs     # Tauri IPC commands
+│   ├── runtime-config.json # Runtime versions, URLs, checksums
+│   └── MANUAL.html         # User manual (bundled resource)
+└── .github/workflows/      # CI/CD (build & release)
 ```
 
 ## System Requirements
 
-- **Windows**: Windows 10/11 x64, WebView2 runtime (usually pre-installed)
-- **Linux**: Ubuntu 22.04+ or similar distributions with webkit2gtk dependencies
-- **macOS**: macOS 13+ (Ventura or later), Apple Silicon or Intel
+- **Windows**: Windows 10/11 (x64, or ARM64 via x64 emulation), with the WebView2 runtime (usually pre-installed)
+- **Linux**: Ubuntu 22.04+ or a similar distribution with webkit2gtk
+- **macOS**: macOS 13 (Ventura) or later, on Apple Silicon or Intel
 
 ## License
 

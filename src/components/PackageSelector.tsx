@@ -163,6 +163,16 @@ export function PackageSelector({ onSelectionChange, initialSelection, initialEn
               <div className="list-row__main">
                 <span>{r.name}</span>
                 <span className="wiz-muted">{r.required ? "Required" : r.tag}</span>
+                {r.password && (
+                  <PasswordInput
+                    aria-label={`${r.name} root password`}
+                    value={r.password.value}
+                    onChange={(e) => r.password!.onChange?.(e.target.value)}
+                    placeholder="Root password"
+                    disabled={!on}
+                    className="wiz-pkg__pw"
+                  />
+                )}
               </div>
               <div className="wiz-pkg__controls">
                 {r.options ? (
@@ -179,16 +189,6 @@ export function PackageSelector({ onSelectionChange, initialSelection, initialEn
                   </select>
                 ) : (
                   <span className="wiz-muted mono">v2.11.3</span>
-                )}
-                {r.password && (
-                  <PasswordInput
-                    aria-label={`${r.name} root password`}
-                    value={r.password.value}
-                    onChange={(e) => r.password!.onChange?.(e.target.value)}
-                    placeholder="Root password"
-                    disabled={!on}
-                    className="wiz-pkg__pw"
-                  />
                 )}
               </div>
               <button

@@ -500,72 +500,39 @@ if (!empty($_GET) || $_SERVER['REQUEST_METHOD'] === 'POST') {{
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CAMPP - Database Manager</title>
-<style>
-* {{ margin: 0; padding: 0; box-sizing: border-box; }}
-body {{
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: #1a1a2e; color: #e0e0e0;
-    display: flex; align-items: center; justify-content: center;
-    min-height: 100vh;
-}}
-.container {{ text-align: center; max-width: 600px; width: 100%; padding: 20px; }}
-h1 {{ font-size: 1.8rem; margin-bottom: 0.5rem; color: #fff; }}
-.subtitle {{ color: #888; margin-bottom: 2rem; font-size: 0.95rem; }}
-.cards {{ display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }}
-.card {{
-    background: #16213e; border-radius: 12px; padding: 30px 24px;
-    width: 260px; text-decoration: none; color: inherit;
-    border: 1px solid #0f3460; cursor: pointer;
-    transition: transform 0.15s, border-color 0.15s;
-    display: flex; flex-direction: column; align-items: center; gap: 12px;
-}}
-.card:hover {{ transform: translateY(-3px); border-color: #533483; }}
-.card.mysql:hover {{ border-color: #00758f; }}
-.card.pgsql:hover {{ border-color: #336791; }}
-.card .icon {{ font-size: 2.5rem; }}
-.card .name {{ font-size: 1.1rem; font-weight: 600; }}
-.card .detail {{ font-size: 0.82rem; color: #888; }}
-.card .connect-btn {{
-    margin-top: 8px; padding: 8px 20px; border: none; border-radius: 6px;
-    font-size: 0.9rem; cursor: pointer; font-weight: 500;
-    transition: opacity 0.15s;
-}}
-.card .connect-btn:hover {{ opacity: 0.85; }}
-.card.mysql .connect-btn {{ background: #00758f; color: #fff; }}
-.card.pgsql .connect-btn {{ background: #336791; color: #fff; }}
-.manual {{ margin-top: 2rem; font-size: 0.85rem; }}
-.manual a {{ color: #7f8fa6; text-decoration: none; }}
-.manual a:hover {{ text-decoration: underline; }}
-</style>
+<link rel="stylesheet" href="campp-launcher.css">
 </head>
 <body>
-<div class="container">
-    <h1>CAMPP Database Manager</h1>
-    <p class="subtitle">Select a database to manage</p>
-    <div class="cards">
-        <a href="?auto=mysql" class="card mysql">
-            <div class="icon">&#128200;</div>
-            <div class="name">MySQL</div>
-            <div class="detail">127.0.0.1:{mysql_port}</div>
-            <div class="detail">User: root</div>
-            <button class="connect-btn" type="button">Connect</button>
-        </a>
-        <a href="?auto=pgsql" class="card pgsql">
-            <div class="icon">&#128202;</div>
-            <div class="name">PostgreSQL</div>
-            <div class="detail">127.0.0.1:{postgres_port}</div>
-            <div class="detail">User: root</div>
-            <button class="connect-btn" type="button">Connect</button>
-        </a>
+  <main class="card">
+    <div class="hero">
+      <img src="data:image/png;base64,{logo}" alt="CAMPP">
+      <h1>Database <span>Manager</span></h1>
+      <p class="muted">Adminer, signed in to your local databases</p>
     </div>
-    <p class="manual">Or use <a href="adminer.php">manual login</a></p>
-</div>
+
+    <section>
+      <h2>Connect</h2>
+      <ul>
+        <li><a href="?auto=mysql">
+          <span class="db"><strong>MySQL</strong><span class="mono muted">127.0.0.1:{mysql_port} · root</span></span>
+          <span class="pill">Connect</span>
+        </a></li>
+        <li><a href="?auto=pgsql">
+          <span class="db"><strong>PostgreSQL</strong><span class="mono muted">127.0.0.1:{postgres_port} · root</span></span>
+          <span class="pill">Connect</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <footer class="muted">Other server or user? Use <a href="adminer.php">manual login</a></footer>
+  </main>
 </body>
 </html>"##,
         mysql_port = mysql_port,
         postgres_port = postgres_port,
         escaped_mysql_pw = escaped_mysql_pw,
         escaped_pg_pw = escaped_pg_pw,
+        logo = LAUNCHER_LOGO_B64.trim(),
     );
 
     let mut file = File::create(&index_path)
@@ -573,8 +540,15 @@ h1 {{ font-size: 1.8rem; margin-bottom: 0.5rem; color: #fff; }}
     file.write_all(content.as_bytes())
         .map_err(|e| format!("Failed to write Adminer index.php: {}", e))?;
 
+    // Launcher styles only — Adminer itself only loads adminer.css / adminer-dark.css.
+    fs::write(adminer_dir.join("campp-launcher.css"), LAUNCHER_CSS)
+        .map_err(|e| format!("Failed to write Adminer launcher CSS: {}", e))?;
+
     Ok(())
 }
+
+const LAUNCHER_CSS: &str = include_str!("adminer_launcher.css");
+const LAUNCHER_LOGO_B64: &str = include_str!("../process/welcome_logo.b64");
 
 /// Generate ngrok configuration file
 pub fn generate_ngrok_config(
@@ -618,5 +592,30 @@ mod tests {
         assert_eq!(escape_php_single_quoted("pass\\"), "pass\\\\");
         // Backslash must be escaped BEFORE the quote, not after.
         assert_eq!(escape_php_single_quoted("a\\'b"), "a\\\\\\'b");
+    }
+
+    #[test]
+    fn adminer_launcher_uses_campp_theme_without_touching_adminer_css() {
+        use crate::runtime::locator::RuntimePaths;
+        let dir = tempfile::TempDir::new().unwrap();
+        let p = |n: &str| dir.path().join(n);
+        let paths = RuntimePaths {
+            caddy: p("caddy"), php_cgi: p("php-cgi"), php_ini: p("php.ini"), php_ext_dir: p("ext"),
+            mysql: p("mysqld"), phpmyadmin: p("phpmyadmin"), pgsql_dir: p("pgsql"), adminer: p("adminer"),
+            mysql_data_dir: p("data"), pgsql_data_dir: p("pgdata"), logs_dir: p("logs"),
+            config_dir: p("config"), projects_dir: p("projects"), ngrok: p("ngrok"),
+        };
+        std::fs::create_dir_all(&paths.adminer).unwrap();
+
+        super::generate_adminer_config(&paths, 3307, "", 5433, "").unwrap();
+
+        let index = std::fs::read_to_string(paths.adminer.join("index.php")).unwrap();
+        assert!(index.contains(r#"href="campp-launcher.css""#));
+        assert!(index.contains("data:image/png;base64,") && !index.contains("{logo}"));
+        assert!(index.contains("127.0.0.1:3307") && index.contains("127.0.0.1:5433"));
+        assert!(paths.adminer.join("campp-launcher.css").exists());
+        // Adminer's own stylesheet hooks stay untouched.
+        assert!(!paths.adminer.join("adminer.css").exists());
+        assert!(!paths.adminer.join("adminer-dark.css").exists());
     }
 }

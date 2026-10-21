@@ -1352,7 +1352,7 @@ select.input option {
   flex-wrap: wrap;
 }
 
-.wiz-pkg .list-row__main span:last-child {
+.wiz-pkg .list-row__main > .wiz-muted {
   font-size: 11.5px;
 }
 
@@ -1376,8 +1376,10 @@ select.input option {
   font-size: 12.5px;
 }
 
-.wiz-pkg__pw {
-  width: 130px;
+.wiz-pkg .wiz-pkg__pw {
+  width: 160px;
+  max-width: 100%;
+  margin-top: 6px;
 }
 
 .wiz-pkg__pw .input {
@@ -1401,10 +1403,13 @@ select.input option {
     flex-basis: 100%;
   }
 
-  .wiz-pkg__select,
-  .wiz-pkg__pw {
+  .wiz-pkg__select {
     flex: 1;
     width: auto;
+  }
+
+  .wiz-pkg .wiz-pkg__pw {
+    width: 100%;
   }
 }
 
@@ -1610,8 +1615,9 @@ select.input option {
   background-color: var(--bg-card-secondary);
 }
 
-/* .field's flex-basis is for row layouts; in the modal's column it would become a 280px height */
-.modal__body .field {
+/* .field's flex-basis is for row layouts; in a column (modal, column card) it would become a 280px height */
+.modal__body .field,
+.card-section:not(.card-section--row) > .field {
   flex: none;
 }
 

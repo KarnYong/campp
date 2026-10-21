@@ -80,429 +80,293 @@
       font-size: 0.9em;
     }
 
-    pre {
-      background-color: var(--color-code-bg);
-      padding: 1rem;
-      border-radius: 8px;
-      overflow-x: auto;
-      margin-bottom: 1rem;
     }
-
-    pre code {
-      padding: 0;
-      background: none;
     }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 1rem;
     }
-
-    th, td {
-      border: 1px solid var(--color-border);
-      padding: 0.75rem;
-      text-align: left;
     }
-
-    th {
-      background-color: var(--color-code-bg);
     }
-
-    .note {
-      background-color: #dbeafe;
-      border-left: 4px solid #3b82f6;
-      padding: 1rem;
-      margin-bottom: 1rem;
-      border-radius: 0 8px 8px 0;
     }
-
-    .warning {
-      background-color: #fef3c7;
-      border-left: 4px solid #f59e0b;
-      padding: 1rem;
-      margin-bottom: 1rem;
-      border-radius: 0 8px 8px 0;
     }
-
-    .tip {
-      background-color: #d1fae5;
-      border-left: 4px solid #10b981;
-      padding: 1rem;
-      margin-bottom: 1rem;
-      border-radius: 0 8px 8px 0;
     }
-
-    @media (prefers-color-scheme: dark) {
-      .note {
-        background-color: #1e3a5f;
       }
-      .warning {
-        background-color: #78350f;
       }
-      .tip {
-        background-color: #065f46;
       }
     }
-
-    .back-to-top {
-      position: fixed;
-      bottom: 2rem;
-      right: 2rem;
-      background-color: var(--color-primary);
-      color: white;
-      padding: 0.5rem 1rem;
-      border-radius: 8px;
-      text-decoration: none;
-      font-weight: 500;
     }
-
-    .back-to-top:hover {
-      opacity: 0.9;
     }
-  </style>
-</head>
-<body>
-  <h1>CAMPP User Manual</h1>
-  <p><strong>Version 0.2.1</strong> | Local Web Development Stack</p>
+[412 more lines]<body>
+  <h1 id="top">CAMPP User Manual</h1>
+  <p><strong>Version 0.3.13</strong> | Local Web Development Stack</p>
+
+  <h2>Contents</h2>
+  <ul>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#installation">Installation</a></li>
+    <li><a href="#first-run">First Run</a></li>
+    <li><a href="#dashboard">Dashboard</a></li>
+    <li><a href="#database">Database Connection</a></li>
+    <li><a href="#projects">Project Folder</a></li>
+    <li><a href="#settings">Settings</a></li>
+    <li><a href="#ngrok">Sharing with ngrok</a></li>
+    <li><a href="#debug">Debug Page</a></li>
+    <li><a href="#troubleshooting">Troubleshooting</a></li>
+    <li><a href="#data">Data Locations</a></li>
+  </ul>
 
   <h2 id="overview">Overview</h2>
-  <p>CAMPP is a cross-platform local web development stack that bundles everything you need to run PHP websites locally:</p>
+  <p>CAMPP is a cross-platform local web development stack that bundles everything you need to run PHP websites locally, with no admin rights required:</p>
   <ul>
-    <li><strong>Caddy 2.8.4</strong> - Modern web server with automatic HTTPS</li>
-    <li><strong>PHP-FPM 8.5.1</strong> - Fast PHP runtime</li>
-    <li><strong>Database</strong> - MySQL 8.4.0 on Windows/macOS, MariaDB 12.3.1 on Linux</li>
-    <li><strong>phpMyAdmin 5.2.2</strong> - Web-based database management</li>
+    <li><strong>Caddy 2.11.7</strong> - Modern web server</li>
+    <li><strong>PHP-FPM 8.5</strong> - PHP runtime (8.4, 8.3, 8.2 also available; 7.4 on Windows)</li>
+    <li><strong>Database</strong> - MySQL 8.4.11 LTS on Windows/macOS, MariaDB 12.3.3 LTS on Linux</li>
+    <li><strong>PostgreSQL 18.6.1</strong> - Optional</li>
+    <li><strong>phpMyAdmin 5.2.3</strong> and <strong>Adminer 5.4.2</strong> - Web-based database management (optional)</li>
+    <li><strong>ngrok 3.19.2</strong> - Public tunnel to share your site (optional, Windows only)</li>
   </ul>
 
   <h2 id="installation">Installation</h2>
+  <p>Download from <a href="https://github.com/KarnYong/campp/releases/latest">GitHub Releases</a>.</p>
+
   <h3>Windows</h3>
   <ol>
-    <li>Download the installer from <a href="https://github.com/KarnYong/campp/releases">GitHub Releases</a></li>
-    <li>Run the installer (NSIS or MSI)</li>
-    <li>Choose your project folder location during installation (default: <code>%LOCALAPPDATA%\campp\projects</code>)</li>
-    <li>If Windows SmartScreen shows a warning, click <strong>More info</strong> → <strong>Run anyway</strong></li>
-    <li>Launch CAMPP from Start Menu or Desktop shortcut</li>
+    <li>Download <code>CAMPP-&lt;version&gt;-x64.exe</code> (recommended) or <code>.msi</code></li>
+    <li>Run the installer. No admin rights are needed.</li>
+    <li>If Windows SmartScreen shows a warning, click <strong>More info</strong> &rarr; <strong>Run anyway</strong></li>
+    <li>Launch CAMPP from the Start Menu or desktop shortcut</li>
   </ol>
+  <div class="tip">
+    <strong>Portable:</strong> <code>CAMPP-&lt;version&gt;-x64-portable.zip</code> runs without installing. <code>CAMPP-&lt;version&gt;-x64-portable-offline.zip</code> also includes all runtimes, so it works with no internet. Extract either one to a folder you can write to and run <code>CAMPP.exe</code>.
+  </div>
 
   <h3>macOS</h3>
   <ol>
-    <li>Download the <code>.dmg</code> file from <a href="https://github.com/KarnYong/campp/releases">GitHub Releases</a></li>
+    <li>Download the <code>.dmg</code> file (<code>universal</code> works on Apple Silicon and Intel)</li>
     <li>Open the DMG and drag CAMPP to Applications</li>
     <li>Launch CAMPP from Applications or Launchpad</li>
   </ol>
 
   <h3>Linux</h3>
-  <ol>
-    <li>Download the <code>.AppImage</code> file from <a href="https://github.com/KarnYong/campp/releases">GitHub Releases</a></li>
-    <li>Make the file executable: <code>chmod +x CAMPP-*.AppImage</code></li>
-    <li>Run the AppImage: <code>./CAMPP-*.AppImage</code></li>
-  </ol>
+  <ul>
+    <li><strong>DEB:</strong> <code>sudo apt install ./CAMPP-&lt;version&gt;-amd64.deb</code></li>
+    <li><strong>RPM:</strong> <code>sudo dnf install ./CAMPP-&lt;version&gt;-amd64.rpm</code></li>
+    <li><strong>AppImage:</strong> <code>chmod +x CAMPP-*.AppImage</code>, then <code>./CAMPP-*.AppImage</code></li>
+    <li><strong>Portable:</strong> extract <code>CAMPP-&lt;version&gt;-amd64-portable.tar.gz</code> and run <code>CAMPP/CAMPP</code></li>
+  </ul>
 
   <div class="note">
-    <strong>Note:</strong> The Windows SmartScreen warning appears because the app is not code-signed. This is normal and safe. The source code is publicly available on GitHub.
-  </div>
-
-  <div class="tip">
-    <strong>Windows Installation:</strong> You can select a custom project folder location during installation. On macOS and Linux, the project folder uses the default location but can be changed later in Settings.
+    <strong>Note:</strong> The Windows SmartScreen warning appears because the app is not code-signed. This is normal, and the source code is public on GitHub. macOS builds are signed and notarized.
   </div>
 
   <h2 id="first-run">First Run</h2>
-  <p>On first launch, CAMPP will display a setup wizard that downloads the required runtime components (~500MB):</p>
+  <p>On first launch, the setup wizard guides you through installation:</p>
   <ol>
-    <li>Click <strong>Start Setup</strong> to begin downloading</li>
-    <li>Wait for all components to download (this may take a few minutes)</li>
-    <li>Click <strong>Get Started</strong> when complete</li>
+    <li><strong>Welcome</strong> - Click to begin. If CAMPP finds an existing installation, you can keep it or replace everything.</li>
+    <li><strong>Choose components</strong> - Turn optional components on or off and pick a version for each one. Caddy and PHP are required.</li>
+    <li><strong>Set root passwords</strong> - Enter a root password for each database you install (MySQL/MariaDB, PostgreSQL). These are required.</li>
+    <li><strong>Review installation</strong> - Check your choices and the estimated download size, then click <strong>Install</strong>.</li>
+    <li>Wait for download and extraction to finish, then click <strong>Get Started</strong>.</li>
   </ol>
-
-  <h2 id="dashboard">Dashboard</h2>
-  <p>The main dashboard shows three service cards:</p>
-
-  <h3>Service Controls</h3>
-  <p>Each service card displays:</p>
-  <ul>
-    <li><strong>Status</strong> - Running, Stopped, or Error</li>
-    <li><strong>Port</strong> - The port the service uses</li>
-    <li><strong>Start/Stop/Restart</strong> buttons</li>
-  </ul>
-
-  <h3>Quick Actions (Top Right)</h3>
-  <ul>
-    <li><strong>Open Site</strong> - Opens http://localhost:8080 in your browser</li>
-    <li><strong>phpMyAdmin</strong> - Opens http://localhost:8080/phpmyadmin</li>
-    <li><strong>Settings</strong> - Opens the settings panel</li>
-  </ul>
-
-  <h2 id="default-ports">Default Ports</h2>
-  <table>
-    <tr>
-      <th>Service</th>
-      <th>Port</th>
-      <th>Access URL</th>
-    </tr>
-    <tr>
-      <td>Web Server (Caddy)</td>
-      <td>8080</td>
-      <td>http://localhost:8080</td>
-    </tr>
-    <tr>
-      <td>PHP-FPM</td>
-      <td>9000</td>
-      <td>Internal only (FastCGI)</td>
-    </tr>
-    <tr>
-      <td>Database (MySQL/MariaDB)</td>
-      <td>3307</td>
-      <td>localhost:3307</td>
-    </tr>
-    <tr>
-      <td>phpMyAdmin</td>
-      <td>8080</td>
-      <td>http://localhost:8080/phpmyadmin</td>
-    </tr>
-  </table>
-
-  <div class="tip">
-    <strong>Tip:</strong> These ports are chosen to avoid conflicts with system services. You can change them in Settings.
+  <div class="warning">
+    <strong>Remember your database passwords.</strong> phpMyAdmin, Adminer and your PHP code all use them to connect.
+  </div>
+  <div class="note">
+    <strong>Linux:</strong> If the wizard reports <em>Missing system dependencies</em>, install the packages it lists, then click <strong>Retry Check</strong>.
   </div>
 
-  <div class="note">
-    <strong>Note:</strong> CAMPP uses MySQL 8.4.0 on Windows and macOS, and MariaDB 12.3.1 on Linux. Both are MySQL-compatible and work identically for PHP applications.
+  <h2 id="dashboard">Dashboard</h2>
+  <p>The sidebar has <strong>Services</strong>, <strong>Settings</strong>, <strong>Debug</strong> and <strong>User manual</strong>.</p>
+
+  <h3>Services</h3>
+  <p>Each installed service shows its status (Running, Stopped or Error), its port, and Start / Stop / Restart controls. Use <strong>Start all</strong> or <strong>Stop all</strong> to control everything at once. If a component isn't installed, its card says <em>Install from Settings</em>.</p>
+
+  <h3>Quick open</h3>
+  <ul>
+    <li><strong>Website</strong> - Opens <code>http://localhost:8080</code></li>
+    <li><strong>phpMyAdmin</strong> - Opens <code>/phpmyadmin</code></li>
+    <li><strong>Adminer</strong> - Opens <code>/adminer</code>, a launcher that signs you in to MySQL or PostgreSQL with one click</li>
+    <li><strong>Projects folder</strong> - Opens your project folder in the file manager</li>
+  </ul>
+  <p>Website, phpMyAdmin and Adminer are enabled only while Caddy is running.</p>
+
+  <h3>Default Ports</h3>
+  <table>
+    <thead>
+      <tr><th>Service</th><th>Port</th><th>Access</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Web Server (Caddy)</td><td>8080</td><td><code>http://localhost:8080</code></td></tr>
+      <tr><td>PHP-FPM</td><td>9000</td><td>Internal only (FastCGI)</td></tr>
+      <tr><td>MySQL / MariaDB</td><td>3307</td><td><code>127.0.0.1:3307</code></td></tr>
+      <tr><td>PostgreSQL</td><td>5433</td><td><code>127.0.0.1:5433</code></td></tr>
+      <tr><td>phpMyAdmin</td><td>8080</td><td><code>http://localhost:8080/phpmyadmin</code></td></tr>
+      <tr><td>Adminer</td><td>8080</td><td><code>http://localhost:8080/adminer/</code></td></tr>
+    </tbody>
+  </table>
+  <div class="tip">
+    <strong>Tip:</strong> These ports are chosen to avoid conflicts with system services, so CAMPP can run alongside an existing MySQL or PostgreSQL. You can change them in Settings.
   </div>
 
   <h2 id="database">Database Connection</h2>
-  <h3>Default Credentials</h3>
   <table>
-    <tr>
-      <th>Setting</th>
-      <th>Value</th>
-    </tr>
-    <tr>
-      <td>Host</td>
-      <td>localhost</td>
-    </tr>
-    <tr>
-      <td>Port</td>
-      <td>3307</td>
-    </tr>
-    <tr>
-      <td>Username</td>
-      <td>root</td>
-    </tr>
-    <tr>
-      <td>Password</td>
-      <td><em>(empty - leave blank)</em></td>
-    </tr>
+    <thead>
+      <tr><th>Setting</th><th>MySQL / MariaDB</th><th>PostgreSQL</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Host</td><td><code>127.0.0.1</code></td><td><code>127.0.0.1</code></td></tr>
+      <tr><td>Port</td><td><code>3307</code></td><td><code>5433</code></td></tr>
+      <tr><td>Username</td><td><code>root</code></td><td><code>root</code></td></tr>
+      <tr><td>Password</td><td colspan="2">The root password you set in the setup wizard (change it in Settings)</td></tr>
+    </tbody>
   </table>
 
-  <h3>PHP Connection Example</h3>
+  <h3>PHP Connection Examples</h3>
   <pre><code>&lt;?php
+// MySQL / MariaDB
 $pdo = new PDO(
-    'mysql:host=localhost;port=3307;charset=utf8mb4',
+    'mysql:host=127.0.0.1;port=3307;charset=utf8mb4',
     'root',
-    ''
+    'your-password'
+);
+
+// PostgreSQL
+$pg = new PDO(
+    'pgsql:host=127.0.0.1;port=5433;dbname=postgres',
+    'root',
+    'your-password'
 );</code></pre>
-
-  <h2 id="project-folder">Project Folder</h2>
-  <p>Your website files should be placed in the project folder. The default locations are:</p>
-
-  <h4>Windows</h4>
-  <pre><code>C:\Users\&lt;YourUsername&gt;\AppData\Local\campp\projects</code></pre>
-
-  <h4>macOS</h4>
-  <pre><code>~/Library/Application Support/campp/projects</code></pre>
-
-  <h4>Linux</h4>
-  <pre><code>~/.local/share/campp/projects</code></pre>
-
-  <div class="tip">
-    <strong>Project Folder Location:</strong>
-    <ul style="margin-top: 0.5rem;">
-      <li><strong>Windows:</strong> Choose a custom location during installation.</li>
-      <li><strong>macOS/Linux:</strong> Uses the default location above.</li>
-    </ul>
+  <div class="note">
+    <strong>Note:</strong> Use <code>127.0.0.1</code> rather than <code>localhost</code> for MySQL. With <code>localhost</code>, PHP tries a Unix socket instead of the TCP port. MySQL (Windows/macOS) and MariaDB (Linux) are compatible and work the same way from PHP.
   </div>
 
-  <p>To quickly access this folder:</p>
-  <ol>
-    <li>Click <strong>Settings</strong> (gear icon)</li>
-    <li>Click <strong>Open</strong> next to "Project Root Directory"</li>
-  </ol>
+  <h2 id="projects">Project Folder</h2>
+  <p>Put your website files in the project folder. To open it, click <strong>Projects folder</strong> under Quick open on the dashboard. Default locations:</p>
+  <ul>
+    <li><strong>Windows:</strong> <code>&lt;CAMPP install folder&gt;\projects</code> (default install: <code>%LOCALAPPDATA%\CAMPP\projects</code>)</li>
+    <li><strong>macOS:</strong> <code>~/Library/Application Support/campp/projects</code></li>
+    <li><strong>Linux:</strong> <code>~/.local/share/campp/projects</code></li>
+  </ul>
 
   <h3>Example Project Structure</h3>
   <pre><code>projects/
 ├── my-site/
 │   ├── index.php
-│   ├── about.php
 │   └── assets/
 │       └── style.css
 └── another-site/
     └── index.php</code></pre>
-
   <p>Access your sites at:</p>
   <ul>
-    <li>http://localhost:8080/my-site/</li>
-    <li>http://localhost:8080/another-site/</li>
+    <li><code>http://localhost:8080/my-site/</code></li>
+    <li><code>http://localhost:8080/another-site/</code></li>
   </ul>
+  <p>When the folder has no <code>index.php</code>, <code>http://localhost:8080</code> shows the CAMPP welcome page.</p>
 
   <h2 id="settings">Settings</h2>
-  <p>Click the <strong>Settings</strong> button to configure:</p>
-
-  <h3>Port Configuration</h3>
-  <ul>
-    <li>Web Server Port (default: 8080)</li>
-    <li>PHP-FPM Port (default: 9000)</li>
-    <li>Database Port (default: 3307)</li>
-  </ul>
-
   <div class="warning">
-    <strong>Warning:</strong> Changing ports requires restarting all services to take effect.
+    <strong>Stop all services before changing settings.</strong> Changes apply the next time services start.
   </div>
 
-  <h3>Project Root Directory</h3>
-  <p>Change where your project files are stored. Click <strong>Open</strong> to view the folder in Explorer.</p>
+  <h3>Appearance</h3>
+  <p>Choose the System, Light or Dark theme.</p>
 
-  <h2 id="debug-menu">Debug Menu</h2>
-  <p>Press <strong>Ctrl+Shift+D</strong> to open the debug menu:</p>
+  <h3>Ports</h3>
+  <p>Change the Web server, PHP-FPM, Database and PostgreSQL ports.</p>
+
+  <h3>Network</h3>
   <ul>
-    <li><strong>Open Runtime Folder</strong> - View downloaded binaries</li>
-    <li><strong>View Download Folder</strong> - View downloaded ZIP files</li>
-    <li><strong>Reset Installation</strong> - Delete all binaries and restart setup</li>
-    <li><strong>Show First-Run Wizard</strong> - Re-run the initial setup</li>
+    <li><strong>127.0.0.1</strong> (default) - Reachable only from this computer</li>
+    <li><strong>LAN mode</strong> - Reachable from other devices on your network, e.g. for testing on a phone</li>
+  </ul>
+  <div class="warning">
+    <strong>Warning:</strong> LAN mode exposes your development services to every device on the network. Use it only on trusted, private networks and check your firewall.
+  </div>
+
+  <h3>Components</h3>
+  <p>Install, reinstall (for example, to switch version) or uninstall each component. At least one component must remain installed. PHP is required by Caddy and phpMyAdmin.</p>
+
+  <h3>Database passwords</h3>
+  <p>Change the root password for MySQL/MariaDB and PostgreSQL. The new password takes effect the next time each database starts. Update any PHP code that connects with the old password.</p>
+
+  <h3>ngrok tunnel</h3>
+  <p>Paste your ngrok authtoken from <a href="https://ngrok.com/">ngrok.com</a> (Windows only).</p>
+
+  <h2 id="ngrok">Sharing with ngrok (Windows)</h2>
+  <ol>
+    <li>Install ngrok in the setup wizard or from Settings &rarr; Components</li>
+    <li>Create a free account at <a href="https://ngrok.com/">ngrok.com</a> and copy your authtoken</li>
+    <li>Start Caddy, then start ngrok. If no authtoken is saved, CAMPP asks for it.</li>
+    <li>The public URL appears on the ngrok service card. Anyone with the link can open your site.</li>
+  </ol>
+  <div class="note">
+    <strong>Windows Defender</strong> sometimes quarantines ngrok as a false positive. Settings shows a notice that can add the CAMPP folders to Defender's exclusion list, or lists the manual steps.
+  </div>
+
+  <h2 id="debug">Debug Page</h2>
+  <p>Open <strong>Debug</strong> in the sidebar (in the setup wizard, press <code>Ctrl+Shift+D</code> or <code>Cmd+Shift+D</code>):</p>
+  <ul>
+    <li><strong>System</strong> - Version, platform and whether the runtime config loaded</li>
+    <li><strong>Folders</strong> - Runtime, resource, downloads and executable paths</li>
+    <li><strong>Port check</strong> - Whether each configured port is free for CAMPP to use</li>
+    <li><strong>Copy diagnostics</strong> - Copies everything to the clipboard, ready for a bug report</li>
+    <li><strong>Reset installation</strong> - Stops every service and deletes all binaries, databases and settings. Your projects folder is kept.</li>
   </ul>
 
   <h2 id="troubleshooting">Troubleshooting</h2>
 
   <h3>Service won't start</h3>
   <ul>
-    <li>Check if the port is already in use by another application</li>
-    <li>Try changing the port in Settings</li>
-    <li>Check the error message displayed on the service card</li>
+    <li>Use <strong>Debug &rarr; Port check</strong> to see if another app is using the port</li>
+    <li>Change the port in Settings (stop all services first)</li>
+    <li>Check the error on the service card and the files in the logs folder</li>
   </ul>
 
-  <h3>phpMyAdmin shows errors</h3>
+  <h3>phpMyAdmin or Adminer shows errors</h3>
   <ul>
-    <li>Make sure the database service (MySQL/MariaDB) is running first</li>
-    <li>Try restarting the database service</li>
+    <li>Make sure Caddy, PHP-FPM and the database service are all running</li>
+    <li>Log in as <code>root</code> with the password you set during setup</li>
   </ul>
 
   <h3>Reset everything</h3>
   <ol>
-    <li>Press <strong>Ctrl+Shift+D</strong> to open debug menu</li>
-    <li>Click <strong>Reset Installation</strong></li>
-    <li>This will stop all services and delete runtime binaries</li>
-    <li>Restart the app to re-download everything</li>
+    <li>Open <strong>Debug</strong> &rarr; <strong>Reset installation</strong></li>
+    <li>Confirm. Every service stops, and binaries, databases and settings are deleted.</li>
+    <li>The setup wizard runs again to reinstall</li>
   </ol>
-
-  <h3>Antivirus detects a threat</h3>
-  <p>This is a false positive. The app is safe because:</p>
-  <ul>
-    <li>Source code is open and available on GitHub</li>
-    <li>The warning appears because the app is not code-signed</li>
-    <li>Add an exception in your antivirus for the CAMPP folder</li>
-  </ul>
-
-  <h2 id="data-locations">Data Locations</h2>
-
-  <h4>Windows</h4>
-  <table>
-    <tr>
-      <th>What</th>
-      <th>Location</th>
-    </tr>
-    <tr>
-      <td>Runtime Binaries</td>
-      <td><code>%LOCALAPPDATA%\campp\runtime\</code></td>
-    </tr>
-    <tr>
-      <td>Project Files</td>
-      <td><code>%LOCALAPPDATA%\campp\projects\</code> <em>(configurable)</em></td>
-    </tr>
-    <tr>
-      <td>Configuration</td>
-      <td><code>%LOCALAPPDATA%\campp\config\</code></td>
-    </tr>
-    <tr>
-      <td>Database Data</td>
-      <td><code>%LOCALAPPDATA%\campp\mysql\data\</code></td>
-    </tr>
-    <tr>
-      <td>Logs</td>
-      <td><code>%LOCALAPPDATA%\campp\logs\</code></td>
-    </tr>
-  </table>
-
-  <h4>macOS</h4>
-  <table>
-    <tr>
-      <th>What</th>
-      <th>Location</th>
-    </tr>
-    <tr>
-      <td>Runtime Binaries</td>
-      <td><code>~/Library/Application Support/campp/runtime/</code></td>
-    </tr>
-    <tr>
-      <td>Project Files</td>
-      <td><code>~/Library/Application Support/campp/projects/</code></td>
-    </tr>
-    <tr>
-      <td>Configuration</td>
-      <td><code>~/Library/Application Support/campp/config/</code></td>
-    </tr>
-    <tr>
-      <td>Database Data</td>
-      <td><code>~/Library/Application Support/campp/mysql/data/</code></td>
-    </tr>
-    <tr>
-      <td>Logs</td>
-      <td><code>~/Library/Application Support/campp/logs/</code></td>
-    </tr>
-  </table>
-
-  <h4>Linux</h4>
-  <table>
-    <tr>
-      <th>What</th>
-      <th>Location</th>
-    </tr>
-    <tr>
-      <td>Runtime Binaries</td>
-      <td><code>~/.local/share/campp/runtime/</code></td>
-    </tr>
-    <tr>
-      <td>Project Files</td>
-      <td><code>~/.local/share/campp/projects/</code></td>
-    </tr>
-    <tr>
-      <td>Configuration</td>
-      <td><code>~/.local/share/campp/config/</code></td>
-    </tr>
-    <tr>
-      <td>Database Data</td>
-      <td><code>~/.local/share/campp/mysql/data/</code></td>
-    </tr>
-    <tr>
-      <td>Logs</td>
-      <td><code>~/.local/share/campp/logs/</code></td>
-    </tr>
-  </table>
-
-  <div class="note">
-    <strong>Note:</strong> Check Settings to see your actual project folder location. On Windows, this may differ if you configured a custom path during installation.
+  <div class="warning">
+    <strong>Back up your databases first</strong> (for example, export them with phpMyAdmin). A reset deletes all database data.
   </div>
 
-  <h2 id="support">Support</h2>
+  <h3>Antivirus detects a threat</h3>
+  <p>This is a false positive. The source code is open on GitHub, and the Windows build is not code-signed. Add an exception in your antivirus for the CAMPP folder.</p>
+
+  <h2 id="data">Data Locations</h2>
+  <p><strong>Windows</strong> keeps everything inside the CAMPP install folder (default <code>%LOCALAPPDATA%\CAMPP</code>, or wherever you extracted the portable zip). <strong>macOS and Linux</strong> use the app data folder: <code>~/Library/Application Support/campp/</code> on macOS, <code>~/.local/share/campp/</code> on Linux.</p>
+  <table>
+    <thead>
+      <tr><th>What</th><th>Windows</th><th>macOS / Linux</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Runtime binaries</td><td><code>&lt;install&gt;\runtime\</code></td><td><code>campp/runtime/</code></td></tr>
+      <tr><td>Projects</td><td><code>&lt;install&gt;\projects\</code></td><td><code>campp/projects/</code></td></tr>
+      <tr><td>Configuration</td><td><code>&lt;install&gt;\config\</code></td><td><code>campp/config/</code></td></tr>
+      <tr><td>MySQL / MariaDB data</td><td><code>&lt;install&gt;\mysql\data\</code></td><td><code>campp/mysql/data/</code></td></tr>
+      <tr><td>PostgreSQL data</td><td><code>&lt;install&gt;\pgsql\data\</code></td><td><code>campp/pgsql/data/</code></td></tr>
+      <tr><td>Logs</td><td><code>&lt;install&gt;\logs\</code></td><td><code>campp/logs/</code></td></tr>
+    </tbody>
+  </table>
+  <div class="tip">
+    <strong>Tip:</strong> <strong>Debug &rarr; Folders</strong> shows the actual paths on your machine.
+  </div>
+
+  <h2>Support</h2>
   <ul>
-    <li><strong>GitHub:</strong> <a href="https://github.com/KarnYong/campp">https://github.com/KarnYong/campp</a></li>
-    <li><strong>Report Issues:</strong> <a href="https://github.com/KarnYong/campp/issues">https://github.com/KarnYong/campp/issues</a></li>
+    <li>GitHub: <a href="https://github.com/KarnYong/campp">https://github.com/KarnYong/campp</a></li>
+    <li>Report Issues: <a href="https://github.com/KarnYong/campp/issues">https://github.com/KarnYong/campp/issues</a> (paste <strong>Debug &rarr; Copy diagnostics</strong>)</li>
   </ul>
 
   <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--color-border);">
-  <p style="text-align: center; color: #666;">
-    <small>CAMPP v0.2.1 | MIT License | &copy; 2024-2025 CAMPP Project</small>
-  </p>
+  <p style="text-align: center; opacity: 0.7;">CAMPP v0.3.13 | MIT License | &copy; 2024-2026 CAMPP Project</p>
 
-  <a href="#overview" class="back-to-top">Back to Top</a>
+  <a href="#top" class="back-to-top">Back to Top</a>
 </body>
 </html>

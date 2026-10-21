@@ -5,10 +5,30 @@
     "caddy": {
       "versions": [
         {
+          "id": "caddy-2.11.7",
+          "version": "2.11.7",
+          "selected": true,
+          "display_name": "Caddy 2.11.7 (Latest)",
+          "checksums": {
+            "windowsX64": "0a1edc0b799512051c57071ce0e798d3f2cf67dc98171366f1d2b326072e3b06",
+            "windowsArm64": "34804a5e61106fa6718682f5be6c9edc4cceec9601ba7e25beec1e176cfc3b47",
+            "linuxX64": "727b91701a392de6ebc5027509f548bf39979e5216340d0faed8fa5e69c84f8b",
+            "macOSX64": "110c53e5c093e4cfce6eda787f94f23bef913c309f620fab26b4f678031841ad",
+            "macOSArm64": "cda3030e5d5b13eb9f0b6fb541037f633bddd958c070c5f561d7a5cccb581665"
+          },
+          "urls": {
+            "windowsX64": "https://github.com/caddyserver/caddy/releases/download/v2.11.7/caddy_2.11.7_windows_amd64.zip",
+            "windowsArm64": "https://github.com/caddyserver/caddy/releases/download/v2.11.7/caddy_2.11.7_windows_arm64.zip",
+            "linuxX64": "https://github.com/caddyserver/caddy/releases/download/v2.11.7/caddy_2.11.7_linux_amd64.tar.gz",
+            "macOSX64": "https://github.com/caddyserver/caddy/releases/download/v2.11.7/caddy_2.11.7_mac_amd64.tar.gz",
+            "macOSArm64": "https://github.com/caddyserver/caddy/releases/download/v2.11.7/caddy_2.11.7_mac_arm64.tar.gz"
+          }
+        },
+        {
           "id": "caddy-2.11.4",
           "version": "2.11.4",
-          "selected": true,
-          "display_name": "Caddy 2.11.4 (Latest)",
+          "selected": false,
+          "display_name": "Caddy 2.11.4 (Previous)",
           "checksums": {
             "windowsX64": "1708333f79e274c7697285afe6d592ab39314e0b131e9ec6bea08ad27df62ebf",
             "windowsArm64": "c7f16da93728f61455f77c04eac1ff4de06a38da281ed6d3dcbfae795be2a936",
@@ -23,46 +43,6 @@
             "macOSX64": "https://github.com/caddyserver/caddy/releases/download/v2.11.4/caddy_2.11.4_mac_amd64.tar.gz",
             "macOSArm64": "https://github.com/caddyserver/caddy/releases/download/v2.11.4/caddy_2.11.4_mac_arm64.tar.gz"
           }
-        },
-        {
-          "id": "caddy-2.11",
-          "version": "2.11.3",
-          "selected": false,
-          "display_name": "Caddy 2.11.3",
-          "checksums": {
-            "windowsX64": "94ba71226d30a07d8eca3f971e88222fafb13f8bc46f391ed01afd6780f9c030",
-            "windowsArm64": "2c1960deb8c5fbc83e7ea3b9807e20c4d50efe3846e5248aa4eb2f6dc437de81",
-            "linuxX64": "3894577b14657feab3624d782f64175050211e52a228a6f57b4f24f4b0d970f3",
-            "macOSX64": "9e6f08758f2a4677d0f3acd3e3ccc541b0475217800325b5e5f4ef56668e4c88",
-            "macOSArm64": "b37757be82ef630dddf359e6f1685731a1c657576ce80c469e0e3e6a8fb49e9d"
-          },
-          "urls": {
-            "windowsX64": "https://github.com/caddyserver/caddy/releases/download/v2.11.3/caddy_2.11.3_windows_amd64.zip",
-            "windowsArm64": "https://github.com/caddyserver/caddy/releases/download/v2.11.3/caddy_2.11.3_windows_arm64.zip",
-            "linuxX64": "https://github.com/caddyserver/caddy/releases/download/v2.11.3/caddy_2.11.3_linux_amd64.tar.gz",
-            "macOSX64": "https://github.com/caddyserver/caddy/releases/download/v2.11.3/caddy_2.11.3_mac_amd64.tar.gz",
-            "macOSArm64": "https://github.com/caddyserver/caddy/releases/download/v2.11.3/caddy_2.11.3_mac_arm64.tar.gz"
-          }
-        },
-        {
-          "id": "caddy-2.10",
-          "version": "2.10.2",
-          "selected": false,
-          "display_name": "Caddy 2.10.2 (Previous)",
-          "checksums": {
-            "windowsX64": "9fd1ef9be5d9b05852b66ccc25f96f23d8651bcab20779861a745bdffa273722",
-            "windowsArm64": "014b4795872678f708f5cd347fd00d81671cd0305284b4a236ffb1898967d840",
-            "linuxX64": "5c218bc34c9197369263da7e9317a83acdbd80ef45d94dca5eff76e727c67cdd",
-            "macOSX64": "de2230a0d0e424e8de2c450e989ebe7511e6f8886937e81b571e0853c497fe40",
-            "macOSArm64": "cc9ad20742ea7bfee5dd1d435d42ab7fcf8592294f9ec43bf08fd21cbe448bc4"
-          },
-          "urls": {
-            "windowsX64": "https://github.com/caddyserver/caddy/releases/download/v2.10.2/caddy_2.10.2_windows_amd64.zip",
-            "windowsArm64": "https://github.com/caddyserver/caddy/releases/download/v2.10.2/caddy_2.10.2_windows_arm64.zip",
-            "linuxX64": "https://github.com/caddyserver/caddy/releases/download/v2.10.2/caddy_2.10.2_linux_amd64.tar.gz",
-            "macOSX64": "https://github.com/caddyserver/caddy/releases/download/v2.10.2/caddy_2.10.2_mac_amd64.tar.gz",
-            "macOSArm64": "https://github.com/caddyserver/caddy/releases/download/v2.10.2/caddy_2.10.2_mac_arm64.tar.gz"
-          }
         }
       ]
     },
@@ -70,42 +50,44 @@
       "versions": [
         {
           "id": "php-8.5",
-          "version": "8.5.1",
+          "version": "8.5.12",
           "selected": true,
-          "display_name": "PHP 8.5.1 (Latest)",
+          "display_name": "PHP 8.5.12 (Latest)",
           "eol": false,
           "lts": false,
           "checksums": {
-            "windowsX64": "77fbee57c8159279bc065942d361103b0a3f53c8dfabc182a07433be9eec8dba",
-            "windowsArm64": "cfd66a27d32e0ce2f462527f8f29fd2d797c714083c07a32b6147d06a7553d6f",
-            "linuxX64": "b3871bc4e2d99140d3cba88ec0fe54d828ee2e460a6232f6d74565a288420e62",
-            "macOSX64": "6a211936907b9df16ae32fa8cdaa74d76b7ce3940e09cf5fba0109140953db98",
-            "macOSArm64": "9fb9a6a5ce41a384a611ec3f3e2deb5329ef0ce68848ab50ac7bb391b1890c23"
+            "windowsX64": "660f3ff6ccbdf60f9607ef54bdba85ee22a58d61fd3633b38a93d57fb7c3d184",
+            "windowsArm64": "660f3ff6ccbdf60f9607ef54bdba85ee22a58d61fd3633b38a93d57fb7c3d184",
+            "linuxX64": "d2a5c031ae23a72b97ed5ab739bd5b8fe75dd09754d2f406a9216b7d7c8311d8",
+            "linuxArm64": "4bd94d191f1f8f620a1ca76236f679d2e2491ecfa987036fc6d7a7c08e663f3b",
+            "macOSX64": "57cdce953a8392e655a800908eb5e8fa61e2b7d795b8e7d3f354b3d81939563d",
+            "macOSArm64": "1d994fbc4e49015a7cd4ad4fcb7c03e7e219f65fdb14e5e33ef1c44d928368e9"
           },
           "urls": {
-            "windowsX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.5.1-Win32-vs17-x64.zip",
-            "windowsArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.5.1-Win32-vs17-x86.zip",
-            "linuxX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.4.18-fpm-linux-x86_64.tar.gz",
-            "macOSX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.4.18-fpm-macos-x86_64.tar.gz",
-            "macOSArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.1/php-8.4.18-fpm-macos-aarch64.tar.gz"
+            "windowsX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.12/php-8.5.12-Win32-vs17-x64.zip",
+            "windowsArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.12/php-8.5.12-Win32-vs17-x64.zip",
+            "linuxX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.11/php-8.5.8-fpm-linux-x86_64.tar.gz",
+            "linuxArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.11/php-8.5.8-fpm-linux-aarch64.tar.gz",
+            "macOSX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.11/php-8.5.8-fpm-macos-x86_64.tar.gz",
+            "macOSArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.5.11/php-8.5.8-fpm-macos-aarch64.tar.gz"
           }
         },
         {
           "id": "php-8.4",
-          "version": "8.4.25",
+          "version": "8.4.27",
           "selected": false,
-          "display_name": "PHP 8.4.25 (Active Support)",
+          "display_name": "PHP 8.4.27 (Active Support)",
           "eol": false,
           "lts": false,
           "checksums": {
-            "windowsX64": "2cf521fb6bcb45b634c7e9a7ab2afb6d41698b987bbc73c4975d90a065e0f16c",
+            "windowsX64": "7902fe891ff4b035d431fd429a2ec1df193ba1f6fedba425d861790465c64e6b",
             "linuxX64": "40e341db82e5e90450122462aa6038fe653b63da951c1da1f10b15d0da4a26a0",
             "linuxArm64": "8ca6b8d44f12f981cdd96b5aa31f6bf5373a89d201a4a49ed0feb5f242631dec",
             "macOSX64": "67bbb7f2b2543d45c8a4ab0e4759fbd956530e87fba47a00505c06f09c9b9950",
             "macOSArm64": "1a417db44f0eb0b40a9f8cd862f24ecfabdea87f85863f30d218c4876bb688ef"
           },
           "urls": {
-            "windowsX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.4.25/php-8.4.25-Win32-vs17-x64.zip",
+            "windowsX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.4.27/php-8.4.27-Win32-vs17-x64.zip",
             "linuxX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.4.25/php-8.4.23-fpm-linux-x86_64.tar.gz",
             "linuxArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.4.25/php-8.4.23-fpm-linux-aarch64.tar.gz",
             "macOSX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.4.25/php-8.4.23-fpm-macos-x86_64.tar.gz",
@@ -114,20 +96,20 @@
         },
         {
           "id": "php-8.3",
-          "version": "8.3.33",
+          "version": "8.3.36",
           "selected": false,
-          "display_name": "PHP 8.3.33 (Security Fixes)",
+          "display_name": "PHP 8.3.36 (Security Fixes)",
           "eol": false,
           "lts": false,
           "checksums": {
-            "windowsX64": "b089e370ff99eb7038b0d22617dec2f3a1d0e93ca26b11fd218f2f5b60422271",
+            "windowsX64": "0606810ff8fc232406aaab677b760e06af93a63a366d33ff738d4ce90501dfa5",
             "linuxX64": "02964d89c54810471c35bbd3877e1a420693305cb2e33aab18636d0db29ff7bc",
             "linuxArm64": "f0d50fa3d8c5114a93cef02b44a1c01642018bc1dab96644d29ef2d1034eb624",
             "macOSX64": "aac3ec085e1d72cfecfeea75981a5301b92f8555655d0997a1875c14669b5dd5",
             "macOSArm64": "0ceed30f5bd9e54f8a8046c3d28fad549f10220736e15dc16e15855d829fbd81"
           },
           "urls": {
-            "windowsX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.3.33/php-8.3.33-Win32-vs16-x64.zip",
+            "windowsX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.3.36/php-8.3.36-Win32-vs16-x64.zip",
             "linuxX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.3.33/php-8.3.32-fpm-linux-x86_64.tar.gz",
             "linuxArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.3.33/php-8.3.32-fpm-linux-aarch64.tar.gz",
             "macOSX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.3.33/php-8.3.32-fpm-macos-x86_64.tar.gz",
@@ -136,20 +118,20 @@
         },
         {
           "id": "php-8.2",
-          "version": "8.2.33",
+          "version": "8.2.35",
           "selected": false,
-          "display_name": "PHP 8.2.33 (Security Fixes)",
+          "display_name": "PHP 8.2.35 (Security Fixes)",
           "eol": false,
           "lts": false,
           "checksums": {
-            "windowsX64": "7d2568dfaad6ac1391e57994f52c8aed835baf9e6d89f4328770e2843311291c",
+            "windowsX64": "cfa6000be835931961e40740bd3b51111700061d6655ddbfe5a2125807947457",
             "linuxX64": "e324b63d961bedb7273c1a3585f9b209cc1e057016056ed34b8bb1b32526db3e",
             "linuxArm64": "d16bd173d30d8d8d663146bddc785d4350f584d5ce105c52f0a0c85305ba5e51",
             "macOSX64": "7d7f21caa31670fa7198bd21fd5fb6178ecedf2a8b90ef59b2af539587fa0dd7",
             "macOSArm64": "dadddf9b6528f7344ba1f4cdc220bc7e26d2c8402d018f743fe0316d06e4ba77"
           },
           "urls": {
-            "windowsX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.2.33/php-8.2.33-Win32-vs16-x64.zip",
+            "windowsX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.2.35/php-8.2.35-Win32-vs16-x64.zip",
             "linuxX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.2.33/php-8.2.32-fpm-linux-x86_64.tar.gz",
             "linuxArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.2.33/php-8.2.32-fpm-linux-aarch64.tar.gz",
             "macOSX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php-8.2.33/php-8.2.32-fpm-macos-x86_64.tar.gz",
@@ -178,30 +160,30 @@
       "versions": [
         {
           "id": "mysql-8.4",
-          "version": "8.4.0",
+          "version": "8.4.11",
           "selected": true,
-          "display_name": "MySQL 8.4.0 LTS (Recommended)",
+          "display_name": "MySQL 8.4.11 LTS (Recommended)",
           "eol": false,
           "lts": true,
           "checksums": {
-            "windowsX64": "fb1f0c6cce229be4b3208bec8a605576bb47eabb00512bccbcc4396af332c25c",
-            "windowsArm64": "fb1f0c6cce229be4b3208bec8a605576bb47eabb00512bccbcc4396af332c25c",
-            "macOSX64": "adbb8b7e261547768a548d97938a5f1b66cf85daee09db28ac4bb657aa7d4192",
-            "macOSArm64": "b4ad74a78aa4378df00e1164c9979dd660ea09bf47e05f6ef8324f4ea1418618"
+            "windowsX64": "a492371d687d2bab088b0062581144a0044b8964baefdf4faa579292b423d25c",
+            "windowsArm64": "a492371d687d2bab088b0062581144a0044b8964baefdf4faa579292b423d25c",
+            "macOSX64": "90e8aea10698d01b978f0179e72e8d5e2cbe9f9bd5771e88b0b75d7c82244d3f",
+            "macOSArm64": "b96e00493bc3499b9ffd7f08d65c5d64933af0383a8287d9873b64f94c2d6009"
           },
           "urls": {
-            "windowsX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-winx64.zip",
-            "windowsArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-winx64.zip",
-            "macOSX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-macos14-x86_64.tar.gz",
-            "macOSArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.0/mysql-8.4.0-macos14-arm64.tar.gz"
+            "windowsX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.11/mysql-8.4.11-winx64.zip",
+            "windowsArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.11/mysql-8.4.11-winx64.zip",
+            "macOSX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.11/mysql-8.4.11-macos15-x86_64.tar.gz",
+            "macOSArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.11/mysql-8.4.11-macos15-arm64.tar.gz"
           }
         },
         {
           "id": "mysql-8.0",
           "version": "8.0.46",
           "selected": false,
-          "display_name": "MySQL 8.0.46",
-          "eol": false,
+          "display_name": "MySQL 8.0.46 (Legacy)",
+          "eol": true,
           "lts": false,
           "checksums": {
             "windowsX64": "28e9eda019d88eff4478d811ea2110b83f02a3966be157fe91cc55def3ab0d4d",
@@ -222,17 +204,16 @@
       "versions": [
         {
           "id": "mariadb-12.3",
-          "version": "12.3.1",
+          "version": "12.3.3",
           "selected": true,
-          "display_name": "MariaDB 12.3.1 (Latest)",
+          "display_name": "MariaDB 12.3.3 LTS (Latest)",
           "eol": false,
-          "lts": false,
+          "lts": true,
           "checksums": {
-            "linuxX64": "7a5bb527b7821c570b7aec6a20e3c0266b3d4bd5ca7cbde32e043b52a6a27433"
+            "linuxX64": "a12bf7bce08a896cdd01f174f04b4ce1d5da43ec250a5e7fceb9972119514329"
           },
           "urls": {
-            "linuxX64": "https://archive.mariadb.org/mariadb-12.3.1/bintar-linux-systemd-x86_64/mariadb-12.3.1-linux-systemd-x86_64.tar.gz",
-            "linuxArm64": "https://archive.mariadb.org/mariadb-12.3.1/bintar-linux-systemd-aarch64/mariadb-12.3.1-linux-systemd-aarch64.tar.gz"
+            "linuxX64": "https://archive.mariadb.org/mariadb-12.3.3/bintar-linux-systemd-x86_64/mariadb-12.3.3-linux-systemd-x86_64.tar.gz"
           }
         },
         {
@@ -276,20 +257,6 @@
           "urls": {
             "linuxX64": "https://archive.mariadb.org/mariadb-10.11.19/bintar-linux-systemd-x86_64/mariadb-10.11.19-linux-systemd-x86_64.tar.gz"
           }
-        },
-        {
-          "id": "mariadb-10.6",
-          "version": "10.6.28",
-          "selected": false,
-          "display_name": "MariaDB 10.6.28 LTS",
-          "eol": false,
-          "lts": true,
-          "checksums": {
-            "linuxX64": "80ca39575e5dd9670d9015b674835cd1d37548576547425763694d1bcc686ce2"
-          },
-          "urls": {
-            "linuxX64": "https://archive.mariadb.org/mariadb-10.6.28/bintar-linux-systemd-x86_64/mariadb-10.6.28-linux-systemd-x86_64.tar.gz"
-          }
         }
       ]
     },
@@ -297,13 +264,13 @@
       "versions": [
         {
           "id": "phpmyadmin-5.2",
-          "version": "5.2.2",
+          "version": "5.2.3",
           "selected": true,
-          "display_name": "phpMyAdmin 5.2.2 (Latest)",
+          "display_name": "phpMyAdmin 5.2.3 (Latest)",
           "eol": false,
           "lts": false,
-          "checksum": "6b99534f72ffb1d7275f50d23ca4141e1495c97d7cadb73a41d6dc580ed5ce29",
-          "url": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/phpmyadmin-5.2.2/phpMyAdmin-5.2.2-all-languages.zip"
+          "checksum": "2d2e13c735366d318425c78e4ee2cc8fc648d77faba3ddea2cd516e43885733f",
+          "url": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/phpmyadmin-5.2.3/phpMyAdmin-5.2.3-all-languages.zip"
         }
       ]
     },
@@ -311,24 +278,24 @@
       "versions": [
         {
           "id": "postgresql-18.3",
-          "version": "18.3.0",
+          "version": "18.6.1",
           "selected": true,
-          "display_name": "PostgreSQL 18.3.0 (Latest)",
+          "display_name": "PostgreSQL 18.6.1 (Latest)",
           "eol": false,
           "lts": false,
           "checksums": {
-            "windowsX64": "5746652708a16ec8a48195da3707b7dafcf6ab2a976761825c0aac74c174bccd",
-            "macOSX64": "cafd061662f8673584240bd238e20dd83c1eefb2baf70e8e9224b7a8c59d41f1",
-            "macOSArm64": "67b2e48b91c61129de6d3c98d7bf6b35e113297b5d6f30c2cd8c6665aa71647b",
-            "linuxX64": "71066f6534cfbc1f6d1f645b3c5c7d2d352eb6a53280fe863a5b3d82614e9f7b",
-            "linuxArm64": "d2a94bc296758f93bc7d29abb12365b1bdb9e32d14ed25086042802995a606cf"
+            "windowsX64": "d82142f3a9a49be8467f0e87f5a079f627515539f94a070fe1463208fa8eb3c6",
+            "macOSX64": "4229812543e19c91864ebdf5d8f78883c5816d51d4cc5d065298260c1f64d37e",
+            "macOSArm64": "89e91cc80650a43d22c018b95ca356a0c9e15838a1182fed2880bfb5d7d9c9a6",
+            "linuxX64": "e84b02dd8d0ce5879fb697330a789231c8b8f8d958dae3ad4d90fecc710b1315",
+            "linuxArm64": "1ab47fa2f06ff70454309ad02e5d89c46488300d43977231481fd6b160b9d556"
           },
           "urls": {
-            "windowsX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.3.0/postgresql-18.3.0-x86_64-pc-windows-msvc.zip",
-            "macOSX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.3.0/postgresql-18.3.0-x86_64-apple-darwin.tar.gz",
-            "macOSArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.3.0/postgresql-18.3.0-aarch64-apple-darwin.tar.gz",
-            "linuxX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.3.0/postgresql-18.3.0-x86_64-unknown-linux-gnu.tar.gz",
-            "linuxArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.3.0/postgresql-18.3.0-aarch64-unknown-linux-gnu.tar.gz"
+            "windowsX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.1/postgresql-18.6.1-x86_64-pc-windows-msvc.zip",
+            "macOSX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.1/postgresql-18.6.1-x86_64-apple-darwin.tar.gz",
+            "macOSArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.1/postgresql-18.6.1-aarch64-apple-darwin.tar.gz",
+            "linuxX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.1/postgresql-18.6.1-x86_64-unknown-linux-gnu.tar.gz",
+            "linuxArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.1/postgresql-18.6.1-aarch64-unknown-linux-gnu.tar.gz"
           }
         },
         {
@@ -410,6 +377,16 @@
           "lts": false,
           "checksum": "f8b1cdc676d72e88d2d470dd05f2dcb7212bf6cdcf78f1eadb7fc292f4cefd39",
           "url": "https://github.com/vrana/adminer/releases/download/v5.4.2/adminer-5.4.2-en.php"
+        },
+        {
+          "id": "adminer-6.1",
+          "version": "6.1.2",
+          "selected": false,
+          "display_name": "Adminer 6.1.2",
+          "eol": false,
+          "lts": false,
+          "checksum": "56fae7a3bdaae6ff12c404378b1045c02dbe9529a5afda0b901ded0e1f63302f",
+          "url": "https://github.com/vrana/adminer/releases/download/v6.1.2/adminer-6.1.2-en.php"
         }
       ]
     },
