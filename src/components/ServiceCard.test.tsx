@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ServiceCard } from './ServiceCard';
-import { ServiceType, ServiceState } from '../types/services';
+import { ServiceType, ServiceState, getDatabaseDisplayName } from '../types/services';
 
 describe('ServiceCard Component', () => {
   const mockHandlers = {
@@ -359,7 +359,8 @@ describe('ServiceCard Component', () => {
         />
       );
 
-      expect(screen.getByText('MySQL')).toBeInTheDocument();
+      // MariaDB on Linux, MySQL elsewhere
+      expect(screen.getByText(getDatabaseDisplayName())).toBeInTheDocument();
       expect(screen.getByText(':3307')).toBeInTheDocument();
       expect(screen.getByText('Database Server')).toBeInTheDocument();
     });
