@@ -335,22 +335,25 @@ impl ProcessManager {
             }
         }
 
-        // Force-kill the tracked child by handle (fallback, and the Windows path).
-        if let Some(ref mut child) = service_process.child {
-            let _ = child.kill();
-            let _ = child.wait();
-        }
-
-        // For MySQL/MariaDB on Windows, also kill by PID to handle spawned child processes
+        // Windows: kill the whole process tree, before the parent is killed below (taskkill /T
+        // finds children through the parent). MySQL 8.4 runs as two processes (the one we
+        // spawn starts a second mysqld that does the work); without /T that one kept
+        // running and holding port 3307 after Stop, so backups copied live MySQL files.
         #[cfg(target_os = "windows")]
         if let Some(pid) = service_process.pid {
             let _ = Command::new("taskkill")
-                .args(["/F", "/PID", &pid.to_string()])
+                .args(["/F", "/T", "/PID", &pid.to_string()])
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .output();
 
             std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+
+        // Force-kill the tracked child by handle (fallback, and the Windows path).
+        if let Some(ref mut child) = service_process.child {
+            let _ = child.kill();
+            let _ = child.wait();
         }
 
         service_process.child = None;

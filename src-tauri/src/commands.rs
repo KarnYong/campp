@@ -313,6 +313,9 @@ pub async fn list_backups() -> Result<Vec<crate::backup::BackupInfo>, String> {
 #[tauri::command]
 pub async fn create_backup(state: State<'_, AppState>) -> Result<String, String> {
     ensure_all_stopped(&state)?;
+    // Services are stopped; also end any leftover runtime process (path-scoped) so no
+    // database is still writing the files we copy.
+    kill_runtime_processes();
     tokio::task::spawn_blocking(|| crate::backup::create_backup(None))
         .await.map_err(|e| format!("Task error: {}", e))?
 }
