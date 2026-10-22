@@ -696,8 +696,9 @@ fn get_default_packages() -> PackagesConfig {
                 // theseus-rs publishes no Windows ARM64 build; use the x64 build
                 // under Windows 11 x64 emulation (same approach as MySQL).
                 windows_arm64: "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.1/postgresql-18.6.1-x86_64-pc-windows-msvc.zip".to_string(),
-                linux_x64: "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.1/postgresql-18.6.1-x86_64-unknown-linux-gnu.tar.gz".to_string(),
-                linux_arm64: "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.1/postgresql-18.6.1-aarch64-unknown-linux-gnu.tar.gz".to_string(),
+                // Linux uses 18.6.0: the 18.6.1 rebuild needs glibc 2.36 and fails on Ubuntu 22.04.
+                linux_x64: "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.0/postgresql-18.6.0-x86_64-unknown-linux-gnu.tar.gz".to_string(),
+                linux_arm64: "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.0/postgresql-18.6.0-aarch64-unknown-linux-gnu.tar.gz".to_string(),
                 macos_x64: "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.1/postgresql-18.6.1-x86_64-apple-darwin.tar.gz".to_string(),
                 macos_arm64: "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.1/postgresql-18.6.1-aarch64-apple-darwin.tar.gz".to_string(),
                 eol: false,

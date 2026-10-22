@@ -1203,6 +1203,13 @@ impl RuntimeDownloader {
         fs::create_dir_all(&runtime_dir)
             .map_err(|e| format!("Failed to create runtime directory: {}", e))?;
 
+        // These unpack into a versioned folder (postgresql-18.6.0-...). Remove older ones
+        // first: the locator takes the first match, so a leftover old version could keep
+        // running after a reinstall to another version. Data lives outside runtime/.
+        if let Some(prefix) = versioned_dir_prefix(component) {
+            Self::remove_versioned_dirs(&runtime_dir, prefix)?;
+        }
+
         // Determine extraction method based on file extension
         let extension = downloaded_path
             .extension()
@@ -1539,6 +1546,17 @@ impl Default for RuntimeDownloader {
     }
 }
 
+/// Folder-name prefix of components whose archives extract to a versioned directory.
+fn versioned_dir_prefix(component: BinaryComponent) -> Option<&'static str> {
+    match component {
+        BinaryComponent::MySQL => Some("mysql-"),
+        BinaryComponent::MariaDB => Some("mariadb-"),
+        BinaryComponent::PostgreSQL => Some("postgresql-"),
+        BinaryComponent::PhpMyAdmin => Some("phpMyAdmin-"),
+        _ => None,
+    }
+}
+
 /// Check if a file is executable based on its name
 #[cfg(unix)]
 fn is_executable(name: &str) -> bool {
@@ -1663,6 +1681,29 @@ fn extract_tar_entries<R: std::io::Read>(
 #[cfg(test)]
 mod tests {
     use super::RuntimeDownloader;
+
+    #[test]
+    fn reinstall_removes_only_older_versions_of_the_same_component() {
+        use super::{versioned_dir_prefix, BinaryComponent};
+        let dir = tempfile::TempDir::new().unwrap();
+        let rt = dir.path();
+        for d in ["postgresql-18.6.1-x86_64-unknown-linux-gnu/bin", "postgresql-18.3.0-x86_64-unknown-linux-gnu/bin",
+                  "mariadb-12.3.3-linux-systemd-x86_64/bin", "phpMyAdmin-5.2.3-all-languages", "adminer"] {
+            std::fs::create_dir_all(rt.join(d)).unwrap();
+        }
+        std::fs::write(rt.join("postgresql_installed.txt"), "version=18.6.1").unwrap();
+
+        let prefix = versioned_dir_prefix(BinaryComponent::PostgreSQL).unwrap();
+        RuntimeDownloader::remove_versioned_dirs(rt, prefix).unwrap();
+
+        let left: Vec<String> = std::fs::read_dir(rt).unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
+        assert!(!left.iter().any(|n| n.starts_with("postgresql-")), "{left:?}");
+        for keep in ["mariadb-12.3.3-linux-systemd-x86_64", "phpMyAdmin-5.2.3-all-languages", "adminer", "postgresql_installed.txt"] {
+            assert!(left.iter().any(|n| n == keep), "{keep} must stay: {left:?}");
+        }
+        assert_eq!(versioned_dir_prefix(BinaryComponent::Caddy), None, "flat components untouched");
+    }
 
     #[test]
     fn tgz_url_is_treated_as_tar_gz() {

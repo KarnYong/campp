@@ -314,7 +314,28 @@ impl ProcessManager {
             }
         }
 
-        // Force-kill the tracked child by handle (fallback / non-Postgres path).
+        // Unix: ask politely first. child.kill() is SIGKILL, and a SIGKILLed php-fpm
+        // master leaves its workers running and holding the port, so PHP-FPM couldn't
+        // start again after Stop. SIGTERM also gives MariaDB/MySQL a clean shutdown.
+        #[cfg(unix)]
+        if let Some(ref mut child) = service_process.child {
+            if matches!(child.try_wait(), Ok(None)) {
+                let _ = Command::new("kill")
+                    .args(["-TERM", &child.id().to_string()])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+                for _ in 0..100 {
+                    // up to 10s
+                    if !matches!(child.try_wait(), Ok(None)) {
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+            }
+        }
+
+        // Force-kill the tracked child by handle (fallback, and the Windows path).
         if let Some(ref mut child) = service_process.child {
             let _ = child.kill();
             let _ = child.wait();
@@ -477,6 +498,11 @@ fn start_caddy(service_process: &mut ServiceProcess, paths: &RuntimePaths, php_p
 fn start_php_fpm(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> Result<(), String> {
     // Kill any existing PHP processes to avoid port conflicts
     kill_existing_processes(&paths.php_cgi);
+    // php-fpm (macOS/Linux) rewrites its process title to "php-fpm: master process
+    // (<conf>)", so the binary path no longer appears. Our conf path does, and is
+    // just as CAMPP-specific. Without this, a php-fpm left over from a crashed or
+    // force-quit CAMPP keeps port 9000 and PHP-FPM can't start.
+    kill_existing_processes(&paths.config_dir.join("php-fpm.conf"));
 
     // Generate php.ini only if it doesn't exist (first run)
     // Users can manually edit php.ini in the runtime directory
