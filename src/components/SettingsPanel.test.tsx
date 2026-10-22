@@ -16,7 +16,8 @@ function mockBackend(overrides: Record<string, unknown> = {}, s: typeof settings
   vi.mocked(invoke).mockImplementation(async (cmd: string) => {
     if (cmd in overrides) return overrides[cmd];
     if (cmd === 'get_settings') return s;
-    if (cmd === 'check_existing_components') return { caddy: '2.11.7', php: '8.5.12', mysql: '8.4.11', postgresql: '18.6.1' };
+    // mysql and mariadb both listed: Linux shows MariaDB, other OSes MySQL
+    if (cmd === 'check_existing_components') return { caddy: '2.11.7', php: '8.5.12', mysql: '8.4.11', mariadb: '12.3.3', postgresql: '18.6.1' };
     return null;
   });
 }
