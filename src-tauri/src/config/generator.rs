@@ -67,13 +67,29 @@ pub fn generate_caddyfile(path: &PathBuf, paths: &RuntimePaths, port: u16, php_p
     content.push_str("    # Root directory for serving files (default project root)\n");
     content.push_str(&format!("    root * \"{}\"\n", projects));
     content.push_str("\n");
-    content.push_str("    # Serve PHP files via FastCGI\n");
+    content.push_str("    # A folder with index.html but no trailing slash: redirect (as php_fastcgi does\n");
+    content.push_str("    # for index.php), so relative links in the page resolve inside the folder.\n");
+    content.push_str("    @htmlDir {\n");
+    content.push_str("        file {path}/index.html\n");
+    content.push_str("        not path */\n");
+    content.push_str("    }\n");
+    content.push_str("    redir @htmlDir {path}/ 308\n");
+    content.push_str("\n");
+    content.push_str("    # Serve PHP files via FastCGI. A folder serves its index.php or index.html;\n");
+    content.push_str("    # anything else is 404. php_fastcgi's default falls back to the root index.php,\n");
+    content.push_str("    # which showed the CAMPP welcome page for every missing page or folder.\n");
     content.push_str(&format!("    php_fastcgi 127.0.0.1:{} {{\n", php_port));
     content.push_str("        index index.php\n");
+    content.push_str("        try_files {path} {path}/index.php {path}/index.html =404\n");
     content.push_str("    }\n");
     content.push_str("\n");
     content.push_str("    # File server for project files\n");
-    content.push_str("    file_server browse\n");
+    content.push_str("    file_server\n");
+    content.push_str("\n");
+    content.push_str("    # Visible 404 (an empty body is a blank page in Firefox/Safari)\n");
+    content.push_str("    handle_errors 404 {\n");
+    content.push_str("        respond \"404 Not Found\" 404\n");
+    content.push_str("    }\n");
     content.push_str("\n");
     content.push_str("    # Logging\n");
     content.push_str("    log {\n");
@@ -532,6 +548,30 @@ tunnels:
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn caddyfile_gives_404_instead_of_falling_back_to_the_welcome_page() {
+        use crate::runtime::locator::RuntimePaths;
+        let dir = tempfile::TempDir::new().unwrap();
+        let p = |n: &str| dir.path().join(n);
+        let paths = RuntimePaths {
+            caddy: p("caddy"), php_cgi: p("php-cgi"), php_ini: p("php.ini"), php_ext_dir: p("ext"),
+            mysql: p("mysqld"), phpmyadmin: p("phpmyadmin"), pgsql_dir: p("pgsql"), adminer: p("adminer"),
+            mysql_data_dir: p("data"), pgsql_data_dir: p("pgdata"), logs_dir: p("logs"),
+            config_dir: p("config"), projects_dir: p("projects"), ngrok: p("ngrok"),
+        };
+        let file = dir.path().join("Caddyfile");
+        super::generate_caddyfile(&file, &paths, 8080, 9000, "127.0.0.1").unwrap();
+        let cf = std::fs::read_to_string(&file).unwrap();
+
+        // Missing page or folder without index -> 404, never the root index.php.
+        assert!(cf.contains("try_files {path} {path}/index.php {path}/index.html =404"), "{cf}");
+        // No directory listings of project folders.
+        assert!(!cf.contains("file_server browse"), "{cf}");
+        // index.html folders redirect to the trailing slash like index.php folders.
+        assert!(cf.contains("redir @htmlDir {path}/ 308"), "{cf}");
+        assert!(cf.contains("respond \"404 Not Found\" 404"), "{cf}");
+    }
+
     #[test]
     fn pg_hba_never_trusts_other_devices() {
         let dir = tempfile::TempDir::new().unwrap();
