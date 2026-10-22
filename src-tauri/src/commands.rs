@@ -275,6 +275,12 @@ pub async fn check_runtime_installed() -> Result<bool, String> {
     Ok(downloader.is_installed())
 }
 
+/// The Caddy version CAMPP installs (Caddy has no version picker, so the UI just shows this).
+#[tauri::command]
+pub async fn get_caddy_version() -> String {
+    crate::runtime::downloader::BinaryComponent::Caddy.version()
+}
+
 /// Save only the theme. Unlike save_settings it never restarts services, so it's
 /// allowed while they run.
 #[tauri::command]
@@ -320,10 +326,9 @@ pub async fn restore_backup(state: State<'_, AppState>, name: String) -> Result<
         .await.map_err(|e| format!("Task error: {}", e))?
 }
 
-/// Danger zone: delete all projects and database data (after an automatic backup).
-/// Returns the safety backup's name.
+/// Danger zone: delete all projects and database data. No backup is taken.
 #[tauri::command]
-pub async fn delete_all_data(state: State<'_, AppState>) -> Result<String, String> {
+pub async fn delete_all_data(state: State<'_, AppState>) -> Result<(), String> {
     ensure_all_stopped(&state)?;
     kill_runtime_processes();
     tokio::task::spawn_blocking(crate::backup::delete_all_data)

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useCaddyVersion } from "../utils/useCaddyVersion";
 import { PasswordInput } from "./PasswordInput";
 import { invoke } from "@tauri-apps/api/core";
 import { PackagesConfig, PackageSelection, PhpPackage, MySQLPackage, PhpMyAdminPackage, getDatabaseDisplayName } from "../types/services";
@@ -17,6 +18,7 @@ interface PackageSelectorProps {
 }
 
 export function PackageSelector({ onSelectionChange, initialSelection, initialEnabled, onEnabledChange, mysqlPassword, onMysqlPasswordChange, postgresPassword, onPostgresPasswordChange }: PackageSelectorProps) {
+  const caddyVersion = useCaddyVersion();
   const [packages, setPackages] = useState<PackagesConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentPlatform, setCurrentPlatform] = useState<string>("");
@@ -188,7 +190,7 @@ export function PackageSelector({ onSelectionChange, initialSelection, initialEn
                     ))}
                   </select>
                 ) : (
-                  <span className="wiz-muted mono">v2.11.3</span>
+                  <span className="wiz-muted mono">{caddyVersion ? `v${caddyVersion}` : "…"}</span>
                 )}
               </div>
               <button

@@ -53,6 +53,21 @@ describe('BackupPage', () => {
     expect(vi.mocked(invoke).mock.calls.filter(([c]) => c === 'list_backups').length).toBeGreaterThan(1);
   });
 
+  it('blocks the window with a progress dialog while backing up', async () => {
+    let finish: (name: string) => void = () => {};
+    mockBackend({ create_backup: new Promise<string>((res) => { finish = res; }) });
+    render(<BackupPage servicesActive={false} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Back up now' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Backing up');
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+
+    finish('campp-backup-500.zip');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByText('Backup saved: campp-backup-500.zip')).toBeInTheDocument();
+  });
+
   it('restores only after confirmation', async () => {
     mockBackend({ restore_backup: 'campp-backup-400-pre-restore.zip' });
     vi.mocked(showConfirm).mockResolvedValueOnce(false).mockResolvedValueOnce(true);

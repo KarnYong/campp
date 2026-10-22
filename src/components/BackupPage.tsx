@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useState, useEffect, useCallback } from "react";
 import { showConfirm } from "./Dialog";
+import { BusyDialog } from "./BusyDialog";
 
 interface BackupInfo {
   name: string;
@@ -85,9 +86,15 @@ export function BackupPage({ servicesActive }: { servicesActive: boolean }) {
   };
 
   const blocked = servicesActive || !!action;
+  const busy = action === "backup"
+    ? { title: "Backing up", detail: "Copying your projects and databases into a zip." }
+    : action
+      ? { title: "Restoring backup", detail: "Saving your current state first, then putting the backup in place." }
+      : null;
 
   return (
     <div className="page">
+      {busy && <BusyDialog title={busy.title} detail={busy.detail} />}
       <header className="main__header">
         <div>
           <h2>Backup</h2>

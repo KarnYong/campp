@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useCaddyVersion } from "../utils/useCaddyVersion";
 import { PasswordInput } from "./PasswordInput";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -33,6 +34,7 @@ const ALL_COMPONENTS = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postg
 type Phase = "select" | "running" | "done" | "error";
 
 export function ReinstallDialog({ componentKey, displayName, currentVersion, onClose }: ReinstallDialogProps) {
+  const caddyVersion = useCaddyVersion();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [phase, setPhase] = useState<Phase>("select");
   const [packages, setPackages] = useState<PackagesConfig | null>(null);
@@ -151,7 +153,7 @@ export function ReinstallDialog({ componentKey, displayName, currentVersion, onC
         {phase === "select" && (
           <>
             {componentKey === "caddy" ? (
-              <p className="wiz-muted">Caddy is installed at the bundled version (v2.11.3).</p>
+              <p className="wiz-muted">Caddy is installed at the bundled version{caddyVersion ? ` (v${caddyVersion})` : ""}.</p>
             ) : (
               <div className="field">
                 <label htmlFor="reinstall-version">Version</label>

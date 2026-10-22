@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { showConfirm } from "./Dialog";
 import { PasswordInput } from "./PasswordInput";
+import { BusyDialog } from "./BusyDialog";
+import { isWeakPassword } from "../utils/password";
 import { useState, useEffect, useCallback } from "react";
 import { AppSettings, getDatabaseDisplayName } from "../types/services";
 import { detectPlatform } from "../utils/platform";
@@ -33,6 +35,9 @@ export function SettingsPanel({ onClose, onSettingsChanged, servicesActive = fal
   const [success, setSuccess] = useState<string | null>(null);
   const [confirmingWipe, setConfirmingWipe] = useState(false);
   const [wiping, setWiping] = useState(false);
+  // New passwords only. The current ones are never shown; empty = keep current.
+  const [newMysqlPw, setNewMysqlPw] = useState("");
+  const [newPgPw, setNewPgPw] = useState("");
   // Installed component -> version; ports/passwords only show for installed ones.
   const [installed, setInstalled] = useState<Record<string, string>>({});
 
@@ -73,8 +78,8 @@ export function SettingsPanel({ onClose, onSettingsChanged, servicesActive = fal
     setError(null);
     setSuccess(null);
     try {
-      const safety = await invoke<string>("delete_all_data");
-      setSuccess(`All projects and databases deleted. A backup was saved first (${safety}); restore it from the Backup page to undo.`);
+      await invoke("delete_all_data");
+      setSuccess("All projects and databases deleted. The databases start empty next time.");
       setConfirmingWipe(false);
       onSettingsChanged?.();
     } catch (e) {
@@ -84,13 +89,19 @@ export function SettingsPanel({ onClose, onSettingsChanged, servicesActive = fal
     }
   };
 
+  // Password that will be in effect after saving.
+  const mysqlPw = newMysqlPw.trim() ? newMysqlPw : settings.mysql_root_password || "";
+  const pgPw = newPgPw.trim() ? newPgPw : settings.postgres_root_password || "";
+  const weakDbPassword =
+    (isInstalled(dbComponentKey) && isWeakPassword(mysqlPw)) || (isInstalled("postgresql") && isWeakPassword(pgPw));
+
   const handleSave = async () => {
     // A blank root password would silently open the database to anyone with access.
-    if (isInstalled(dbComponentKey) && !settings.mysql_root_password.trim()) {
+    if (isInstalled(dbComponentKey) && !mysqlPw.trim()) {
       setError(`${getDatabaseDisplayName()} root password can't be empty.`);
       return;
     }
-    if (isInstalled("postgresql") && !settings.postgres_root_password.trim()) {
+    if (isInstalled("postgresql") && !pgPw.trim()) {
       setError("PostgreSQL root password can't be empty.");
       return;
     }
@@ -98,8 +109,12 @@ export function SettingsPanel({ onClose, onSettingsChanged, servicesActive = fal
     setError(null);
     setSuccess(null);
 
+    const toSave = { ...settings, mysql_root_password: mysqlPw, postgres_root_password: pgPw };
     try {
-      await invoke("save_settings", { settings });
+      await invoke("save_settings", { settings: toSave });
+      setSettings(toSave);
+      setNewMysqlPw("");
+      setNewPgPw("");
       setSuccess("Settings saved successfully!");
       onSettingsChanged?.();
     } catch (e) {
@@ -122,6 +137,9 @@ export function SettingsPanel({ onClose, onSettingsChanged, servicesActive = fal
 
   return (
     <div className="page" {...props}>
+      {wiping && (
+        <BusyDialog title="Deleting projects and databases" detail="Removing your projects and all database data." />
+      )}
       <header className="main__header">
         <div>
           <h2>Settings</h2>
@@ -210,6 +228,14 @@ export function SettingsPanel({ onClose, onSettingsChanged, servicesActive = fal
             <span>LAN mode exposes your dev services to every device on this network. Use it only on trusted networks and check your firewall.</span>
           </div>
         )}
+        {settings.listen_all_interfaces && weakDbPassword && (
+          <div className="warn-box" role="alert">
+            <span>
+              A database root password is weak (shorter than 8 characters or easy to guess). Other devices can try it
+              against MySQL, PostgreSQL, phpMyAdmin and Adminer. Set a stronger one under Database passwords.
+            </span>
+          </div>
+        )}
       </section>
 
       {/* Ports */}
@@ -273,26 +299,28 @@ export function SettingsPanel({ onClose, onSettingsChanged, servicesActive = fal
         <section className="card-section" aria-labelledby="s-db-passwords">
           <div className="card-section__head">
             <h3 id="s-db-passwords">Database passwords</h3>
-            <p>Root password for each database. Applied the next time the database starts.</p>
+            <p>Set a new root password. Leave a field empty to keep the current one. Applied the next time the database starts.</p>
           </div>
           {isInstalled(dbComponentKey) && (
             <div className="field">
-              <label htmlFor="mysql-password">{getDatabaseDisplayName()} root password</label>
+              <label htmlFor="mysql-password">New {getDatabaseDisplayName()} root password</label>
               <PasswordInput
                 id="mysql-password"
-                value={settings.mysql_root_password || ""}
-                onChange={(e) => setSettings({ ...settings, mysql_root_password: e.target.value })}
+                value={newMysqlPw}
+                onChange={(e) => setNewMysqlPw(e.target.value)}
+                placeholder="Leave empty to keep the current password"
                 autoComplete="new-password"
               />
             </div>
           )}
           {isInstalled("postgresql") && (
             <div className="field">
-              <label htmlFor="postgres-password">PostgreSQL root password</label>
+              <label htmlFor="postgres-password">New PostgreSQL root password</label>
               <PasswordInput
                 id="postgres-password"
-                value={settings.postgres_root_password || ""}
-                onChange={(e) => setSettings({ ...settings, postgres_root_password: e.target.value })}
+                value={newPgPw}
+                onChange={(e) => setNewPgPw(e.target.value)}
+                placeholder="Leave empty to keep the current password"
                 autoComplete="new-password"
               />
             </div>
@@ -305,7 +333,7 @@ export function SettingsPanel({ onClose, onSettingsChanged, servicesActive = fal
         <div className="card-section--row">
           <div className="card-section__head">
             <h3 id="s-danger">Delete all projects and databases</h3>
-            <p>Empties the projects folder and deletes every MySQL/MariaDB and PostgreSQL database. A backup is taken first.</p>
+            <p>Empties the projects folder and deletes every MySQL/MariaDB and PostgreSQL database. This can't be undone, so back up first on the Backup page.</p>
           </div>
           {!confirmingWipe && (
             <button type="button" className="btn-secondary btn-sm btn-danger" onClick={() => setConfirmingWipe(true)}>
@@ -315,7 +343,7 @@ export function SettingsPanel({ onClose, onSettingsChanged, servicesActive = fal
         </div>
         {confirmingWipe && (
           <div className="danger-confirm">
-            <span>All your sites and data will be gone (you can restore the automatic backup). Delete now?</span>
+            <span>No backup is made. Anything not already in a backup is gone for good. Delete now?</span>
             <div className="main__actions">
               <button type="button" className="btn-secondary btn-xs" onClick={() => setConfirmingWipe(false)} disabled={wiping}>
                 Cancel

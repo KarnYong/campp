@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useCaddyVersion } from "../utils/useCaddyVersion";
 import { showAlert } from "./Dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -63,6 +64,7 @@ const packages = {
 };
 
 export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
+  const caddyVersion = useCaddyVersion();
   const [step, setStep] = useState<WizardStep>("welcome");
   const [currentPlatform, setCurrentPlatform] = useState<string>("linux");
   const [progress, setProgress] = useState<DownloadProgressType>({
@@ -456,7 +458,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
   const currentStepNum = getStepNumber();
   const dbKey = currentPlatform === "linux" ? "mariadb" : "mysql";
   const versionOf = (key: string): string | undefined => {
-    if (key === "caddy") return "2.11.3";
+    if (key === "caddy") return caddyVersion;
     const id = packageSelection[key as keyof PackageSelection];
     return packages[key as keyof typeof packages]?.find((p) => p.id === id)?.version;
   };

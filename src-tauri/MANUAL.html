@@ -284,13 +284,14 @@ $pg = new PDO(
   <p>Change the Web server, PHP-FPM, Database and PostgreSQL ports.</p>
 
   <h3>Database passwords</h3>
-  <p>Change the root password for MySQL/MariaDB and PostgreSQL. The new password takes effect the next time each database starts. Update any PHP code that connects with the old password.</p>
+  <p>Type a new root password for MySQL/MariaDB or PostgreSQL. Fields are empty on purpose: the current password is never shown, and leaving a field empty keeps it. The new password takes effect the next time each database starts. Update any PHP code that connects with the old password.</p>
+  <p>In LAN mode, Settings warns you if a database password is weak (shorter than 8 characters or easy to guess), because other devices on the network can try it.</p>
 
   <h3>ngrok tunnel</h3>
   <p>Paste your ngrok authtoken from <a href="https://ngrok.com/">ngrok.com</a> (Windows only).</p>
 
   <h3>Delete all projects and databases</h3>
-  <p>The danger zone at the bottom of Settings empties the projects folder and deletes every database, for a clean start. CAMPP takes a backup first (marked <em>before delete</em> on the Backup page), so you can undo it with Restore. The databases are recreated empty the next time they start, with your current passwords.</p>
+  <p>The danger zone at the bottom of Settings empties the projects folder and deletes every database, for a clean start. <strong>No backup is made</strong>, so back up first on the Backup page if you might need anything. Existing backups are not deleted. The databases are recreated empty the next time they start, with your current passwords.</p>
 
   <h2 id="ngrok">Sharing with ngrok (Windows)</h2>
   <ol>

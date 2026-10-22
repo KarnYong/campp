@@ -411,8 +411,12 @@ host    all       all   127.0.0.1/32  {auth_method}
 host    all       all   ::1/128        {auth_method}
 "#, auth_method = auth_method);
 
+    // Other devices always need the password, even while `auth_method` is "trust" for
+    // the first-start password setup (that only needs this computer). If no password is
+    // set yet, scram fails and remote logins are simply refused.
     if listen_all_interfaces {
-        content.push_str(&format!("host    all       all   0.0.0.0/0     {}\n", auth_method));
+        content.push_str("host    all       all   0.0.0.0/0     scram-sha-256\n");
+        content.push_str("host    all       all   ::/0          scram-sha-256\n");
     }
 
     let mut file = File::create(&path)
@@ -528,6 +532,26 @@ tunnels:
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn pg_hba_never_trusts_other_devices() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let data = dir.path().to_path_buf();
+
+        // First start in LAN mode: local "trust" to set the password, network still needs it.
+        super::generate_pg_hba_conf(&data, "trust", true).unwrap();
+        let hba = std::fs::read_to_string(data.join("pg_hba.conf")).unwrap();
+        assert!(hba.contains("127.0.0.1/32  trust"));
+        assert!(hba.contains("0.0.0.0/0     scram-sha-256"));
+        assert!(hba.contains("::/0          scram-sha-256"));
+        let remote_lines = hba.lines().filter(|l| l.contains("0.0.0.0/0") || l.contains("::/0"));
+        assert!(remote_lines.clone().count() == 2 && remote_lines.into_iter().all(|l| !l.contains("trust")));
+
+        // Local only: no network lines at all.
+        super::generate_pg_hba_conf(&data, "scram-sha-256", false).unwrap();
+        let hba = std::fs::read_to_string(data.join("pg_hba.conf")).unwrap();
+        assert!(!hba.contains("0.0.0.0/0") && !hba.contains("::/0"));
+    }
+
     #[test]
     fn phpmyadmin_requires_login_and_stores_no_password() {
         use crate::runtime::locator::RuntimePaths;

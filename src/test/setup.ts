@@ -12,6 +12,10 @@ afterEach(() => {
   cleanup();
 });
 
+// jsdom has no modal <dialog> API
+HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) { this.setAttribute('open', ''); };
+HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) { this.removeAttribute('open'); };
+
 // Mock Tauri API
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),

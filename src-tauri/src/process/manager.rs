@@ -654,6 +654,7 @@ fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths, setti
             service_process.child = Some(child);
             service_process.log_file = Some(log_path);
             service_process.pid = service_process.child.as_ref().map(|c| c.id());
+            remove_init_file_when_ready(init_file, service_process.port);
             Ok(())
         }
         Err(e) => {
@@ -949,6 +950,25 @@ pub(crate) fn mysql_string_literal(s: &str) -> String {
     format!("'{}'", s.replace('\\', "\\\\").replace('\'', "\\'"))
 }
 
+/// The init file holds the root password in plain text. MySQL/MariaDB runs it before
+/// accepting connections, so once the port answers it has been read and can go.
+/// Runs in the background so starting the service isn't delayed.
+fn remove_init_file_when_ready(init_file: PathBuf, port: u16) {
+    std::thread::spawn(move || {
+        let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+        for _ in 0..120 {
+            if std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(500)).is_ok() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+        // ponytail: ~2 min ceiling; if the server never answers, the next start overwrites the file anyway.
+        if let Err(e) = fs::remove_file(&init_file) {
+            tracing::warn!("Could not remove MySQL init file {:?}: {}", init_file, e);
+        }
+    });
+}
+
 /// SQL run via `--init-file` on every MySQL/MariaDB start, keeping every root
 /// account on the saved password.
 fn mysql_init_sql(password: &str, listen_all_interfaces: bool) -> String {
@@ -1032,6 +1052,26 @@ mod tests {
         assert_eq!(mysql_string_literal("abc"), "'abc'");
         assert_eq!(mysql_string_literal("a'b"), r"'a\'b'");
         assert_eq!(mysql_string_literal(r"ends\"), r"'ends\\'");
+    }
+
+    #[test]
+    fn init_file_with_password_is_removed_once_the_server_answers() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let file = dir.path().join("mysql_init_user.sql");
+        std::fs::write(&file, "ALTER USER ... IDENTIFIED BY 'secret';").unwrap();
+
+        // Reserve a free port, then release it so nothing is listening yet.
+        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        remove_init_file_when_ready(file.clone(), port);
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+        assert!(file.exists(), "kept while the server isn't accepting connections yet");
+
+        let _server = std::net::TcpListener::bind(("127.0.0.1", port)).unwrap();
+        for _ in 0..40 {
+            if !file.exists() { break; }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        assert!(!file.exists(), "removed once the port answers");
     }
 
     #[test]

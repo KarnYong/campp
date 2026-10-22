@@ -267,16 +267,14 @@ pub fn delete_backup(name: &str) -> Result<(), String> {
     fs::remove_file(backup_path_in(&app_base()?, name)?).map_err(|e| format!("Failed to delete backup: {}", e))
 }
 
-/// Delete every project and all database data. A "pre-delete" backup is taken
-/// first so it can be undone from the Backup page. Databases re-initialize empty
-/// on their next start; the projects folder itself is kept (emptied).
-pub fn delete_all_data() -> Result<String, String> {
-    delete_all_in(&app_base()?, &installed_versions())
+/// Delete every project and all database data. No automatic backup: the UI tells
+/// the user to back up first. Databases re-initialize empty on their next start;
+/// the projects folder itself is kept (emptied), and so are existing backups.
+pub fn delete_all_data() -> Result<(), String> {
+    delete_all_in(&app_base()?)
 }
 
-fn delete_all_in(base: &Path, versions: &HashMap<String, String>) -> Result<String, String> {
-    let safety = create_in(base, Some("pre-delete"), versions)?;
-
+fn delete_all_in(base: &Path) -> Result<(), String> {
     for rel in ["mysql/data", "pgsql/data"] {
         let dir = base.join(rel);
         if dir.exists() {
@@ -287,13 +285,14 @@ fn delete_all_in(base: &Path, versions: &HashMap<String, String>) -> Result<Stri
     if let Ok(entries) = fs::read_dir(&projects) {
         for entry in entries.flatten() {
             let path = entry.path();
-            let res = if path.is_dir() { crate::commands::remove_dir_all_with_retry(&path) } else {
-                fs::remove_file(&path).map_err(|e| format!("Failed to delete {}: {}", path.display(), e))
-            };
-            res.map_err(|e| format!("{} (everything is in backup {})", e, safety))?;
+            if path.is_dir() {
+                crate::commands::remove_dir_all_with_retry(&path)?;
+            } else {
+                fs::remove_file(&path).map_err(|e| format!("Failed to delete {}: {}", path.display(), e))?;
+            }
         }
     }
-    Ok(safety)
+    Ok(())
 }
 
 /// Replace projects + database data with the backup's. Takes a "pre-restore" backup
@@ -517,18 +516,21 @@ mod tests {
     }
 
     #[test]
-    fn delete_all_empties_projects_and_databases_after_a_backup() {
+    fn delete_all_empties_projects_and_databases_but_keeps_backups() {
         let t = fake_install();
         let b = t.path();
-        let safety = delete_all_in(b, &HashMap::new()).unwrap();
+        let earlier = create_in(b, None, &HashMap::new()).unwrap();
+        delete_all_in(b).unwrap();
 
         assert!(b.join("projects").is_dir(), "projects folder kept");
         assert_eq!(fs::read_dir(b.join("projects")).unwrap().count(), 0, "projects folder emptied");
         assert!(!b.join("mysql/data").exists());
         assert!(!b.join("pgsql/data").exists());
-        assert!(b.join("backups").join(&safety).is_file(), "backups are not deleted");
+        let names: Vec<String> = list_in(&b.join("backups")).into_iter().map(|x| x.name).collect();
+        assert_eq!(names, vec![earlier.clone()], "existing backups kept, none added");
 
-        restore_in(b, &safety, &HashMap::new()).unwrap();
+        // The user's own backup brings everything back.
+        restore_in(b, &earlier, &HashMap::new()).unwrap();
         assert_eq!(read(b, "projects/site/index.php"), "v1");
         assert_eq!(read(b, "mysql/data/shop/orders.ibd"), "orders-v1");
     }

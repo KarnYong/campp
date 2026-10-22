@@ -154,6 +154,7 @@ pub fn run() {
             commands::open_manual,
             commands::reset_installation,
             commands::set_theme,
+            commands::get_caddy_version,
             commands::list_backups,
             commands::create_backup,
             commands::restore_backup,
