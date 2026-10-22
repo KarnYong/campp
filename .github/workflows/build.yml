@@ -260,8 +260,18 @@ jobs:
             exit 1
           fi
 
-          xcrun stapler staple "$FILE_TO_NOTARIZE"
-          xcrun stapler validate "$FILE_TO_NOTARIZE"
+          # Stapling fetches the ticket from Apple's CloudKit, which often drops the
+          # connection ("network connection was lost", exit 68) even after Apple
+          # accepted the file. Retry instead of failing the whole release.
+          for attempt in 1 2 3 4 5; do
+            if xcrun stapler staple "$FILE_TO_NOTARIZE" && xcrun stapler validate "$FILE_TO_NOTARIZE"; then
+              exit 0
+            fi
+            echo "Staple/validate attempt $attempt failed, retrying in $((attempt * 15))s..."
+            sleep $((attempt * 15))
+          done
+          echo "Stapling failed after 5 attempts"
+          exit 1
           EOF
 
           chmod +x notarize_and_staple.sh
