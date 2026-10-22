@@ -431,14 +431,11 @@ fn start_caddy(service_process: &mut ServiceProcess, paths: &RuntimePaths, php_p
 
     // Generate phpMyAdmin config only if phpMyAdmin is installed
     if paths.phpmyadmin.join("index.php").exists() {
-        crate::config::generator::generate_phpmyadmin_config(paths, mysql_port, &settings.mysql_root_password)?;
+        crate::config::generator::generate_phpmyadmin_config(paths, mysql_port)?;
     }
     // Generate Adminer launcher only if Adminer is installed
     if paths.adminer.join("adminer.php").exists() {
-        crate::config::generator::generate_adminer_config(
-            paths, mysql_port, &settings.mysql_root_password,
-            settings.postgres_port, &settings.postgres_root_password,
-        )?;
+        crate::config::generator::generate_adminer_config(paths, mysql_port, settings.postgres_port)?;
     }
     // Always regenerate Caddyfile with current port settings
     let caddyfile_path = paths.config_dir.join("Caddyfile");

@@ -184,8 +184,11 @@ pub async fn get_settings() -> Result<crate::config::AppSettings, String> {
 
 /// Save app settings
 #[tauri::command]
-pub async fn save_settings(settings: crate::config::AppSettings, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn save_settings(mut settings: crate::config::AppSettings, state: State<'_, AppState>) -> Result<(), String> {
     let old_settings = crate::config::AppSettings::load();
+    // Theme is owned by set_theme (sidebar switch); keep the stored value so a
+    // Settings page loaded earlier can't revert it with a stale copy.
+    settings.theme = old_settings.theme.clone();
     let mysql_changed = old_settings.mysql_root_password != settings.mysql_root_password;
     let postgres_changed = old_settings.postgres_root_password != settings.postgres_root_password;
 
@@ -272,6 +275,76 @@ pub async fn check_runtime_installed() -> Result<bool, String> {
     Ok(downloader.is_installed())
 }
 
+/// Save only the theme. Unlike save_settings it never restarts services, so it's
+/// allowed while they run.
+#[tauri::command]
+pub async fn set_theme(theme: String) -> Result<(), String> {
+    if !matches!(theme.as_str(), "system" | "light" | "dark") {
+        return Err(format!("Unknown theme: {}", theme));
+    }
+    let mut settings = AppSettings::load();
+    settings.theme = theme;
+    settings.save()
+}
+
+/// Backups copy live database files, so every service must be stopped first.
+fn ensure_all_stopped(state: &State<'_, AppState>) -> Result<(), String> {
+    let manager = state.process_manager.lock()
+        .map_err(|e| format!("Failed to acquire process manager lock: {}", e))?;
+    if manager.get_all_statuses().values()
+        .any(|s| !matches!(s.state, ServiceState::Stopped | ServiceState::Error)) {
+        return Err("Stop all services first.".to_string());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn list_backups() -> Result<Vec<crate::backup::BackupInfo>, String> {
+    crate::backup::list_backups()
+}
+
+/// Back up projects + database data. Returns the backup file name.
+#[tauri::command]
+pub async fn create_backup(state: State<'_, AppState>) -> Result<String, String> {
+    ensure_all_stopped(&state)?;
+    tokio::task::spawn_blocking(|| crate::backup::create_backup(None))
+        .await.map_err(|e| format!("Task error: {}", e))?
+}
+
+/// Restore a backup. Returns the name of the automatic "pre-restore" backup.
+#[tauri::command]
+pub async fn restore_backup(state: State<'_, AppState>, name: String) -> Result<String, String> {
+    ensure_all_stopped(&state)?;
+    kill_runtime_processes();
+    tokio::task::spawn_blocking(move || crate::backup::restore_backup(&name))
+        .await.map_err(|e| format!("Task error: {}", e))?
+}
+
+/// Danger zone: delete all projects and database data (after an automatic backup).
+/// Returns the safety backup's name.
+#[tauri::command]
+pub async fn delete_all_data(state: State<'_, AppState>) -> Result<String, String> {
+    ensure_all_stopped(&state)?;
+    kill_runtime_processes();
+    tokio::task::spawn_blocking(crate::backup::delete_all_data)
+        .await.map_err(|e| format!("Task error: {}", e))?
+}
+
+/// Delete a backup file. Doesn't touch live data, so services may be running.
+#[tauri::command]
+pub async fn delete_backup(name: String) -> Result<(), String> {
+    crate::backup::delete_backup(&name)
+}
+
+#[tauri::command]
+pub async fn open_backups_folder() -> Result<(), String> {
+    let dir = crate::backup::backups_dir()?;
+    fs::create_dir_all(&dir).map_err(|e| format!("Failed to create backups folder: {}", e))?;
+    // open_path opens the folder itself (Explorer / Finder / xdg-open). reveal_item_in_dir
+    // needs a FileManager1 D-Bus service on Linux, which many desktops don't provide.
+    tauri_plugin_opener::open_path(&dir, None::<&str>).map_err(|e| format!("Failed to open folder: {}", e))
+}
+
 /// Reset installation (for testing/debug - deletes runtime directory)
 #[tauri::command]
 pub async fn reset_installation(state: State<'_, AppState>) -> Result<String, String> {
@@ -322,7 +395,7 @@ fn kill_runtime_processes() {
     std::thread::sleep(std::time::Duration::from_millis(1000));
 }
 
-fn remove_dir_all_with_retry(path: &std::path::Path) -> Result<(), String> {
+pub(crate) fn remove_dir_all_with_retry(path: &std::path::Path) -> Result<(), String> {
     let mut attempts = 0;
     let max_attempts = 5;
 
@@ -336,9 +409,9 @@ fn remove_dir_all_with_retry(path: &std::path::Path) -> Result<(), String> {
                 kill_runtime_processes();
             }
             Err(e) => return Err(format!(
-                "Failed to remove runtime directory after {} attempts: {}. \
+                "Failed to remove {} after {} attempts: {}. \
                  Please stop all services manually and try again.",
-                max_attempts, e
+                path.display(), max_attempts, e
             )),
         }
     }

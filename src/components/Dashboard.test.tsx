@@ -36,6 +36,27 @@ describe('Dashboard Component', () => {
     },
   };
 
+  // Answer each backend command with a realistic value. Returning the service map
+  // for every command made get_install_dir hand an object to a <span> and crashed
+  // the render.
+  const installed = { caddy: '2.11.7', php: '8.5.12', mysql: '8.4.11' };
+  const mockBackend = (statuses: unknown, overrides: Record<string, unknown> = {}) => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd in overrides) {
+        const v = overrides[cmd];
+        if (v instanceof Error) throw v;
+        return v;
+      }
+      switch (cmd) {
+        case 'get_all_statuses': return statuses;
+        case 'get_installed_versions': return installed;
+        case 'get_settings': return { listen_all_interfaces: false, theme: 'system', project_root: 'C:/CAMPP/projects' };
+        case 'get_install_dir': return 'C:/CAMPP';
+        default: return null;
+      }
+    });
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     // Don't use fake timers - they cause issues with async/await in tests
@@ -47,7 +68,7 @@ describe('Dashboard Component', () => {
 
   describe('TC-PM-DASH-01: Initial Display', () => {
     it('should render all three service cards', async () => {
-      vi.mocked(invoke).mockResolvedValue(mockServiceMap);
+      mockBackend(mockServiceMap);
 
       render(<Dashboard />);
 
@@ -57,13 +78,13 @@ describe('Dashboard Component', () => {
       });
 
       // Check service cards are rendered
-      expect(screen.getByTestId('service-card-caddy')).toBeInTheDocument();
+      expect(await screen.findByTestId('service-card-caddy')).toBeInTheDocument();
       expect(screen.getByTestId('service-card-php-fpm')).toBeInTheDocument();
       expect(screen.getByTestId('service-card-mysql')).toBeInTheDocument();
     });
 
     it('should fetch service statuses on mount', async () => {
-      vi.mocked(invoke).mockResolvedValue(mockServiceMap);
+      mockBackend(mockServiceMap);
 
       render(<Dashboard />);
 
@@ -73,7 +94,7 @@ describe('Dashboard Component', () => {
     });
 
     it('should display status bar', async () => {
-      vi.mocked(invoke).mockResolvedValue(mockServiceMap);
+      mockBackend(mockServiceMap);
 
       render(<Dashboard />);
 
@@ -86,7 +107,7 @@ describe('Dashboard Component', () => {
 
   describe('TC-PM-DASH-02: Status Refresh', () => {
     it('should call get_all_statuses multiple times', async () => {
-      vi.mocked(invoke).mockResolvedValue(mockServiceMap);
+      mockBackend(mockServiceMap);
 
       render(<Dashboard />);
 
@@ -107,9 +128,7 @@ describe('Dashboard Component', () => {
 
   describe('TC-PM-DASH-03: Start Service', () => {
     it('should call start_service when Start button is clicked', async () => {
-      vi.mocked(invoke)
-        .mockResolvedValueOnce(mockServiceMap) // get_all_statuses
-        .mockResolvedValueOnce({ success: true }); // start_service
+      mockBackend(mockServiceMap);
 
       render(<Dashboard />);
 
@@ -134,9 +153,7 @@ describe('Dashboard Component', () => {
         },
       };
 
-      vi.mocked(invoke)
-        .mockResolvedValueOnce(runningMap) // get_all_statuses
-        .mockResolvedValueOnce({ success: true }); // stop_service
+      mockBackend(runningMap);
 
       render(<Dashboard />);
 
@@ -161,9 +178,7 @@ describe('Dashboard Component', () => {
         },
       };
 
-      vi.mocked(invoke)
-        .mockResolvedValueOnce(runningMap) // get_all_statuses
-        .mockResolvedValueOnce({ success: true }); // restart_service
+      mockBackend(runningMap);
 
       render(<Dashboard />);
 
@@ -181,18 +196,13 @@ describe('Dashboard Component', () => {
   describe('TC-PM-DASH-06: Error Handling', () => {
     it('should display error when service fails to start', async () => {
       const errorMessage = 'Port 8080 already in use';
-      vi.mocked(invoke).mockImplementation(async (cmd: string) => {
-        if (cmd === 'get_all_statuses') {
-          return {
-            ...mockServiceMap,
-            [ServiceType.Caddy]: {
-              ...mockServiceMap[ServiceType.Caddy],
-              state: ServiceState.Error,
-              error_message: errorMessage,
-            },
-          };
-        }
-        return { success: false, error: errorMessage };
+      mockBackend({
+        ...mockServiceMap,
+        [ServiceType.Caddy]: {
+          ...mockServiceMap[ServiceType.Caddy],
+          state: ServiceState.Error,
+          error_message: errorMessage,
+        },
       });
 
       render(<Dashboard />);
@@ -203,18 +213,13 @@ describe('Dashboard Component', () => {
     });
 
     it('should show error state badge when service fails', async () => {
-      vi.mocked(invoke).mockImplementation(async (cmd: string) => {
-        if (cmd === 'get_all_statuses') {
-          return {
-            ...mockServiceMap,
-            [ServiceType.PhpFpm]: {
-              ...mockServiceMap[ServiceType.PhpFpm],
-              state: ServiceState.Error,
-              error_message: 'Failed to start',
-            },
-          };
-        }
-        return {};
+      mockBackend({
+        ...mockServiceMap,
+        [ServiceType.PhpFpm]: {
+          ...mockServiceMap[ServiceType.PhpFpm],
+          state: ServiceState.Error,
+          error_message: 'Failed to start',
+        },
       });
 
       render(<Dashboard />);
@@ -228,7 +233,7 @@ describe('Dashboard Component', () => {
 
   describe('TC-PM-DASH-07: Quick Actions', () => {
     it('should display version information', async () => {
-      vi.mocked(invoke).mockResolvedValue(mockServiceMap);
+      mockBackend(mockServiceMap);
 
       render(<Dashboard />);
 
@@ -255,7 +260,7 @@ describe('Dashboard Component', () => {
         },
       };
 
-      vi.mocked(invoke).mockResolvedValue(allRunningMap);
+      mockBackend(allRunningMap);
 
       render(<Dashboard />);
 

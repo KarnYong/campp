@@ -9,6 +9,9 @@ import { ServiceCard } from "./ServiceCard";
 import { StatusBar } from "./StatusBar";
 import { SettingsPanel } from "./SettingsPanel";
 import { DebugPage } from "./DebugPage";
+import { BackupPage } from "./BackupPage";
+import { ComponentsPage } from "./ComponentsPage";
+import { ThemeSwitch } from "./ThemeSwitch";
 import { Icon } from "./icons";
 import { detectPlatform } from "../utils/platform";
 import logoUrl from "../assets/melivecode-logo.png";
@@ -22,7 +25,7 @@ export function Dashboard() {
   // observe the transient Starting/Stopping state) — track it here so the card
   // can show a spinner immediately on click.
   const [busy, setBusy] = useState<Partial<Record<ServiceType, "start" | "stop" | "restart">>>({});
-  const [view, setView] = useState<"services" | "settings" | "debug">("services");
+  const [view, setView] = useState<"services" | "components" | "settings" | "backup" | "debug">("services");
   const [projectRoot, setProjectRoot] = useState<string>("");
   const [installDir, setInstallDir] = useState<string>("");
   const [installedVersions, setInstalledVersions] = useState<Record<string, string>>({});
@@ -269,14 +272,30 @@ export function Dashboard() {
             </button>
             <button
               type="button"
+              className={`nav-item${view === "components" ? " nav-item--active" : ""}`}
+              aria-current={view === "components" ? "page" : undefined}
+              onClick={() => setView("components")}
+            >
+              <Icon name="database" size={16} />
+              Components
+            </button>
+            <button
+              type="button"
               className={`nav-item${view === "settings" ? " nav-item--active" : ""}`}
               aria-current={view === "settings" ? "page" : undefined}
               onClick={() => setView("settings")}
-              disabled={anyServiceActive && view !== "settings"}
-              title={anyServiceActive ? "Stop all services to change settings" : "Open Settings"}
             >
               <Icon name="sliders" size={16} />
               Settings
+            </button>
+            <button
+              type="button"
+              className={`nav-item${view === "backup" ? " nav-item--active" : ""}`}
+              aria-current={view === "backup" ? "page" : undefined}
+              onClick={() => setView("backup")}
+            >
+              <Icon name="archive" size={16} />
+              Backup
             </button>
             <button
               type="button"
@@ -291,6 +310,7 @@ export function Dashboard() {
 
           <div className="sidebar__footer">
             <StatusBar services={services} data-testid="status-bar" />
+            <ThemeSwitch />
             <button
               type="button"
               className="nav-item"
@@ -312,12 +332,23 @@ export function Dashboard() {
         <main className="main">
           {view === "settings" ? (
             <SettingsPanel
+              servicesActive={anyServiceActive}
               onClose={() => setView("services")}
               onSettingsChanged={async () => {
                 await refreshStatuses();
                 await loadInstalledVersions();
               }}
             />
+          ) : view === "components" ? (
+            <ComponentsPage
+              servicesActive={anyServiceActive}
+              onChanged={async () => {
+                await refreshStatuses();
+                await loadInstalledVersions();
+              }}
+            />
+          ) : view === "backup" ? (
+            <BackupPage servicesActive={anyServiceActive} />
           ) : view === "debug" ? (
             <DebugPage services={services} />
           ) : (<>

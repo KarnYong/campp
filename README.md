@@ -65,13 +65,14 @@ rm -rf ~/.local/share/campp
 - **No admin required**: uses non-default ports to avoid conflicts with system services
 - **Self-contained**: every binary lives in CAMPP's own folder, with no separate installations
 - **Version choice**: choose PHP, database, and tool versions in the setup wizard
-- **Optional components**: install only what you need (MySQL/MariaDB, PostgreSQL, phpMyAdmin, Adminer, ngrok), and add or remove components later from Settings
+- **Optional components**: install only what you need (MySQL/MariaDB, PostgreSQL, phpMyAdmin, Adminer, ngrok), and add, reinstall or remove components later on the Components page
 - **Service management**: start, stop, and restart services individually, or all at once
 - **Port configuration**: change each service's port in Settings
 - **LAN mode**: make services reachable from other devices on your network
 - **Public tunnels (ngrok)**: share your local site at a public URL, handy for webhooks and demos (**Windows only**)
 - **Database root passwords**: set during setup for MySQL/MariaDB and PostgreSQL. You can change them later in **Settings → Database passwords**.
-- **Adminer launcher**: one-click sign-in to your local MySQL or PostgreSQL
+- **Backup & restore**: projects and all database data in one zip, restorable from the Backup page
+- **Adminer launcher**: opens the login for your local MySQL or PostgreSQL with server and user filled in
 - **Quick open**: website, phpMyAdmin, Adminer, and projects folder are one click away
 - **Themes**: System, Light, and Dark
 - **Debug page**: paths, port checks, copyable diagnostics, and a full reset

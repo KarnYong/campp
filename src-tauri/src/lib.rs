@@ -1,4 +1,5 @@
 // Modules
+mod backup;
 mod commands;
 mod config;
 mod database;
@@ -152,6 +153,13 @@ pub fn run() {
             commands::open_folder,
             commands::open_manual,
             commands::reset_installation,
+            commands::set_theme,
+            commands::list_backups,
+            commands::create_backup,
+            commands::restore_backup,
+            commands::delete_backup,
+            commands::delete_all_data,
+            commands::open_backups_folder,
             commands::cleanup_all_services,
             commands::uninstall_component,
             commands::get_debug_info,

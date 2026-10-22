@@ -103,7 +103,7 @@ export function ServiceCard({
       </span>
 
       {notInstalled ? (
-        <span className="service-row__note">Install from Settings</span>
+        <span className="service-row__note">Install from Components</span>
       ) : (
         <>
           {isRunning ? (

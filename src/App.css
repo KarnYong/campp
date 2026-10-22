@@ -951,6 +951,20 @@ select.input option {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
+/* Full-width icon segment (sidebar theme switch) */
+.seg--block {
+  display: flex;
+}
+
+.seg--block button {
+  flex: 1;
+  height: 26px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* Port tiles (Settings) */
 .tile-grid {
   display: grid;
@@ -1011,6 +1025,15 @@ select.input option {
 .field label {
   font-size: 12px;
   font-weight: 500;
+}
+
+/* Groups sections without affecting layout; only used to disable everything at once */
+.fieldset-plain {
+  display: contents;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
 }
 
 .warn-box {

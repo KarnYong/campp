@@ -106,8 +106,10 @@
     <li><a href="#dashboard">Dashboard</a></li>
     <li><a href="#database">Database Connection</a></li>
     <li><a href="#projects">Project Folder</a></li>
+    <li><a href="#components">Components</a></li>
     <li><a href="#settings">Settings</a></li>
     <li><a href="#ngrok">Sharing with ngrok</a></li>
+    <li><a href="#backup">Backup &amp; Restore</a></li>
     <li><a href="#debug">Debug Page</a></li>
     <li><a href="#troubleshooting">Troubleshooting</a></li>
     <li><a href="#data">Data Locations</a></li>
@@ -174,16 +176,16 @@
   </div>
 
   <h2 id="dashboard">Dashboard</h2>
-  <p>The sidebar has <strong>Services</strong>, <strong>Settings</strong>, <strong>Debug</strong> and <strong>User manual</strong>.</p>
+  <p>The sidebar has <strong>Services</strong>, <strong>Components</strong>, <strong>Settings</strong>, <strong>Backup</strong>, <strong>Debug</strong> and <strong>User manual</strong>. The three icons above User manual switch the theme (System, Light, Dark) at any time.</p>
 
   <h3>Services</h3>
-  <p>Each installed service shows its status (Running, Stopped or Error), its port, and Start / Stop / Restart controls. Use <strong>Start all</strong> or <strong>Stop all</strong> to control everything at once. If a component isn't installed, its card says <em>Install from Settings</em>.</p>
+  <p>Each installed service shows its status (Running, Stopped or Error), its port, and Start / Stop / Restart controls. Use <strong>Start all</strong> or <strong>Stop all</strong> to control everything at once. If a component isn't installed, its card says <em>Install from Components</em>.</p>
 
   <h3>Quick open</h3>
   <ul>
     <li><strong>Website</strong> - Opens <code>http://localhost:8080</code></li>
-    <li><strong>phpMyAdmin</strong> - Opens <code>/phpmyadmin</code></li>
-    <li><strong>Adminer</strong> - Opens <code>/adminer</code>, a launcher that signs you in to MySQL or PostgreSQL with one click</li>
+    <li><strong>phpMyAdmin</strong> - Opens <code>/phpmyadmin</code>. Log in as <code>root</code> with your MySQL/MariaDB password.</li>
+    <li><strong>Adminer</strong> - Opens <code>/adminer</code>, a launcher that opens the login for MySQL or PostgreSQL with server and user filled in. Type your database password.</li>
     <li><strong>Projects folder</strong> - Opens your project folder in the file manager</li>
   </ul>
   <p>Website, phpMyAdmin and Adminer are enabled only while Caddy is running.</p>
@@ -261,16 +263,13 @@ $pg = new PDO(
   </ul>
   <p>When the folder has no <code>index.php</code>, <code>http://localhost:8080</code> shows the CAMPP welcome page.</p>
 
+  <h2 id="components">Components</h2>
+  <p>Open <strong>Components</strong> in the sidebar to install, reinstall (for example, to switch version) or uninstall each component. At least one component must remain installed. PHP is required by Caddy and phpMyAdmin.</p>
+
   <h2 id="settings">Settings</h2>
   <div class="warning">
-    <strong>Stop all services before changing settings.</strong> Changes apply the next time services start.
+    <strong>Stop all services before changing settings or components.</strong> Changes apply the next time services start.
   </div>
-
-  <h3>Appearance</h3>
-  <p>Choose the System, Light or Dark theme.</p>
-
-  <h3>Ports</h3>
-  <p>Change the Web server, PHP-FPM, Database and PostgreSQL ports.</p>
 
   <h3>Network</h3>
   <ul>
@@ -281,8 +280,8 @@ $pg = new PDO(
     <strong>Warning:</strong> LAN mode exposes your development services to every device on the network. Use it only on trusted, private networks and check your firewall.
   </div>
 
-  <h3>Components</h3>
-  <p>Install, reinstall (for example, to switch version) or uninstall each component. At least one component must remain installed. PHP is required by Caddy and phpMyAdmin.</p>
+  <h3>Ports</h3>
+  <p>Change the Web server, PHP-FPM, Database and PostgreSQL ports.</p>
 
   <h3>Database passwords</h3>
   <p>Change the root password for MySQL/MariaDB and PostgreSQL. The new password takes effect the next time each database starts. Update any PHP code that connects with the old password.</p>
@@ -290,15 +289,30 @@ $pg = new PDO(
   <h3>ngrok tunnel</h3>
   <p>Paste your ngrok authtoken from <a href="https://ngrok.com/">ngrok.com</a> (Windows only).</p>
 
+  <h3>Delete all projects and databases</h3>
+  <p>The danger zone at the bottom of Settings empties the projects folder and deletes every database, for a clean start. CAMPP takes a backup first (marked <em>before delete</em> on the Backup page), so you can undo it with Restore. The databases are recreated empty the next time they start, with your current passwords.</p>
+
   <h2 id="ngrok">Sharing with ngrok (Windows)</h2>
   <ol>
-    <li>Install ngrok in the setup wizard or from Settings &rarr; Components</li>
+    <li>Install ngrok in the setup wizard or on the <strong>Components</strong> page</li>
     <li>Create a free account at <a href="https://ngrok.com/">ngrok.com</a> and copy your authtoken</li>
     <li>Start Caddy, then start ngrok. If no authtoken is saved, CAMPP asks for it.</li>
     <li>The public URL appears on the ngrok service card. Anyone with the link can open your site.</li>
   </ol>
   <div class="note">
     <strong>Windows Defender</strong> sometimes quarantines ngrok as a false positive. Settings shows a notice that can add the CAMPP folders to Defender's exclusion list, or lists the manual steps.
+  </div>
+
+  <h2 id="backup">Backup &amp; Restore</h2>
+  <p>Open <strong>Backup</strong> in the sidebar and click <strong>Back up now</strong> to save your projects folder and all database data (MySQL/MariaDB and PostgreSQL) into one zip in the backups folder. Click <strong>Restore</strong> next to a backup to put everything back as it was, or <strong>Delete</strong> to remove a backup you no longer need.</p>
+  <ul>
+    <li>Before restoring, CAMPP backs up your current state (marked <em>before restore</em>), so you can undo a restore.</li>
+    <li>Database passwords are not taken from the backup. The passwords set in Settings stay in effect.</li>
+    <li>A backup can only be restored on the same database type and PostgreSQL major version, and not onto an older MySQL/MariaDB. CAMPP checks this and tells you if it can't.</li>
+    <li>To move to another computer, copy the zip into that computer's backups folder (<strong>Open folder</strong>). Database data can only be restored on the same operating system (Windows, macOS or Linux), because MySQL and PostgreSQL store their files differently on each. To move databases to another system, export them with phpMyAdmin or Adminer and import them there.</li>
+  </ul>
+  <div class="warning">
+    <strong>Keep a copy elsewhere.</strong> Backups are stored inside CAMPP's folder. Uninstalling CAMPP on Windows may remove them.
   </div>
 
   <h2 id="debug">Debug Page</h2>
@@ -308,7 +322,7 @@ $pg = new PDO(
     <li><strong>Folders</strong> - Runtime, resource, downloads and executable paths</li>
     <li><strong>Port check</strong> - Whether each configured port is free for CAMPP to use</li>
     <li><strong>Copy diagnostics</strong> - Copies everything to the clipboard, ready for a bug report</li>
-    <li><strong>Reset installation</strong> - Stops every service and deletes all binaries, databases and settings. Your projects folder is kept.</li>
+    <li><strong>Reset installation</strong> - Stops every service and deletes all binaries, databases and settings. Your projects folder and backups are kept.</li>
   </ul>
 
   <h2 id="troubleshooting">Troubleshooting</h2>
@@ -333,7 +347,7 @@ $pg = new PDO(
     <li>The setup wizard runs again to reinstall</li>
   </ol>
   <div class="warning">
-    <strong>Back up your databases first</strong> (for example, export them with phpMyAdmin). A reset deletes all database data.
+    <strong>Back up first</strong> on the <strong>Backup</strong> page. A reset deletes all database data.
   </div>
 
   <h3>Antivirus detects a threat</h3>

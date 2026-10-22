@@ -1,42 +1,20 @@
 import { invoke } from "@tauri-apps/api/core";
-import { showAlert, showConfirm } from "./Dialog";
+import { showConfirm } from "./Dialog";
 import { PasswordInput } from "./PasswordInput";
 import { useState, useEffect, useCallback } from "react";
 import { AppSettings, getDatabaseDisplayName } from "../types/services";
 import { detectPlatform } from "../utils/platform";
-import { applyTheme, themeLabel } from "../utils/theme";
-import { NgrokAntivirusNotice } from "./NgrokAntivirusNotice";
-import { ReinstallDialog } from "./ReinstallDialog";
 import { LOGOS } from "../assets/logos";
 
 interface SettingsPanelProps {
   onClose: () => void;
   onSettingsChanged?: () => void;
+  /** Any service running: settings are read-only until everything is stopped. */
+  servicesActive?: boolean;
   [key: string]: any; // Allow additional props like data-testid
 }
 
-interface ComponentInfo {
-  key: string;
-  displayName: string;
-  installed: boolean;
-  version: string | null;
-}
-
-const COMPONENT_ORDER: { key: string; getDisplayName: () => string }[] = (() => {
-  const platform = detectPlatform();
-  const dbKey = platform === "linux" ? "mariadb" : "mysql";
-  return [
-    { key: "caddy", getDisplayName: () => "Caddy" },
-    { key: "php", getDisplayName: () => "PHP" },
-    { key: dbKey, getDisplayName: () => getDatabaseDisplayName(platform) },
-    { key: "phpmyadmin", getDisplayName: () => "phpMyAdmin" },
-    { key: "postgresql", getDisplayName: () => "PostgreSQL" },
-    { key: "adminer", getDisplayName: () => "Adminer" },
-    { key: "ngrok", getDisplayName: () => "ngrok" },
-  ];
-})();
-
-export function SettingsPanel({ onClose, onSettingsChanged, ...props }: SettingsPanelProps) {
+export function SettingsPanel({ onClose, onSettingsChanged, servicesActive = false, ...props }: SettingsPanelProps) {
   const dbComponentKey = detectPlatform() === "linux" ? "mariadb" : "mysql";
   const [settings, setSettings] = useState<AppSettings>({
     web_port: 8080,
@@ -53,11 +31,10 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [components, setComponents] = useState<ComponentInfo[]>([]);
-  const [componentAction, setComponentAction] = useState<string | null>(null);
-  // Last uninstall error (install errors are shown inside ReinstallDialog).
-  const [componentError, setComponentError] = useState<string | null>(null);
-  const [installTarget, setInstallTarget] = useState<ComponentInfo | null>(null);
+  const [confirmingWipe, setConfirmingWipe] = useState(false);
+  const [wiping, setWiping] = useState(false);
+  // Installed component -> version; ports/passwords only show for installed ones.
+  const [installed, setInstalled] = useState<Record<string, string>>({});
 
   const loadSettings = useCallback(async () => {
     try {
@@ -72,14 +49,7 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
 
   const loadComponents = useCallback(async () => {
     try {
-      const versions = await invoke<Record<string, string>>("check_existing_components");
-      const infos: ComponentInfo[] = COMPONENT_ORDER.map(({ key, getDisplayName }) => ({
-        key,
-        displayName: getDisplayName(),
-        installed: !!versions[key],
-        version: versions[key] || null,
-      }));
-      setComponents(infos);
+      setInstalled(await invoke<Record<string, string>>("check_existing_components"));
     } catch (e) {
       console.error("Failed to load components:", e);
     }
@@ -90,18 +60,29 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
     loadComponents();
   }, [loadSettings, loadComponents]);
 
-  const refreshComponents = async () => {
-    await loadComponents();
-    onSettingsChanged?.();
-  };
-
   const handlePortChange = (field: keyof AppSettings, value: string) => {
     const numValue = parseInt(value, 10);
     if (isNaN(numValue) || numValue < 1 || numValue > 65535) return;
     setSettings({ ...settings, [field]: numValue });
   };
 
-  const isInstalled = (key: string) => !!components.find((c) => c.key === key)?.installed;
+  const isInstalled = (key: string) => !!installed[key];
+
+  const handleDeleteAll = async () => {
+    setWiping(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const safety = await invoke<string>("delete_all_data");
+      setSuccess(`All projects and databases deleted. A backup was saved first (${safety}); restore it from the Backup page to undo.`);
+      setConfirmingWipe(false);
+      onSettingsChanged?.();
+    } catch (e) {
+      setError(`Delete failed: ${e}`);
+    } finally {
+      setWiping(false);
+    }
+  };
 
   const handleSave = async () => {
     // A blank root password would silently open the database to anyone with access.
@@ -128,44 +109,6 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
     }
   };
 
-  const handleUninstall = async (componentKey: string) => {
-    clearComponentError();
-    if (componentKey === "php" || componentKey === "mysql" || componentKey === "mariadb") {
-      const name = componentKey === "php" ? "PHP" : getDatabaseDisplayName();
-      const msg = componentKey === "php"
-        ? "PHP is required by Caddy for serving PHP files and phpMyAdmin. Uninstall anyway?"
-        : `${getDatabaseDisplayName()} is required by phpMyAdmin. Uninstall anyway?`;
-      if (!(await showConfirm(`Uninstall ${name}?`, msg, "Uninstall", true))) return;
-    }
-
-    // Prevent uninstalling last component
-    const installedCount = components.filter(c => c.installed).length;
-    if (installedCount <= 1) {
-      await showAlert("Can't uninstall", "At least one component must remain installed.");
-      return;
-    }
-
-    const actionKey = `uninstall-${componentKey}`;
-    setComponentAction(actionKey);
-    try {
-      await invoke("uninstall_component", { component: componentKey });
-      await refreshComponents();
-    } catch (e) {
-      setComponentError(`Failed to uninstall: ${e}`);
-    } finally {
-      setComponentAction(null);
-    }
-  };
-
-  // Install/reinstall happen in ReinstallDialog (version picker + progress).
-  const openInstallDialog = (componentKey: string) => {
-    clearComponentError();
-    setInstallTarget(components.find((c) => c.key === componentKey) ?? null);
-  };
-
-  // Clear a stale error when a new action starts.
-  const clearComponentError = () => setComponentError(null);
-
   if (loading) {
     return <p className="page-loading">Loading settings…</p>;
   }
@@ -188,7 +131,13 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
           <button type="button" className="btn-secondary btn-sm" onClick={onClose} disabled={saving}>
             Cancel
           </button>
-          <button type="button" className="btn-primary btn-sm" onClick={handleSave} disabled={saving}>
+          <button
+            type="button"
+            className="btn-primary btn-sm"
+            onClick={handleSave}
+            disabled={saving || servicesActive}
+            title={servicesActive ? "Stop all services first" : undefined}
+          >
             {saving ? "Saving…" : "Save changes"}
           </button>
         </div>
@@ -205,61 +154,14 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
         </div>
       )}
 
-      {/* Appearance */}
-      <section className="card-section card-section--row" aria-labelledby="s-appearance">
-        <div className="card-section__head">
-          <h3 id="s-appearance">Appearance</h3>
-          <p>{themeLabel(settings.theme)}</p>
+      {servicesActive && (
+        <div className="warn-box">
+          <span>Stop all services to change settings. Ports, network and passwords can't be changed while services are running.</span>
         </div>
-        <div className="seg" role="group" aria-label="Theme">
-          {(["system", "light", "dark"] as const).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              aria-pressed={(settings.theme || "system") === mode}
-              onClick={() => {
-                setSettings({ ...settings, theme: mode });
-                applyTheme(mode);
-              }}
-            >
-              {mode.charAt(0).toUpperCase() + mode.slice(1)}
-            </button>
-          ))}
-        </div>
-      </section>
+      )}
 
-      {/* Ports */}
-      <section className="card-section" aria-labelledby="s-ports">
-        <div className="card-section__head">
-          <h3 id="s-ports">Ports</h3>
-          <p>Non-default ports, so CAMPP runs without admin rights.</p>
-        </div>
-        <div className="tile-grid">
-          {ports.map((p) => {
-            const installed = isInstalled(p.key);
-            return (
-              <div key={p.id} className={`tile${installed ? "" : " tile--disabled"}`}>
-                <span className="logo-tile logo-tile--sm"><img src={LOGOS[p.key]} alt="" /></span>
-                <label htmlFor={p.id} className="tile__label">
-                  <span>{p.label}</span>
-                  <span>{installed ? p.hint : "Not installed"}</span>
-                </label>
-                <input
-                  id={p.id}
-                  type="number"
-                  className="input input--port mono"
-                  value={settings[p.field] as number}
-                  onChange={(e) => handlePortChange(p.field, e.target.value)}
-                  min={1}
-                  max={65535}
-                  disabled={!installed}
-                />
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
+      {/* Read-only while services run: disabling the fieldset disables every control inside. */}
+      <fieldset className="fieldset-plain" disabled={servicesActive}>
       {/* Network */}
       <section className="card-section" aria-labelledby="s-network">
         <div className="card-section--row">
@@ -308,6 +210,38 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
             <span>LAN mode exposes your dev services to every device on this network. Use it only on trusted networks and check your firewall.</span>
           </div>
         )}
+      </section>
+
+      {/* Ports */}
+      <section className="card-section" aria-labelledby="s-ports">
+        <div className="card-section__head">
+          <h3 id="s-ports">Ports</h3>
+          <p>Non-default ports, so CAMPP runs without admin rights.</p>
+        </div>
+        <div className="tile-grid">
+          {ports.map((p) => {
+            const installed = isInstalled(p.key);
+            return (
+              <div key={p.id} className={`tile${installed ? "" : " tile--disabled"}`}>
+                <span className="logo-tile logo-tile--sm"><img src={LOGOS[p.key]} alt="" /></span>
+                <label htmlFor={p.id} className="tile__label">
+                  <span>{p.label}</span>
+                  <span>{installed ? p.hint : "Not installed"}</span>
+                </label>
+                <input
+                  id={p.id}
+                  type="number"
+                  className="input input--port mono"
+                  value={settings[p.field] as number}
+                  onChange={(e) => handlePortChange(p.field, e.target.value)}
+                  min={1}
+                  max={65535}
+                  disabled={!installed}
+                />
+              </div>
+            );
+          })}
+        </div>
       </section>
 
       {/* ngrok — only visible when ngrok is installed */}
@@ -366,93 +300,35 @@ export function SettingsPanel({ onClose, onSettingsChanged, ...props }: Settings
         </section>
       )}
 
-      {/* Components */}
-      <section className="card-section" aria-labelledby="s-components">
-        <div className="card-section__head">
-          <h3 id="s-components">Components</h3>
-          <p>Install, reinstall or remove the software CAMPP runs.</p>
+      {/* Danger zone */}
+      <section className="card-section card-section--danger" aria-labelledby="s-danger">
+        <div className="card-section--row">
+          <div className="card-section__head">
+            <h3 id="s-danger">Delete all projects and databases</h3>
+            <p>Empties the projects folder and deletes every MySQL/MariaDB and PostgreSQL database. A backup is taken first.</p>
+          </div>
+          {!confirmingWipe && (
+            <button type="button" className="btn-secondary btn-sm btn-danger" onClick={() => setConfirmingWipe(true)}>
+              Delete everything…
+            </button>
+          )}
         </div>
-        {componentError && (
-          <div className="error-box">
-            <p className="error-box-text" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", marginBottom: "0.5rem" }}>
-              {componentError}
-            </p>
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-              <button type="button" onClick={clearComponentError} className="btn-secondary btn-xs btn-danger">
-                Dismiss
+        {confirmingWipe && (
+          <div className="danger-confirm">
+            <span>All your sites and data will be gone (you can restore the automatic backup). Delete now?</span>
+            <div className="main__actions">
+              <button type="button" className="btn-secondary btn-xs" onClick={() => setConfirmingWipe(false)} disabled={wiping}>
+                Cancel
+              </button>
+              <button type="button" className="btn-danger-solid btn-xs" onClick={handleDeleteAll} disabled={wiping}>
+                {wiping ? "Deleting…" : "Yes, delete everything"}
               </button>
             </div>
           </div>
         )}
-        <div className="list-box">
-          {components.map((comp) => {
-            const isActing = componentAction === `uninstall-${comp.key}`;
-            const canUninstall = comp.installed && components.filter((c) => c.installed).length > 1;
-            return (
-              <div key={comp.key} className="list-row">
-                <span className="logo-tile logo-tile--sm"><img src={LOGOS[comp.key]} alt="" /></span>
-                <div className="list-row__main">
-                  <span>{comp.displayName}</span>
-                  {comp.installed && comp.version ? (
-                    <span className="mono">v{comp.version}</span>
-                  ) : (
-                    <span className="list-row__warn">Not installed</span>
-                  )}
-                </div>
-                {isActing && (
-                  <span className="list-row__busy">
-                    <span className="btn-spinner" aria-hidden="true" />
-                    Working…
-                  </span>
-                )}
-                {comp.installed ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => openInstallDialog(comp.key)}
-                      disabled={!!componentAction}
-                      className="btn-secondary btn-xs"
-                    >
-                      Reinstall
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleUninstall(comp.key)}
-                      disabled={!!componentAction || !canUninstall}
-                      className="btn-secondary btn-xs btn-danger"
-                      title={!canUninstall ? "At least one component must remain installed" : undefined}
-                    >
-                      Uninstall
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => openInstallDialog(comp.key)}
-                    disabled={!!componentAction}
-                    className="btn-primary btn-xs"
-                  >
-                    Install
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        {detectPlatform() === "windows" && <NgrokAntivirusNotice />}
       </section>
+      </fieldset>
 
-      {installTarget && (
-        <ReinstallDialog
-          componentKey={installTarget.key}
-          displayName={installTarget.displayName}
-          currentVersion={installTarget.installed ? installTarget.version : null}
-          onClose={(changed) => {
-            setInstallTarget(null);
-            if (changed) refreshComponents();
-          }}
-        />
-      )}
     </div>
   );
 }

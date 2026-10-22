@@ -927,15 +927,32 @@ impl RuntimeDownloader {
     }
 
     /// Extract a ZIP archive
-    fn extract_zip(&self, archive_path: &Path, dest_dir: &Path) -> Result<(), String> {
+    pub(crate) fn extract_zip(&self, archive_path: &Path, dest_dir: &Path) -> Result<(), String> {
         let file = File::open(archive_path).map_err(|e| Self::maybe_av_hint(format!("Failed to open archive: {}", e), archive_path, &e))?;
         let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Failed to read ZIP: {}", e))?;
+        // Symlinks are created after every regular file, so no later entry can be
+        // written through a link to somewhere outside dest_dir.
+        #[cfg_attr(not(unix), allow(unused_mut, unused_variables))]
+        let mut symlinks: Vec<(PathBuf, String)> = Vec::new();
 
         for i in 0..archive.len() {
             let mut file = archive
                 .by_index(i)
                 .map_err(|e| format!("Failed to get file: {}", e))?;
             let outpath = dest_dir.join(file.enclosed_name().ok_or("Invalid path")?);
+
+            if file.is_symlink() {
+                // Only CAMPP backups made on macOS/Linux contain links. Windows can't
+                // create them without admin rights, so they're skipped there.
+                #[cfg(unix)]
+                {
+                    let mut target = String::new();
+                    io::Read::read_to_string(&mut file, &mut target)
+                        .map_err(|e| format!("Failed to read link: {}", e))?;
+                    symlinks.push((outpath, target));
+                }
+                continue;
+            }
 
             if file.name().ends_with('/') {
                 fs::create_dir_all(&outpath)
@@ -949,10 +966,15 @@ impl RuntimeDownloader {
                 io::copy(&mut file, &mut outfile)
                     .map_err(|e| format!("Failed to write file: {}", e))?;
 
-                // Set executable permission on Unix for binary files
+                // Unix: restore the mode stored in the zip (backups keep it), then make
+                // sure known runtime binaries are executable either way.
                 #[cfg(unix)]
                 {
                     use std::os::unix::fs::PermissionsExt;
+                    if let Some(mode) = file.unix_mode().map(|m| m & 0o7777).filter(|m| *m != 0) {
+                        fs::set_permissions(&outpath, fs::Permissions::from_mode(mode))
+                            .map_err(|e| format!("Failed to set permissions: {}", e))?;
+                    }
                     if is_executable(&file.name()) {
                         let mut perms = fs::metadata(&outpath)
                             .map_err(|e| format!("Failed to get metadata: {}", e))?
@@ -963,6 +985,16 @@ impl RuntimeDownloader {
                     }
                 }
             }
+        }
+
+        #[cfg(unix)]
+        for (link, target) in symlinks {
+            if let Some(parent) = link.parent() {
+                fs::create_dir_all(parent).map_err(|e| format!("Failed to create parent directory: {}", e))?;
+            }
+            let _ = fs::remove_file(&link);
+            std::os::unix::fs::symlink(&target, &link)
+                .map_err(|e| format!("Failed to create link {}: {}", link.display(), e))?;
         }
 
         Ok(())

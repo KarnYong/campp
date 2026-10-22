@@ -3,14 +3,6 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
 
-/// Escape a string for embedding in a PHP single-quoted literal ('...').
-/// Backslash must be escaped first, then the quote — order matters, or the
-/// escaping backslashes get double-escaped. Used for DB passwords in the
-/// phpMyAdmin and Adminer configs.
-fn escape_php_single_quoted(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('\'', "\\'")
-}
-
 pub fn generate_caddyfile(path: &PathBuf, paths: &RuntimePaths, port: u16, php_port: u16, bind_address: &str) -> Result<(), String> {
     let projects_raw = paths.projects_dir
         .to_str()
@@ -254,7 +246,7 @@ php_value[memory_limit] = 256M
     Ok(())
 }
 
-pub fn generate_phpmyadmin_config(paths: &RuntimePaths, mysql_port: u16, mysql_root_password: &str) -> Result<(), String> {
+pub fn generate_phpmyadmin_config(paths: &RuntimePaths, mysql_port: u16) -> Result<(), String> {
     let config_path = paths.phpmyadmin.join("config.inc.php");
 
     let tmp_dir = paths.phpmyadmin.join("tmp");
@@ -276,9 +268,6 @@ pub fn generate_phpmyadmin_config(paths: &RuntimePaths, mysql_port: u16, mysql_r
     let tmp_dir_str = tmp_dir.to_string_lossy().replace('\\', "/");
     let upload_dir_str = upload_dir.to_string_lossy().replace('\\', "/");
 
-    let allow_no_password = if mysql_root_password.is_empty() { "true" } else { "false" };
-    let escaped_password = escape_php_single_quoted(mysql_root_password);
-
     let config_content = format!(r#"<?php
 /**
  * CAMPP phpMyAdmin Configuration
@@ -288,16 +277,22 @@ pub fn generate_phpmyadmin_config(paths: &RuntimePaths, mysql_port: u16, mysql_r
 // Cookie encryption key (exactly 32 bytes)
 $cfg['blowfish_secret'] = '{}';
 
+// Caddy serves phpMyAdmin under /phpmyadmin/ but strips that prefix (handle_path),
+// so phpMyAdmin would think it lives at the site root and redirect there after
+// login. Built per request so it's right for localhost, a LAN IP and ngrok (https).
+$cfg['PmaAbsoluteUri'] = ((($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https' || !empty($_SERVER['HTTPS'])) ? 'https' : 'http')
+    . '://' . ($_SERVER['HTTP_HOST'] ?? '127.0.0.1') . '/phpmyadmin/';
+
 // Server configuration (optimized for performance)
+// Login screen, no stored password: phpMyAdmin is reachable from other devices
+// in LAN mode and through ngrok, so it must never log anyone in automatically.
 $i = 0;
 $i++;
-$cfg['Servers'][$i]['auth_type'] = 'config';
-$cfg['Servers'][$i]['user'] = 'root';
-$cfg['Servers'][$i]['password'] = '{}';
+$cfg['Servers'][$i]['auth_type'] = 'cookie';
 $cfg['Servers'][$i]['host'] = '127.0.0.1';
 $cfg['Servers'][$i]['port'] = '{}';
 $cfg['Servers'][$i]['compress'] = false;
-$cfg['Servers'][$i]['AllowNoPassword'] = {};
+$cfg['Servers'][$i]['AllowNoPassword'] = false;
 $cfg['Servers'][$i]['hide_db'] = '^(information_schema|mysql|performance_schema)$';
 
 // Performance optimizations
@@ -342,7 +337,7 @@ $cfg['FirstDayOfCalendar'] = 1;
 
 // Execution time (for large database operations)
 $cfg['ExecTimeLimit'] = 0;
-"#, blowfish_secret, escaped_password, mysql_port, allow_no_password, upload_dir_str, upload_dir_str, tmp_dir_str);
+"#, blowfish_secret, mysql_port, upload_dir_str, upload_dir_str, tmp_dir_str);
 
     let mut file = File::create(&config_path)
         .map_err(|e| format!("Failed to create phpMyAdmin config: {}", e))?;
@@ -432,67 +427,24 @@ host    all       all   ::1/128        {auth_method}
 pub fn generate_adminer_config(
     paths: &RuntimePaths,
     mysql_port: u16,
-    mysql_root_password: &str,
     postgres_port: u16,
-    postgres_root_password: &str,
 ) -> Result<(), String> {
     let adminer_dir = &paths.adminer;
     let index_path = adminer_dir.join("index.php");
 
-    let escaped_mysql_pw = escape_php_single_quoted(mysql_root_password);
-    let escaped_pg_pw = escape_php_single_quoted(postgres_root_password);
-
     let content = format!(r##"<?php
-// CAMPP Adminer Launcher - Pre-configured database connections
-$mysql_host = '127.0.0.1:{mysql_port}';
-$mysql_user = 'root';
-$mysql_pass = '{escaped_mysql_pw}';
-$pg_host = '127.0.0.1:{postgres_port}';
-$pg_user = 'root';
-$pg_pass = '{escaped_pg_pw}';
+// CAMPP Adminer Launcher. The buttons open Adminer's login form with server and
+// user filled in; the password is always typed. No password is stored here, since
+// Adminer is reachable from other devices in LAN mode and through ngrok.
 
-// Mode 1: Auto-login from launcher click (only when 'auto' is the sole GET param)
-if (isset($_GET['auto']) && count($_GET) === 1 && $_SERVER['REQUEST_METHOD'] === 'GET') {{
-    session_start();
-    $token = rand(1, 1000000);
-    $_SESSION['token'] = $token;
-
-    if ($_GET['auto'] === 'mysql') {{
-        $driver = 'server';
-        $server = $mysql_host;
-        $user = $mysql_user;
-        $pass = $mysql_pass;
-    }} else {{
-        $driver = 'pgsql';
-        $server = $pg_host;
-        $user = $pg_user;
-        $pass = $pg_pass;
-    }}
-
-    $_POST = array(
-        'token' => $token,
-        'auth' => array(
-            'driver' => $driver,
-            'server' => $server,
-            'username' => $user,
-            'password' => $pass,
-            'db' => '',
-        ),
-    );
-    $_SERVER['REQUEST_METHOD'] = 'POST';
-    include __DIR__ . '/adminer.php';
-    exit;
-}}
-
-// Mode 2: Pass through to Adminer for all other requests
-// (Adminer navigation has params like pgsql=, server=, table=, etc.)
-// (Adminer form submissions are POST requests)
+// Any Adminer request (navigation params like server=, pgsql=, table=, or a form POST)
+// goes straight to Adminer.
 if (!empty($_GET) || $_SERVER['REQUEST_METHOD'] === 'POST') {{
     include __DIR__ . '/adminer.php';
     exit;
 }}
 
-// Mode 3: Clean /adminer/ visit - show launcher page
+// Plain /adminer/ visit: show the launcher page
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -507,19 +459,19 @@ if (!empty($_GET) || $_SERVER['REQUEST_METHOD'] === 'POST') {{
     <div class="hero">
       <img src="data:image/png;base64,{logo}" alt="CAMPP">
       <h1>Database <span>Manager</span></h1>
-      <p class="muted">Adminer, signed in to your local databases</p>
+      <p class="muted">Adminer for your local databases. Log in as root with your database password.</p>
     </div>
 
     <section>
       <h2>Connect</h2>
       <ul>
-        <li><a href="?auto=mysql">
+        <li><a href="?server=127.0.0.1:{mysql_port}&amp;username=root">
           <span class="db"><strong>MySQL</strong><span class="mono muted">127.0.0.1:{mysql_port} · root</span></span>
-          <span class="pill">Connect</span>
+          <span class="pill">Log in</span>
         </a></li>
-        <li><a href="?auto=pgsql">
+        <li><a href="?pgsql=127.0.0.1:{postgres_port}&amp;username=root">
           <span class="db"><strong>PostgreSQL</strong><span class="mono muted">127.0.0.1:{postgres_port} · root</span></span>
-          <span class="pill">Connect</span>
+          <span class="pill">Log in</span>
         </a></li>
       </ul>
     </section>
@@ -530,8 +482,6 @@ if (!empty($_GET) || $_SERVER['REQUEST_METHOD'] === 'POST') {{
 </html>"##,
         mysql_port = mysql_port,
         postgres_port = postgres_port,
-        escaped_mysql_pw = escaped_mysql_pw,
-        escaped_pg_pw = escaped_pg_pw,
         logo = LAUNCHER_LOGO_B64.trim(),
     );
 
@@ -578,20 +528,26 @@ tunnels:
 
 #[cfg(test)]
 mod tests {
-    use super::escape_php_single_quoted;
-
     #[test]
-    fn escapes_quote_and_backslash_for_php_single_quotes() {
-        // Plain password: unchanged.
-        assert_eq!(escape_php_single_quoted("s3cret"), "s3cret");
-        // Quote: escaped so it can't terminate the '...' literal.
-        assert_eq!(escape_php_single_quoted("a'b"), "a\\'b");
-        // Backslash: doubled. The old quote-only escape left this broken.
-        assert_eq!(escape_php_single_quoted("a\\b"), "a\\\\b");
-        // Trailing backslash used to escape the closing quote → syntax error.
-        assert_eq!(escape_php_single_quoted("pass\\"), "pass\\\\");
-        // Backslash must be escaped BEFORE the quote, not after.
-        assert_eq!(escape_php_single_quoted("a\\'b"), "a\\\\\\'b");
+    fn phpmyadmin_requires_login_and_stores_no_password() {
+        use crate::runtime::locator::RuntimePaths;
+        let dir = tempfile::TempDir::new().unwrap();
+        let p = |n: &str| dir.path().join(n);
+        let paths = RuntimePaths {
+            caddy: p("caddy"), php_cgi: p("php-cgi"), php_ini: p("php.ini"), php_ext_dir: p("ext"),
+            mysql: p("mysqld"), phpmyadmin: p("phpmyadmin"), pgsql_dir: p("pgsql"), adminer: p("adminer"),
+            mysql_data_dir: p("data"), pgsql_data_dir: p("pgdata"), logs_dir: p("logs"),
+            config_dir: p("config"), projects_dir: p("projects"), ngrok: p("ngrok"),
+        };
+        std::fs::create_dir_all(&paths.phpmyadmin).unwrap();
+
+        super::generate_phpmyadmin_config(&paths, 3307).unwrap();
+
+        let cfg = std::fs::read_to_string(paths.phpmyadmin.join("config.inc.php")).unwrap();
+        assert!(cfg.contains("['auth_type'] = 'cookie'"));
+        assert!(!cfg.contains("['password']"), "no stored password");
+        assert!(cfg.contains("['port'] = '3307'"));
+        assert!(cfg.contains("'/phpmyadmin/'"), "PmaAbsoluteUri keeps the /phpmyadmin/ prefix");
     }
 
     #[test]
@@ -607,12 +563,15 @@ mod tests {
         };
         std::fs::create_dir_all(&paths.adminer).unwrap();
 
-        super::generate_adminer_config(&paths, 3307, "", 5433, "").unwrap();
+        super::generate_adminer_config(&paths, 3307, 5433).unwrap();
 
         let index = std::fs::read_to_string(paths.adminer.join("index.php")).unwrap();
         assert!(index.contains(r#"href="campp-launcher.css""#));
         assert!(index.contains("data:image/png;base64,") && !index.contains("{logo}"));
-        assert!(index.contains("127.0.0.1:3307") && index.contains("127.0.0.1:5433"));
+        assert!(index.contains("?server=127.0.0.1:3307&amp;username=root"));
+        assert!(index.contains("?pgsql=127.0.0.1:5433&amp;username=root"));
+        assert!(!index.contains("$_POST"), "no auto-login");
+        assert!(!index.contains("auto="), "auto-login removed");
         assert!(paths.adminer.join("campp-launcher.css").exists());
         // Adminer's own stylesheet hooks stay untouched.
         assert!(!paths.adminer.join("adminer.css").exists());
