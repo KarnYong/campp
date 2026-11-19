@@ -5,10 +5,30 @@
     "caddy": {
       "versions": [
         {
+          "id": "caddy-2.11.9",
+          "version": "2.11.9",
+          "selected": true,
+          "display_name": "Caddy 2.11.9 (Latest)",
+          "checksums": {
+            "windowsX64": "ad93112d335ee687100c4c9f11bced16ca590377976b7fe7883882b9e797e472",
+            "windowsArm64": "bdf5fa34e7f3646ee04f59634d66cbcbfa39516f08108d8661ff3ceb3913a0c7",
+            "linuxX64": "5b8cb7faf8726a2028ad96a66e54e6e81e8f361bc6175e5d22bbd997cc5177fb",
+            "macOSX64": "22af256a2cc45606f6bfa8786cd89130529331319665926f4e972234a658fb30",
+            "macOSArm64": "d075afc620376679a77b453399bf7ada264cab3280b2833e4ed1372abc0c1c13"
+          },
+          "urls": {
+            "windowsX64": "https://github.com/caddyserver/caddy/releases/download/v2.11.9/caddy_2.11.9_windows_amd64.zip",
+            "windowsArm64": "https://github.com/caddyserver/caddy/releases/download/v2.11.9/caddy_2.11.9_windows_arm64.zip",
+            "linuxX64": "https://github.com/caddyserver/caddy/releases/download/v2.11.9/caddy_2.11.9_linux_amd64.tar.gz",
+            "macOSX64": "https://github.com/caddyserver/caddy/releases/download/v2.11.9/caddy_2.11.9_mac_amd64.tar.gz",
+            "macOSArm64": "https://github.com/caddyserver/caddy/releases/download/v2.11.9/caddy_2.11.9_mac_arm64.tar.gz"
+          }
+        },
+        {
           "id": "caddy-2.11.7",
           "version": "2.11.7",
-          "selected": true,
-          "display_name": "Caddy 2.11.7 (Latest)",
+          "selected": false,
+          "display_name": "Caddy 2.11.7",
           "checksums": {
             "windowsX64": "0a1edc0b799512051c57071ce0e798d3f2cf67dc98171366f1d2b326072e3b06",
             "windowsArm64": "34804a5e61106fa6718682f5be6c9edc4cceec9601ba7e25beec1e176cfc3b47",
@@ -160,22 +180,22 @@
       "versions": [
         {
           "id": "mysql-8.4",
-          "version": "8.4.11",
+          "version": "8.4.13",
           "selected": true,
-          "display_name": "MySQL 8.4.11 LTS (Recommended)",
+          "display_name": "MySQL 8.4.13 LTS (Recommended)",
           "eol": false,
           "lts": true,
           "checksums": {
-            "windowsX64": "a492371d687d2bab088b0062581144a0044b8964baefdf4faa579292b423d25c",
-            "windowsArm64": "a492371d687d2bab088b0062581144a0044b8964baefdf4faa579292b423d25c",
+            "windowsX64": "e9cd98b1d23f122987b1afca26ad942efec5891481103d48ae3cde237fa3ea54",
+            "windowsArm64": "e9cd98b1d23f122987b1afca26ad942efec5891481103d48ae3cde237fa3ea54",
             "macOSX64": "90e8aea10698d01b978f0179e72e8d5e2cbe9f9bd5771e88b0b75d7c82244d3f",
-            "macOSArm64": "b96e00493bc3499b9ffd7f08d65c5d64933af0383a8287d9873b64f94c2d6009"
+            "macOSArm64": "f324f8950e24d4147470bbc6a6ef0b90ef93b91d3fc74154b3d2ba085b44912a"
           },
           "urls": {
-            "windowsX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.11/mysql-8.4.11-winx64.zip",
-            "windowsArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.11/mysql-8.4.11-winx64.zip",
+            "windowsX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.13/mysql-8.4.13-winx64.zip",
+            "windowsArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.13/mysql-8.4.13-winx64.zip",
             "macOSX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.11/mysql-8.4.11-macos15-x86_64.tar.gz",
-            "macOSArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.11/mysql-8.4.11-macos15-arm64.tar.gz"
+            "macOSArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/mysql-8.4.13/mysql-8.4.13-macos15-arm64.tar.gz"
           }
         },
         {
@@ -204,58 +224,58 @@
       "versions": [
         {
           "id": "mariadb-12.3",
-          "version": "12.3.3",
+          "version": "12.3.4",
           "selected": true,
-          "display_name": "MariaDB 12.3.3 LTS (Latest)",
+          "display_name": "MariaDB 12.3.4 LTS (Latest)",
           "eol": false,
           "lts": true,
           "checksums": {
-            "linuxX64": "a12bf7bce08a896cdd01f174f04b4ce1d5da43ec250a5e7fceb9972119514329"
+            "linuxX64": "26868ab54e3fffa822ffe433537e9c6dde0bdaa45f45a83ef43bd72e29b58baa"
           },
           "urls": {
-            "linuxX64": "https://archive.mariadb.org/mariadb-12.3.3/bintar-linux-systemd-x86_64/mariadb-12.3.3-linux-systemd-x86_64.tar.gz"
+            "linuxX64": "https://archive.mariadb.org/mariadb-12.3.4/bintar-linux-systemd-x86_64/mariadb-12.3.4-linux-systemd-x86_64.tar.gz"
           }
         },
         {
           "id": "mariadb-11.8",
-          "version": "11.8.9",
+          "version": "11.8.10",
           "selected": false,
-          "display_name": "MariaDB 11.8.9 LTS",
+          "display_name": "MariaDB 11.8.10 LTS",
           "eol": false,
           "lts": true,
           "checksums": {
-            "linuxX64": "32f8871a2aa38b36aa418b7f4abc6fc0c6ef1ba5a45798cacb2afa52c8a6113b"
+            "linuxX64": "15ca40274597af84fa8f89f8248b37740c5a712c003df80b4c7b32a4486e2027"
           },
           "urls": {
-            "linuxX64": "https://archive.mariadb.org/mariadb-11.8.9/bintar-linux-systemd-x86_64/mariadb-11.8.9-linux-systemd-x86_64.tar.gz"
+            "linuxX64": "https://archive.mariadb.org/mariadb-11.8.10/bintar-linux-systemd-x86_64/mariadb-11.8.10-linux-systemd-x86_64.tar.gz"
           }
         },
         {
           "id": "mariadb-11.4",
-          "version": "11.4.13",
+          "version": "11.4.14",
           "selected": false,
-          "display_name": "MariaDB 11.4.13 LTS",
+          "display_name": "MariaDB 11.4.14 LTS",
           "eol": false,
           "lts": true,
           "checksums": {
-            "linuxX64": "3cebf63914df3154b7cb6d548337eb2be42c773aeb641110446b72e2746cfed7"
+            "linuxX64": "6fa13ea11d07a53ae4795c8c3736dc5aa99c2ef22ece754cff07363dc1faba0d"
           },
           "urls": {
-            "linuxX64": "https://archive.mariadb.org/mariadb-11.4.13/bintar-linux-systemd-x86_64/mariadb-11.4.13-linux-systemd-x86_64.tar.gz"
+            "linuxX64": "https://archive.mariadb.org/mariadb-11.4.14/bintar-linux-systemd-x86_64/mariadb-11.4.14-linux-systemd-x86_64.tar.gz"
           }
         },
         {
           "id": "mariadb-10.11",
-          "version": "10.11.19",
+          "version": "10.11.20",
           "selected": false,
-          "display_name": "MariaDB 10.11.19 LTS",
+          "display_name": "MariaDB 10.11.20 LTS",
           "eol": false,
           "lts": true,
           "checksums": {
-            "linuxX64": "7efb257927f31f4422f496246b32590d0b7617f3d9dd900e575de761b302d919"
+            "linuxX64": "3e28539f79de3ca9df72f4a4b93f9092eb4f05a9648391ddf37c44fb4ed84727"
           },
           "urls": {
-            "linuxX64": "https://archive.mariadb.org/mariadb-10.11.19/bintar-linux-systemd-x86_64/mariadb-10.11.19-linux-systemd-x86_64.tar.gz"
+            "linuxX64": "https://archive.mariadb.org/mariadb-10.11.20/bintar-linux-systemd-x86_64/mariadb-10.11.20-linux-systemd-x86_64.tar.gz"
           }
         }
       ]
@@ -278,90 +298,90 @@
       "versions": [
         {
           "id": "postgresql-18.3",
-          "version": "18.6.1",
+          "version": "18.7.0",
           "selected": true,
-          "display_name": "PostgreSQL 18.6.1 (Latest)",
+          "display_name": "PostgreSQL 18.7.0 (Latest)",
           "eol": false,
           "lts": false,
           "checksums": {
-            "windowsX64": "d82142f3a9a49be8467f0e87f5a079f627515539f94a070fe1463208fa8eb3c6",
-            "macOSX64": "4229812543e19c91864ebdf5d8f78883c5816d51d4cc5d065298260c1f64d37e",
-            "macOSArm64": "89e91cc80650a43d22c018b95ca356a0c9e15838a1182fed2880bfb5d7d9c9a6",
-            "linuxX64": "bb3d09f876b2383e25a8c9ce09e32d185a03656a23d074f5195542b1b1b3ca61",
-            "linuxArm64": "5d2b5e8be9e96bfc3d7f22090057a836ec36d5d092542d8d3b93cc145cf4ee13"
+            "windowsX64": "64948bd862b2f9c253067d3476e971b8b31291376fb004c5c7d5d016509401f7",
+            "macOSX64": "9cd649259d6bf4af60a235e772c83853df215b63f4c1967c2eed7f9376aefb89",
+            "macOSArm64": "86456c0ed99d2466524eaa074db6580cf7d748b91042e252c83eaca9a9d216e7",
+            "linuxX64": "53ca01952cb581145e4fb16b6b3b675da345a82879f350707b9f65863a0642f4",
+            "linuxArm64": "6fcf45163aa044fe58597885b0e27c4b1614c53ad088d4d0ebbbfdf5df510eaf"
           },
           "urls": {
-            "windowsX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.1/postgresql-18.6.1-x86_64-pc-windows-msvc.zip",
-            "macOSX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.1/postgresql-18.6.1-x86_64-apple-darwin.tar.gz",
-            "macOSArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.1/postgresql-18.6.1-aarch64-apple-darwin.tar.gz",
-            "linuxX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.0/postgresql-18.6.0-x86_64-unknown-linux-gnu.tar.gz",
-            "linuxArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.0/postgresql-18.6.0-aarch64-unknown-linux-gnu.tar.gz"
+            "windowsX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.7.0/postgresql-18.7.0-x86_64-pc-windows-msvc.zip",
+            "macOSX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.7.0/postgresql-18.7.0-x86_64-apple-darwin.tar.gz",
+            "macOSArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.7.0/postgresql-18.7.0-aarch64-apple-darwin.tar.gz",
+            "linuxX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.7.0/postgresql-18.7.0-x86_64-unknown-linux-gnu.tar.gz",
+            "linuxArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.7.0/postgresql-18.7.0-aarch64-unknown-linux-gnu.tar.gz"
           }
         },
         {
           "id": "postgresql-17",
-          "version": "17.11.0",
+          "version": "17.12.0",
           "selected": false,
-          "display_name": "PostgreSQL 17.11.0",
+          "display_name": "PostgreSQL 17.12.0",
           "eol": false,
           "lts": false,
           "checksums": {
-            "windowsX64": "85829f743e2697c55f1a5e8b210c53b90dd1f578448fc01cb9c4dc9e0a8e3827",
-            "macOSX64": "e43a81b15e1cfe7f9d8fd79c6d4d0366e9001a5f690e322224dca704656602f7",
-            "macOSArm64": "fd4b62794b160e26973a768a1eef3248aef9d2ff23ebd6d884a4299485e28e57",
-            "linuxX64": "b7a1ba6bae6499d8296e3e81b0171eecfd1766ca9aaa0057e41ad3e844e5e2e0",
-            "linuxArm64": "abffda09209280ec1502b73720dc4d254fb7fff9a072e324926c600a5b16c221"
+            "windowsX64": "e45909100dd4d7309981054d5625e70612150999d106741d1c01a5443be918bf",
+            "macOSX64": "34ba0eca0f15776b4ab9a07b2decc6fb0b1910a57870ad7d7dacb7399b43c9bd",
+            "macOSArm64": "2f752033b208f9a6a12ef64a9ee23bf19149cff160841980db1e221bf7d24809",
+            "linuxX64": "af316b6e42266ec0a153bdc9194e0b1b5f12c9ce4f0b13d9a96dfca77d9aaecc",
+            "linuxArm64": "9b3ca376cbdecb297711f9b09bfe834ae0f7c231042de58b7cb4bb2c0a526301"
           },
           "urls": {
-            "windowsX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/17.11.0/postgresql-17.11.0-x86_64-pc-windows-msvc.zip",
-            "macOSX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/17.11.0/postgresql-17.11.0-x86_64-apple-darwin.tar.gz",
-            "macOSArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/17.11.0/postgresql-17.11.0-aarch64-apple-darwin.tar.gz",
-            "linuxX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/17.11.0/postgresql-17.11.0-x86_64-unknown-linux-gnu.tar.gz",
-            "linuxArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/17.11.0/postgresql-17.11.0-aarch64-unknown-linux-gnu.tar.gz"
+            "windowsX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/17.12.0/postgresql-17.12.0-x86_64-pc-windows-msvc.zip",
+            "macOSX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/17.12.0/postgresql-17.12.0-x86_64-apple-darwin.tar.gz",
+            "macOSArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/17.12.0/postgresql-17.12.0-aarch64-apple-darwin.tar.gz",
+            "linuxX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/17.12.0/postgresql-17.12.0-x86_64-unknown-linux-gnu.tar.gz",
+            "linuxArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/17.12.0/postgresql-17.12.0-aarch64-unknown-linux-gnu.tar.gz"
           }
         },
         {
           "id": "postgresql-16",
-          "version": "16.15.0",
+          "version": "16.16.0",
           "selected": false,
-          "display_name": "PostgreSQL 16.15.0",
+          "display_name": "PostgreSQL 16.16.0",
           "eol": false,
           "lts": false,
           "checksums": {
-            "windowsX64": "98fe43cff00f5aef4a7669adb575655e913dc65b1fdfb997c46fe3c1e07f4efb",
-            "macOSX64": "dfae21b2b931f1d8d1103afb6e8e108fdd94c6f407ce24d35b6cd0ad34f286d1",
-            "macOSArm64": "46f6382024d9b633d1f4b4903ffef8c2404e00ae83098d628c00591048cb0512",
-            "linuxX64": "77dd669eda3985ea8be26256f6af28d3c8414152ada713797555bb7423b4486a",
-            "linuxArm64": "f6d49ffbaea28cf8732785b18afb75bded905667d4ec8e2308a13a30fe0a24d1"
+            "windowsX64": "9bd12299e754ff546cc4ceafb284c39fc65722cb1d930ded114077517a6ed855",
+            "macOSX64": "6bcc3f98c76fdb4b52bf4e59781308ea996058941566579a0961b3a25626b6bb",
+            "macOSArm64": "b7f002d554cd8a916d189e24b8f885d088b7909bb6d2de092f82c10274cb8251",
+            "linuxX64": "f668fbc685cdcb71d6a82f57035bed7d97b059e2d8a1d3adf317ec36c5e861d2",
+            "linuxArm64": "05f13472e1da9df11e801fc7b1ad92408ba02fb6af7f7cbaffd346934a5e5b0a"
           },
           "urls": {
-            "windowsX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/16.15.0/postgresql-16.15.0-x86_64-pc-windows-msvc.zip",
-            "macOSX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/16.15.0/postgresql-16.15.0-x86_64-apple-darwin.tar.gz",
-            "macOSArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/16.15.0/postgresql-16.15.0-aarch64-apple-darwin.tar.gz",
-            "linuxX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/16.15.0/postgresql-16.15.0-x86_64-unknown-linux-gnu.tar.gz",
-            "linuxArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/16.15.0/postgresql-16.15.0-aarch64-unknown-linux-gnu.tar.gz"
+            "windowsX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/16.16.0/postgresql-16.16.0-x86_64-pc-windows-msvc.zip",
+            "macOSX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/16.16.0/postgresql-16.16.0-x86_64-apple-darwin.tar.gz",
+            "macOSArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/16.16.0/postgresql-16.16.0-aarch64-apple-darwin.tar.gz",
+            "linuxX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/16.16.0/postgresql-16.16.0-x86_64-unknown-linux-gnu.tar.gz",
+            "linuxArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/16.16.0/postgresql-16.16.0-aarch64-unknown-linux-gnu.tar.gz"
           }
         },
         {
           "id": "postgresql-15",
-          "version": "15.19.0",
+          "version": "15.20.0",
           "selected": false,
-          "display_name": "PostgreSQL 15.19.0",
+          "display_name": "PostgreSQL 15.20.0",
           "eol": false,
           "lts": false,
           "checksums": {
-            "windowsX64": "8b2aa66b908e3f72115546f432cc4ea12f5d785e26be4f1828912a67f4e9ee7f",
-            "macOSX64": "e37b8890570f413dca754d093a5ff390834eccac8648988fd5a262d65f14ff88",
-            "macOSArm64": "66461013bc02d7d07f385a6d69cd8d0743cb7ff482c4cd8c2fb1ab78e7f8c709",
-            "linuxX64": "556ad48b5e59fec8fd7c732cb86a8b6606eb4890cb1ce4266e7487a51f2ed971",
-            "linuxArm64": "50d20ffbd7d864eecc6eab8f854ba5f2e8a4f3e50645753fbf0e5929765e76be"
+            "windowsX64": "d60356c5d111a953a0b69d98e2f009a987323ec1dca6b0bde77488fb32202f1f",
+            "macOSX64": "271f3cd94dedd576a6c4a48bb8da02382cffcca3f8112984facf79596aaaf68a",
+            "macOSArm64": "b4f28bbbcb5f195df3f84b5ad9ab8ee60d0fab44e60fdf4b1036f0c7e1451a79",
+            "linuxX64": "2eec5422941fc12339d86c18542753a6b3ca6822149b18d036a05717d5f58e26",
+            "linuxArm64": "e53127a4c665c2a9e3f4c4d32cb01cb23d393706e2a86b7151d570e9d55d17cb"
           },
           "urls": {
-            "windowsX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/15.19.0/postgresql-15.19.0-x86_64-pc-windows-msvc.zip",
-            "macOSX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/15.19.0/postgresql-15.19.0-x86_64-apple-darwin.tar.gz",
-            "macOSArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/15.19.0/postgresql-15.19.0-aarch64-apple-darwin.tar.gz",
-            "linuxX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/15.19.0/postgresql-15.19.0-x86_64-unknown-linux-gnu.tar.gz",
-            "linuxArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/15.19.0/postgresql-15.19.0-aarch64-unknown-linux-gnu.tar.gz"
+            "windowsX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/15.20.0/postgresql-15.20.0-x86_64-pc-windows-msvc.zip",
+            "macOSX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/15.20.0/postgresql-15.20.0-x86_64-apple-darwin.tar.gz",
+            "macOSArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/15.20.0/postgresql-15.20.0-aarch64-apple-darwin.tar.gz",
+            "linuxX64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/15.20.0/postgresql-15.20.0-x86_64-unknown-linux-gnu.tar.gz",
+            "linuxArm64": "https://github.com/theseus-rs/postgresql-binaries/releases/download/15.20.0/postgresql-15.20.0-aarch64-unknown-linux-gnu.tar.gz"
           }
         }
       ]
@@ -370,23 +390,23 @@
       "versions": [
         {
           "id": "adminer-5.4",
-          "version": "5.4.2",
+          "version": "5.5.1",
           "selected": true,
-          "display_name": "Adminer 5.4.2 (Latest)",
+          "display_name": "Adminer 5.5.1 (Latest)",
           "eol": false,
           "lts": false,
-          "checksum": "f8b1cdc676d72e88d2d470dd05f2dcb7212bf6cdcf78f1eadb7fc292f4cefd39",
-          "url": "https://github.com/vrana/adminer/releases/download/v5.4.2/adminer-5.4.2-en.php"
+          "checksum": "a0bb7d4ef753dd2161f8ac3dc1712d084dc124b92a34f391125fb2bd15d03d9f",
+          "url": "https://github.com/vrana/adminer/releases/download/v5.5.1/adminer-5.5.1-en.php"
         },
         {
           "id": "adminer-6.1",
-          "version": "6.1.2",
+          "version": "6.3.0",
           "selected": false,
-          "display_name": "Adminer 6.1.2",
+          "display_name": "Adminer 6.3.0",
           "eol": false,
           "lts": false,
-          "checksum": "56fae7a3bdaae6ff12c404378b1045c02dbe9529a5afda0b901ded0e1f63302f",
-          "url": "https://github.com/vrana/adminer/releases/download/v6.1.2/adminer-6.1.2-en.php"
+          "checksum": "f467aac2419f3992e4bf450f8d88ee9d6ddd45243eb72fa224747019da33a8fa",
+          "url": "https://github.com/vrana/adminer/releases/download/v6.3.0/adminer-6.3.0-en.php"
         }
       ]
     },
