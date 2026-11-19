@@ -19,9 +19,17 @@ export type IconName =
   | "archive"
   | "sun"
   | "moon"
-  | "monitor";
+  | "monitor"
+  | "terminal";
 
 const PATHS: Record<IconName, ReactElement> = {
+  terminal: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M7 9l3 3-3 3" />
+      <path d="M13 15h4" />
+    </>
+  ),
   globe: (
     <>
       <circle cx="12" cy="12" r="9" />

@@ -204,6 +204,15 @@ export function Dashboard() {
     }
   };
 
+  // Terminal in the projects folder with CAMPP's php/composer on PATH (this window only).
+  const openTerminal = async () => {
+    try {
+      await invoke<string>("open_terminal");
+    } catch (error) {
+      await showAlert("Can't open terminal", String(error));
+    }
+  };
+
   const openPhpMyAdmin = async () => {
     try {
       await openUrl(phpMyAdminUrl);
@@ -364,6 +373,16 @@ export function Dashboard() {
               </p>
             </div>
             <div className="main__actions">
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                onClick={openTerminal}
+                disabled={!installedVersions.php}
+                title={installedVersions.php ? "Terminal with CAMPP's php and composer on PATH" : "Install PHP first"}
+              >
+                <Icon name="terminal" size={15} />
+                Open terminal
+              </button>
               <button
                 type="button"
                 className="btn-secondary btn-sm"

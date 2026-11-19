@@ -15,6 +15,8 @@ pub struct PackagesConfig {
     #[serde(default)]
     pub adminer: Vec<PhpMyAdminPackage>,
     #[serde(default)]
+    pub composer: Vec<PhpMyAdminPackage>,
+    #[serde(default)]
     pub ngrok: Vec<MySQLPackage>,
 }
 
@@ -99,6 +101,8 @@ pub struct PackageSelection {
     pub adminer: String,
     #[serde(default = "default_ngrok")]
     pub ngrok: String,
+    #[serde(default = "default_composer")]
+    pub composer: String,
     /// Windows only: "mysql" (default) or "mariadb". Ignored on macOS/Linux,
     /// where the engine is fixed. Old settings files load as "mysql".
     #[serde(default = "default_db_engine")]
@@ -147,6 +151,10 @@ pub fn active_db_engine() -> DbEngine {
     )
 }
 
+fn default_composer() -> String {
+    "composer-2".to_string()
+}
+
 fn default_db_engine() -> String {
     "mysql".to_string()
 }
@@ -177,6 +185,7 @@ impl Default for PackageSelection {
             postgresql: "postgresql-18.3".to_string(),
             adminer: "adminer-5.1".to_string(),
             ngrok: "ngrok-3".to_string(),
+            composer: default_composer(),
             db_engine: default_db_engine(),
         }
     }
@@ -211,6 +220,12 @@ pub struct BinariesConfig {
     #[serde(default)]
     #[serde(rename = "ngrok")]
     pub ngrok: Option<BinaryConfig>,
+    /// Command-line PHP for Linux/macOS (Windows' PHP zip already has php.exe).
+    /// Entry ids match the `php` entries, so the selected PHP picks its CLI.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub php_cli: Option<BinaryConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub composer: Option<PhpMyAdminConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -491,6 +506,15 @@ pub fn get_available_packages() -> PackagesConfig {
                 lts: v.lts,
                 recommended: v.selected,
             }).collect()).unwrap_or_default(),
+            composer: cfg.binaries.composer.as_ref().map(|cc| cc.versions.iter().map(|v| PhpMyAdminPackage {
+                id: v.id.clone(),
+                version: v.version.clone(),
+                display_name: v.display_name.clone(),
+                url: v.url.clone(),
+                eol: v.eol,
+                lts: v.lts,
+                recommended: v.selected,
+            }).collect()).unwrap_or_default(),
             ngrok: cfg.binaries.ngrok.as_ref().map(|nc| nc.versions.iter().map(|v| MySQLPackage {
                 id: v.id.clone(),
                 version: v.version.clone(),
@@ -560,6 +584,9 @@ pub fn get_selected_package_ids() -> PackageSelection {
             ngrok: cfg.binaries.ngrok.as_ref()
                 .and_then(|nc| nc.versions.iter().find(|v| v.selected).map(|v| v.id.clone()))
                 .unwrap_or_else(|| "ngrok-3".to_string()),
+            composer: cfg.binaries.composer.as_ref()
+                .and_then(|cc| cc.versions.iter().find(|v| v.selected).map(|v| v.id.clone()))
+                .unwrap_or_else(default_composer),
             db_engine: default_db_engine(),
         }
     } else {
@@ -611,6 +638,14 @@ pub fn get_postgresql_package(id: &str) -> Option<MySQLPackage> {
 pub fn get_adminer_package(id: &str) -> Option<PhpMyAdminPackage> {
     get_available_packages()
         .adminer
+        .into_iter()
+        .find(|p| p.id == id)
+}
+
+/// Get Composer package by ID
+pub fn get_composer_package(id: &str) -> Option<PhpMyAdminPackage> {
+    get_available_packages()
+        .composer
         .into_iter()
         .find(|p| p.id == id)
 }
@@ -778,6 +813,7 @@ fn get_default_packages() -> PackagesConfig {
                 recommended: true,
             },
         ],
+        composer: vec![],
         ngrok: vec![
             MySQLPackage {
                 id: "ngrok-3".to_string(),
@@ -827,6 +863,13 @@ mod db_engine_tests {
             "url":"https://mirror/a.php","fallback_url":"https://upstream/a.php"}"#;
         let s: VersionInfoSingleUrl = serde_json::from_str(single).unwrap();
         assert_eq!(s.fallback_url.as_deref(), Some("https://upstream/a.php"));
+    }
+
+    #[test]
+    fn old_selection_without_composer_loads_the_default() {
+        let old = r#"{"php":"php-8.5","mysql":"mysql-8.4","phpmyadmin":"phpmyadmin-5.2"}"#;
+        let sel: PackageSelection = serde_json::from_str(old).unwrap();
+        assert_eq!(sel.composer, "composer-2");
     }
 
     #[test]

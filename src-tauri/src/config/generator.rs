@@ -1,7 +1,7 @@
 use crate::runtime::locator::RuntimePaths;
 use std::fs::{self, File};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub fn generate_caddyfile(path: &PathBuf, paths: &RuntimePaths, port: u16, php_port: u16, bind_address: &str) -> Result<(), String> {
     let projects_raw = paths.projects_dir
@@ -167,6 +167,10 @@ extension=pdo
 extension=pdo_mysql
 extension=pdo_pgsql
 extension=pgsql
+extension=zip
+extension=fileinfo
+extension=pdo_sqlite
+extension=sqlite3
 
 ; Session settings - use absolute path for Windows compatibility
 session.save_path = "{}"
@@ -546,8 +550,63 @@ tunnels:
     Ok(())
 }
 
+/// Extensions Composer/Laravel need that php.ini files written before CAMPP enabled
+/// them lack: zip (Composer unpacks dists), fileinfo, pdo_sqlite + sqlite3 (Laravel's
+/// default DB). On static Linux/macOS builds these are compiled in, so the lines are inert.
+const EXTRA_EXTENSIONS: [&str; 4] = ["zip", "fileinfo", "pdo_sqlite", "sqlite3"];
+
+/// Add any missing EXTRA_EXTENSIONS lines to an existing php.ini, right after
+/// `extension=pgsql` (else at the end). Idempotent; keeps line endings; touches nothing else.
+pub fn ensure_php_ini_extensions(path: &Path) -> Result<(), String> {
+    let Ok(text) = fs::read_to_string(path) else { return Ok(()) };
+    let updated = add_missing_extensions(&text);
+    if updated != text {
+        fs::write(path, updated).map_err(|e| format!("Failed to update php.ini: {}", e))?;
+    }
+    Ok(())
+}
+
+fn add_missing_extensions(text: &str) -> String {
+    let has = |ext: &str| text.lines().any(|l| l.trim() == format!("extension={ext}"));
+    let missing: Vec<&str> = EXTRA_EXTENSIONS.iter().copied().filter(|e| !has(e)).collect();
+    if missing.is_empty() {
+        return text.to_string();
+    }
+    let nl = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let block: String = missing.iter().map(|e| format!("extension={e}{nl}")).collect();
+    match text.find("extension=pgsql") {
+        Some(pos) => {
+            let line_end = text[pos..].find('\n').map(|i| pos + i + 1).unwrap_or(text.len());
+            let sep = if line_end == text.len() && !text.ends_with('\n') { nl } else { "" };
+            format!("{}{}{}{}", &text[..line_end], sep, block, &text[line_end..])
+        }
+        None => {
+            let sep = if text.is_empty() || text.ends_with('\n') { "" } else { nl };
+            format!("{text}{sep}{block}")
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn php_ini_upgrade_adds_missing_extensions_once() {
+        let old = "[PHP]\r\nextension=openssl\r\nextension=pgsql\r\n\r\n; Session\r\nsession.save_path = \"x\"\r\n";
+        let new = super::add_missing_extensions(old);
+        for e in super::EXTRA_EXTENSIONS {
+            assert_eq!(new.matches(&format!("extension={e}\r\n")).count(), 1, "{e}");
+        }
+        assert!(new.contains("extension=pgsql\r\nextension=zip\r\n"), "inserted after pgsql");
+        assert!(new.ends_with("session.save_path = \"x\"\r\n"), "rest untouched");
+        assert!(!new.replace("\r\n", "").contains('\n'), "keeps CRLF");
+        assert_eq!(super::add_missing_extensions(&new), new, "idempotent");
+        // Already present (fresh ini) -> unchanged; no pgsql line -> appended
+        let lf = "extension=zip\nextension=fileinfo\nextension=pdo_sqlite\nextension=sqlite3\n";
+        assert_eq!(super::add_missing_extensions(lf), lf);
+        assert!(super::add_missing_extensions("[PHP]")
+            .ends_with("[PHP]\nextension=zip\nextension=fileinfo\nextension=pdo_sqlite\nextension=sqlite3\n"));
+    }
+
     #[test]
     fn caddyfile_gives_404_instead_of_falling_back_to_the_welcome_page() {
         use crate::runtime::locator::RuntimePaths;

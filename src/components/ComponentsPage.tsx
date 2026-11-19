@@ -33,6 +33,7 @@ const COMPONENT_ORDER: { key: string; getDisplayName: () => string }[] = (() => 
     { key: "phpmyadmin", getDisplayName: () => "phpMyAdmin" },
     { key: "postgresql", getDisplayName: () => "PostgreSQL" },
     { key: "adminer", getDisplayName: () => "Adminer" },
+    { key: "composer", getDisplayName: () => "Composer" },
     { key: "ngrok", getDisplayName: () => "ngrok" },
   ];
 })();

@@ -92,6 +92,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
     postgresql: "postgresql-18.3",
     adminer: "adminer-5.1",
     ngrok: "ngrok-3",
+    composer: "composer-2",
     db_engine: "mysql",
   });
   // Keep every database label in sync with the engine picked here (Windows).
@@ -110,6 +111,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
     postgresql: false,
     adminer: false,
     ngrok: false,
+    composer: true,
   });
   const [mysqlPassword, setMysqlPassword] = useState("");
   const [postgresPassword, setPostgresPassword] = useState("");
@@ -253,6 +255,12 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
           isExisting: !!existing.adminer,
         },
         {
+          name: "composer",
+          version: existing.composer || "",
+          displayName: "Composer",
+          isExisting: !!existing.composer,
+        },
+        {
           name: "ngrok",
           version: existing.ngrok || "",
           displayName: "ngrok",
@@ -351,7 +359,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
     setStep("download");
     // Reinstall ngrok only — skip every other component. Caddy/PHP are required
     // so they come along, but the DB/phpMyAdmin/etc. are skipped.
-    const skipList = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer"];
+    const skipList = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer", "composer"];
     try {
       await invoke("download_runtime_with_skip", { packageSelection, skipList });
     } catch (e) {
@@ -546,7 +554,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
                 </p>
               </div>
               <div className="wiz-logos" aria-hidden="true">
-                {["caddy", "php", dbKey, "phpmyadmin", "postgresql", "adminer"].map((k) => (
+                {["caddy", "php", dbKey, "phpmyadmin", "postgresql", "adminer", "composer"].map((k) => (
                   <span key={k} className="logo-tile">
                     <img src={LOGOS[k]} alt="" />
                   </span>
@@ -732,6 +740,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
                   { name: "phpMyAdmin", key: "phpmyadmin" },
                   { name: "PostgreSQL", key: "postgresql" },
                   { name: "Adminer", key: "adminer" },
+                  { name: "Composer", key: "composer" },
                   { name: "ngrok", key: "ngrok" },
                 ]
                   .filter((c) => enabledComponents[c.key] !== false)

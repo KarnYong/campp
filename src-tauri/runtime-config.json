@@ -493,6 +493,129 @@
           }
         }
       ]
+    },
+    "composer": {
+      "versions": [
+        {
+          "id": "composer-2",
+          "version": "2.11.2",
+          "selected": true,
+          "display_name": "Composer 2.11.2 (Latest)",
+          "eol": false,
+          "lts": false,
+          "checksum": "dd158c0afd41d15fac89e1b4e47b5d42911fe316c3687cd5edac98319b25d028",
+          "url": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/composer-2.11.2/composer.phar",
+          "fallback_url": "https://getcomposer.org/download/2.11.2/composer.phar"
+        }
+      ]
+    },
+    "php_cli": {
+      "versions": [
+        {
+          "id": "php-8.5",
+          "version": "8.5.8",
+          "selected": true,
+          "display_name": "PHP 8.5.8 CLI",
+          "eol": false,
+          "lts": false,
+          "checksums": {
+            "linuxX64": "bfaa12e0f6f5788259bc20d0d3f08e1e851bce7f05d43e38fb77041e12a32663",
+            "linuxArm64": "86ea1fe2f6d2415eff78c2e0bcb479b221d5637c89d72e19809b65c4c0527c27",
+            "macOSX64": "d5a9a505ebce66c7f6b4f4e16629c36f385f2d360df915875722d67fe8bb2161",
+            "macOSArm64": "5e5032e8244a2367b1e8a9c70ff6f793dee7433966c9291da85fadf2167cd55f"
+          },
+          "urls": {
+            "linuxX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php_cli-8.5.8/php-8.5.8-cli-linux-x86_64.tar.gz",
+            "linuxArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php_cli-8.5.8/php-8.5.8-cli-linux-aarch64.tar.gz",
+            "macOSX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php_cli-8.5.8/php-8.5.8-cli-macos-x86_64.tar.gz",
+            "macOSArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php_cli-8.5.8/php-8.5.8-cli-macos-aarch64.tar.gz"
+          },
+          "fallback_urls": {
+            "linuxX64": "https://dl.static-php.dev/static-php-cli/bulk/php-8.5.8-cli-linux-x86_64.tar.gz",
+            "linuxArm64": "https://dl.static-php.dev/static-php-cli/bulk/php-8.5.8-cli-linux-aarch64.tar.gz",
+            "macOSX64": "https://dl.static-php.dev/static-php-cli/bulk/php-8.5.8-cli-macos-x86_64.tar.gz",
+            "macOSArm64": "https://dl.static-php.dev/static-php-cli/bulk/php-8.5.8-cli-macos-aarch64.tar.gz"
+          }
+        },
+        {
+          "id": "php-8.4",
+          "version": "8.4.23",
+          "selected": false,
+          "display_name": "PHP 8.4.23 CLI",
+          "eol": false,
+          "lts": false,
+          "checksums": {
+            "linuxX64": "5fa2b5f1cc9d7f79b19718926b4f4f0bb6949db52073b2fabf8ae52de3993af5",
+            "linuxArm64": "1faabbea9c500daab9ba202cb75ea9876191a2a8f902244e9d0464addb9b55b1",
+            "macOSX64": "be88a71134d43e8800946f8372da931ee1796c400a1fb4cf2afd718644251ffc",
+            "macOSArm64": "4a5dca6df0211f7fb21425cf1c867968b2dfb7c079f98cf37770c5728e0bf709"
+          },
+          "urls": {
+            "linuxX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php_cli-8.4.23/php-8.4.23-cli-linux-x86_64.tar.gz",
+            "linuxArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php_cli-8.4.23/php-8.4.23-cli-linux-aarch64.tar.gz",
+            "macOSX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php_cli-8.4.23/php-8.4.23-cli-macos-x86_64.tar.gz",
+            "macOSArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php_cli-8.4.23/php-8.4.23-cli-macos-aarch64.tar.gz"
+          },
+          "fallback_urls": {
+            "linuxX64": "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.23-cli-linux-x86_64.tar.gz",
+            "linuxArm64": "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.23-cli-linux-aarch64.tar.gz",
+            "macOSX64": "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.23-cli-macos-x86_64.tar.gz",
+            "macOSArm64": "https://dl.static-php.dev/static-php-cli/bulk/php-8.4.23-cli-macos-aarch64.tar.gz"
+          }
+        },
+        {
+          "id": "php-8.3",
+          "version": "8.3.32",
+          "selected": false,
+          "display_name": "PHP 8.3.32 CLI",
+          "eol": false,
+          "lts": false,
+          "checksums": {
+            "linuxX64": "7928396c17aabcd5bb074fe82e07b4cb693c6d04360a4415799a143a9f9686c6",
+            "linuxArm64": "4c29858ecfa30d93e854d17494f422b593afa6da8ec80ae979191e69604dc955",
+            "macOSX64": "6e059d66d149f2faa1d216e494a660752ef7e5769f2d4fded9a0e089574949a2",
+            "macOSArm64": "ac297da5c45c525c660b8d0c73f5aa478ad9005d7c85096dc841220aa9c192e4"
+          },
+          "urls": {
+            "linuxX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php_cli-8.3.32/php-8.3.32-cli-linux-x86_64.tar.gz",
+            "linuxArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php_cli-8.3.32/php-8.3.32-cli-linux-aarch64.tar.gz",
+            "macOSX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php_cli-8.3.32/php-8.3.32-cli-macos-x86_64.tar.gz",
+            "macOSArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php_cli-8.3.32/php-8.3.32-cli-macos-aarch64.tar.gz"
+          },
+          "fallback_urls": {
+            "linuxX64": "https://dl.static-php.dev/static-php-cli/bulk/php-8.3.32-cli-linux-x86_64.tar.gz",
+            "linuxArm64": "https://dl.static-php.dev/static-php-cli/bulk/php-8.3.32-cli-linux-aarch64.tar.gz",
+            "macOSX64": "https://dl.static-php.dev/static-php-cli/bulk/php-8.3.32-cli-macos-x86_64.tar.gz",
+            "macOSArm64": "https://dl.static-php.dev/static-php-cli/bulk/php-8.3.32-cli-macos-aarch64.tar.gz"
+          }
+        },
+        {
+          "id": "php-8.2",
+          "version": "8.2.32",
+          "selected": false,
+          "display_name": "PHP 8.2.32 CLI",
+          "eol": false,
+          "lts": false,
+          "checksums": {
+            "linuxX64": "866532d2b463ff256d063432d529e966cc53e4a039109ccbfc4ee4dc51d649f1",
+            "linuxArm64": "e94cc88f535f4e20a931093bbd36aa74b1b48f4121954aa6d7310912a8aad26e",
+            "macOSX64": "6af04840b043391716ec15020d14147bae4aadcdf3608e8ddbfcf46558f82257",
+            "macOSArm64": "3c1c359fe943aaaeb1168933b8e4b1597120c106d33bd66395fac403b6ab3ace"
+          },
+          "urls": {
+            "linuxX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php_cli-8.2.32/php-8.2.32-cli-linux-x86_64.tar.gz",
+            "linuxArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php_cli-8.2.32/php-8.2.32-cli-linux-aarch64.tar.gz",
+            "macOSX64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php_cli-8.2.32/php-8.2.32-cli-macos-x86_64.tar.gz",
+            "macOSArm64": "https://github.com/KarnYong/campp-runtime-binaries/releases/download/php_cli-8.2.32/php-8.2.32-cli-macos-aarch64.tar.gz"
+          },
+          "fallback_urls": {
+            "linuxX64": "https://dl.static-php.dev/static-php-cli/bulk/php-8.2.32-cli-linux-x86_64.tar.gz",
+            "linuxArm64": "https://dl.static-php.dev/static-php-cli/bulk/php-8.2.32-cli-linux-aarch64.tar.gz",
+            "macOSX64": "https://dl.static-php.dev/static-php-cli/bulk/php-8.2.32-cli-macos-x86_64.tar.gz",
+            "macOSArm64": "https://dl.static-php.dev/static-php-cli/bulk/php-8.2.32-cli-macos-aarch64.tar.gz"
+          }
+        }
+      ]
     }
   }
 }

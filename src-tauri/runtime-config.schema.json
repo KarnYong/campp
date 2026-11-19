@@ -27,6 +27,25 @@
         },
         "phpmyadmin": {
           "$ref": "#/definitions/binaryWithSingleUrl"
+        },
+        "mysql": {
+          "$ref": "#/definitions/binaryWithUrls"
+        },
+        "postgresql": {
+          "$ref": "#/definitions/binaryWithUrls"
+        },
+        "adminer": {
+          "$ref": "#/definitions/binaryWithSingleUrl"
+        },
+        "ngrok": {
+          "$ref": "#/definitions/binaryWithUrls"
+        },
+        "php_cli": {
+          "$ref": "#/definitions/binaryWithUrls",
+          "description": "Command-line PHP for Linux/macOS (Windows uses php.exe from the PHP zip). Entry ids match the php entries; versions match their php-fpm files."
+        },
+        "composer": {
+          "$ref": "#/definitions/binaryWithSingleUrl"
         }
       }
     }

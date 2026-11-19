@@ -801,7 +801,7 @@ pub async fn get_installed_versions() -> Result<std::collections::HashMap<String
     let mut versions = std::collections::HashMap::new();
 
     // Read version from marker files
-    for component in ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer", "ngrok"] {
+    for component in ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer", "ngrok", "composer"] {
         let marker_file = runtime_dir.join(format!("{}_installed.txt", component));
         if let Ok(content) = fs::read_to_string(&marker_file) {
             // Parse version from format: "version=1.2.3\ninstalled_at=..."
@@ -966,7 +966,7 @@ pub async fn uninstall_component(
     component: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let valid_components = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer", "ngrok"];
+    let valid_components = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer", "ngrok", "composer"];
     if !valid_components.contains(&component.as_str()) {
         return Err(format!("Invalid component: {}", component));
     }
@@ -1095,4 +1095,11 @@ pub async fn get_debug_info(app: tauri::AppHandle) -> serde_json::Value {
         "os": std::env::consts::OS,
         "arch": std::env::consts::ARCH,
     })
+}
+
+/// Open a terminal in the projects folder with CAMPP's php/composer first on PATH.
+/// Returns the launcher folder.
+#[tauri::command]
+pub async fn open_terminal() -> Result<String, String> {
+    crate::terminal::open_terminal()
 }

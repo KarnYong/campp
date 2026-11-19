@@ -81,6 +81,8 @@ src-tauri/src/
 
 **Database engine**: one MySQL-compatible engine fills the database slot. Linux = MariaDB, macOS = MySQL, Windows = the user's choice (`PackageSelection.db_engine`, default `mysql`). Always branch on `runtime::packages::active_db_engine()`, never on `cfg(target_os = "linux")`, for engine behaviour (binary, init, start flags, user SQL, labels). Frontend: `dbKeyFor()` / `getDatabaseDisplayName()` in `src/types/services.ts`.
 
+**Open terminal** (`src-tauri/src/terminal.rs`): writes `php`/`composer` launchers into `<base>/bin` (paths relative to the launcher, always `-c <php.ini>`) and opens the OS terminal in the projects folder with `<base>/bin` first on PATH for that window only. Windows CLI = `php.exe` next to `php-cgi.exe`; Linux/macOS CLI = `<runtime>/php`, from the `php_cli` config section (ids match `php`, installed automatically with PHP, same version as php-fpm). Composer is a single-file component (`binaries.composer`, `<runtime>/composer/composer.phar`). `ensure_php_ini_extensions` adds zip/fileinfo/pdo_sqlite/sqlite3 to older php.ini files.
+
 **Config Generation**: Mustache templates in `templates/` are rendered by `config/generator.rs` to produce service configs.
 
 **Runtime Binaries**: Downloaded on first-run to platform-specific data directory (`~/.campp/runtime/` on Unix, `C:\Users\<user>\.campp\runtime\` on Windows).

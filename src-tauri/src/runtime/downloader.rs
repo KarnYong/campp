@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use reqwest::Client;
 
 use crate::runtime::locator::get_app_data_paths;
-use crate::runtime::packages::{PackageSelection, get_php_package, get_mysql_package, get_mariadb_package, get_phpmyadmin_package, get_postgresql_package, get_adminer_package, get_ngrok_package, get_config};
+use crate::runtime::packages::{PackageSelection, get_php_package, get_mysql_package, get_mariadb_package, get_phpmyadmin_package, get_postgresql_package, get_adminer_package, get_ngrok_package, get_composer_package, get_config};
 use sha2::{Digest, Sha256};
 
 /// Runtime configuration loaded from runtime-config.json (shared with packages.rs)
@@ -25,6 +25,10 @@ pub enum BinaryComponent {
     PostgreSQL,
     Adminer,
     Ngrok,
+    /// Composer (single composer.phar, run by CAMPP's PHP CLI)
+    Composer,
+    /// Command-line PHP on Linux/macOS; installed together with PHP, never on its own
+    PhpCli,
 }
 
 impl BinaryComponent {
@@ -38,6 +42,8 @@ impl BinaryComponent {
             BinaryComponent::PostgreSQL => "PostgreSQL",
             BinaryComponent::Adminer => "Adminer",
             BinaryComponent::Ngrok => "ngrok",
+            BinaryComponent::Composer => "Composer",
+            BinaryComponent::PhpCli => "PHP CLI",
         }
     }
 
@@ -95,6 +101,16 @@ impl BinaryComponent {
                     .or_else(|| config.binaries.ngrok.as_ref().and_then(|nc| nc.versions.first().map(|v| v.version.clone())))
                     .unwrap_or_default()
             }
+            BinaryComponent::Composer => {
+                config.binaries.composer.as_ref()
+                    .and_then(|cc| cc.versions.iter().find(|v| v.selected).map(|v| v.version.clone()))
+                    .unwrap_or_default()
+            }
+            BinaryComponent::PhpCli => {
+                config.binaries.php_cli.as_ref()
+                    .and_then(|pc| pc.versions.iter().find(|v| v.selected).map(|v| v.version.clone()))
+                    .unwrap_or_default()
+            }
         }
     }
 
@@ -112,6 +128,8 @@ impl BinaryComponent {
             BinaryComponent::PostgreSQL => "postgresql",
             BinaryComponent::Adminer => "adminer",
             BinaryComponent::Ngrok => "ngrok",
+            BinaryComponent::Composer => "composer",
+            BinaryComponent::PhpCli => "php_cli",
         }
     }
 }
@@ -121,6 +139,16 @@ impl RuntimeDownloader {
     pub fn get_component_version(&self, component: &BinaryComponent) -> String {
         if let Some(selection) = &self.package_selection {
             match component {
+                BinaryComponent::Composer => {
+                    if let Some(pkg) = get_composer_package(&selection.composer) {
+                        return pkg.version;
+                    }
+                }
+                BinaryComponent::PhpCli => {
+                    if let Some(e) = self.php_cli_entry() {
+                        return e.version;
+                    }
+                }
                 BinaryComponent::Php => {
                     if let Some(pkg) = get_php_package(&selection.php) {
                         return pkg.version;
@@ -324,6 +352,13 @@ impl RuntimeDownloader {
         // Use selected packages if available, otherwise fall back to default config
         if let Some(selection) = &self.package_selection {
             match component {
+                BinaryComponent::Composer => {
+                    if let Some(pkg) = get_composer_package(&selection.composer) {
+                        return pkg.url;
+                    }
+                }
+                // Only the CLI matching the selected PHP id: a mismatched version is never used.
+                BinaryComponent::PhpCli => return self.php_cli_url(),
                 BinaryComponent::Php => {
                     if let Some(pkg) = get_php_package(&selection.php) {
                         return match self.platform {
@@ -521,7 +556,25 @@ impl RuntimeDownloader {
                     String::new()
                 }
             }
+            BinaryComponent::Composer => config.binaries.composer.as_ref()
+                .and_then(|cc| cc.versions.iter().find(|v| v.selected).map(|v| v.url.clone()))
+                .unwrap_or_default(),
+            BinaryComponent::PhpCli => self.php_cli_url(),
         }
+    }
+
+    /// The `php_cli` entry whose id equals the selected PHP id. No fallback to the
+    /// default entry: a CLI of a different version than php-fpm must never be installed.
+    fn php_cli_entry(&self) -> Option<VersionInfo> {
+        let id = self.package_selection.as_ref().map(|s| s.php.clone())
+            .unwrap_or_else(|| crate::runtime::packages::get_selected_package_ids().php);
+        get_config()?.binaries.php_cli?.versions.into_iter().find(|v| v.id == id)
+    }
+
+    fn php_cli_url(&self) -> String {
+        self.php_cli_entry()
+            .and_then(|e| e.urls.for_key(&self.platform.url_key()))
+            .unwrap_or_default()
     }
 
     /// Extract file extension from URL
@@ -895,8 +948,18 @@ impl RuntimeDownloader {
             }
             // Single-file components: the chosen version's checksum (it used to
             // always take the default's, so picking a non-default version failed).
-            BinaryComponent::PhpMyAdmin | BinaryComponent::Adminer => {
+            BinaryComponent::PhpMyAdmin | BinaryComponent::Adminer | BinaryComponent::Composer => {
                 self.single_file_entry(&config, component)?.checksum
+            }
+            BinaryComponent::PhpCli => {
+                let c = self.php_cli_entry()?.checksums;
+                match platform_key.as_str() {
+                    "linuxX64" => c.linux_x64,
+                    "linuxArm64" => c.linux_arm64,
+                    "macOSX64" => c.macos_x64,
+                    "macOSArm64" => c.macos_arm64,
+                    _ => None,
+                }
             }
         }
     }
@@ -917,6 +980,10 @@ impl RuntimeDownloader {
                 &config.binaries.adminer.as_ref()?.versions,
                 self.package_selection.as_ref().map(|s| s.adminer.clone()),
             ),
+            BinaryComponent::Composer => (
+                &config.binaries.composer.as_ref()?.versions,
+                self.package_selection.as_ref().map(|s| s.composer.clone()),
+            ),
             _ => return None,
         };
         versions.iter()
@@ -928,8 +995,11 @@ impl RuntimeDownloader {
     /// Upstream fallback URL for the version/platform this download targets.
     fn get_fallback_url(&self, component: &BinaryComponent) -> Option<String> {
         let config = get_config()?;
-        if matches!(component, BinaryComponent::PhpMyAdmin | BinaryComponent::Adminer) {
+        if matches!(component, BinaryComponent::PhpMyAdmin | BinaryComponent::Adminer | BinaryComponent::Composer) {
             return self.single_file_entry(&config, component)?.fallback_url;
+        }
+        if *component == BinaryComponent::PhpCli {
+            return self.php_cli_entry()?.fallback_urls?.for_key(&self.platform.url_key());
         }
         let (versions, id) = match component {
             BinaryComponent::Caddy => (Some(&config.binaries.caddy), None),
@@ -1150,6 +1220,7 @@ impl RuntimeDownloader {
             BinaryComponent::PostgreSQL,
             BinaryComponent::Adminer,
             BinaryComponent::Ngrok,
+            BinaryComponent::Composer,
         ];
         let to_download: Vec<BinaryComponent> = candidates
             .into_iter()
@@ -1160,6 +1231,19 @@ impl RuntimeDownloader {
             })
             .collect();
 
+        // Linux/macOS: the command-line PHP comes with PHP, same version (FR-004). Only
+        // when a php_cli entry matches the selected PHP; never a mismatched one.
+        let mut to_download = to_download;
+        if !cfg!(target_os = "windows") {
+            if let Some(pos) = to_download.iter().position(|c| *c == BinaryComponent::Php) {
+                if self.php_cli_url().is_empty() {
+                    tracing::warn!("no command-line PHP for the selected PHP on {:?}", self.platform);
+                } else {
+                    to_download.insert(pos + 1, BinaryComponent::PhpCli);
+                }
+            }
+        }
+
         let total = to_download.len() as u8;
         // Number of *optional* (non-Caddy/PHP) components being installed this
         // run. Used to decide whether a blocked ngrok should be non-fatal: only
@@ -1167,7 +1251,7 @@ impl RuntimeDownloader {
         // rather than a targeted reinstall of ngrok alone).
         let optional_targeted = to_download
             .iter()
-            .filter(|c| !matches!(c, BinaryComponent::Caddy | BinaryComponent::Php))
+            .filter(|c| !matches!(c, BinaryComponent::Caddy | BinaryComponent::Php | BinaryComponent::PhpCli))
             .count();
 
         // Create temp directory for downloads
@@ -1297,11 +1381,15 @@ impl RuntimeDownloader {
 
         if is_tar_gz || extension == "gz" {
             self.extract_tar_gz(&downloaded_path, &runtime_dir)?;
+            // static-php CLI tarball holds a single `php`; tar extraction drops the exec bit
+            if component == BinaryComponent::PhpCli {
+                crate::runtime::locator::ensure_executable(&runtime_dir.join("php"));
+            }
         } else if is_tar_xz || extension == "xz" {
             self.extract_tar_xz(&downloaded_path, &runtime_dir)?;
         } else if extension == "zip" {
             self.extract_zip(&downloaded_path, &runtime_dir)?;
-        } else if extension == "php" {
+        } else if extension == "php" || extension == "phar" {
             // Single PHP file (e.g., Adminer) — copy to component directory
             let component_dir = runtime_dir.join(component.binary_name());
             fs::create_dir_all(&component_dir)
@@ -1313,6 +1401,11 @@ impl RuntimeDownloader {
             if component == BinaryComponent::Adminer {
                 let generic_dest = component_dir.join("adminer.php");
                 let _ = fs::copy(&downloaded_path, &generic_dest);
+            }
+            // Fixed name the terminal launchers point at, whatever the version
+            if component == BinaryComponent::Composer {
+                fs::copy(&downloaded_path, component_dir.join("composer.phar"))
+                    .map_err(|e| format!("Failed to copy composer.phar: {}", e))?;
             }
         } else if extension.is_empty() {
             // Bare binary - copy directly to runtime directory
@@ -1417,7 +1510,7 @@ impl RuntimeDownloader {
             Err(_) => return installed,
         };
 
-        for component in ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer", "ngrok"] {
+        for component in ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer", "ngrok", "composer"] {
             let marker_file = runtime_dir.join(format!("{}_installed.txt", component));
             if let Ok(content) = fs::read_to_string(&marker_file) {
                 // Parse version from format: "version=1.2.3\ninstalled_at=..."
@@ -1435,7 +1528,7 @@ impl RuntimeDownloader {
 
     /// Uninstall a specific component by removing its marker file and binary files
     pub fn uninstall_component(&self, component: &str) -> Result<(), String> {
-        let valid_components = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer", "ngrok"];
+        let valid_components = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer", "ngrok", "composer"];
         if !valid_components.contains(&component) {
             return Err(format!("Invalid component: {}", component));
         }
@@ -1482,6 +1575,10 @@ impl RuntimeDownloader {
                 }
             }
             "mysql" | "mariadb" => Self::remove_db_engine(&runtime_dir, component)?,
+            // runtime/composer/ only; PHP (and its CLI at runtime/php) stay
+            "composer" => {
+                Self::remove_entries(&runtime_dir, &["composer"])?;
+            }
             "phpmyadmin" => {
                 Self::remove_versioned_dirs(&runtime_dir, "phpMyAdmin")?;
                 // Also lowercase variants
@@ -1790,6 +1887,17 @@ mod tests {
         // Reinstalling the active engine
         let reinstall_mysql = ["caddy", "php", "mariadb", "phpmyadmin", "postgresql", "adminer", "ngrok"];
         assert_eq!(db_for_download(true, MySQL, &reinstall_mysql), MySQL);
+    }
+
+    #[test]
+    fn removing_composer_keeps_php_cli() {
+        let rt = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir_all(rt.path().join("composer")).unwrap();
+        std::fs::write(rt.path().join("composer/composer.phar"), "phar").unwrap();
+        std::fs::write(rt.path().join("php"), "cli").unwrap();
+        RuntimeDownloader::remove_entries(rt.path(), &["composer"]).unwrap();
+        assert!(!rt.path().join("composer").exists());
+        assert!(rt.path().join("php").exists());
     }
 
     #[test]

@@ -6,6 +6,7 @@ mod database;
 mod error;
 mod process;
 mod runtime;
+mod terminal;
 
 // Re-exports
 pub use process::{ServiceInfo, ServiceMap, ServiceState, ServiceType};
@@ -60,7 +61,7 @@ pub fn prepare_runtime() -> i32 {
         }
     };
 
-    let skip: &[&str] = &["postgresql", "adminer", "ngrok"];
+    let skip: &[&str] = &["postgresql", "adminer", "ngrok", "composer"];
     let cb: crate::runtime::downloader::ProgressCallback = Box::new(|_| {});
     match tauri::async_runtime::block_on(downloader.download_all_with_skip(cb, skip)) {
         Ok(files) => {
@@ -163,6 +164,7 @@ pub fn run() {
             commands::open_backups_folder,
             commands::cleanup_all_services,
             commands::uninstall_component,
+            commands::open_terminal,
             commands::get_debug_info,
             commands::get_ngrok_public_url,
             commands::add_windows_defender_exclusion,

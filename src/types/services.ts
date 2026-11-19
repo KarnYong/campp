@@ -104,6 +104,7 @@ export interface PackagesConfig {
   phpmyadmin: PhpMyAdminPackage[];
   adminer: PhpMyAdminPackage[];
   ngrok: MySQLPackage[];
+  composer: PhpMyAdminPackage[];
 }
 
 export interface PackageSelection {
@@ -114,6 +115,7 @@ export interface PackageSelection {
   postgresql: string;
   adminer: string;
   ngrok: string;
+  composer: string;
   /** Windows only: which engine fills the database slot. Absent = "mysql". */
   db_engine?: DbEngine;
 }

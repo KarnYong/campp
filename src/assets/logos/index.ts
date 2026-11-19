@@ -6,6 +6,7 @@ import postgresql from "./postgresql.svg";
 import phpmyadmin from "./phpmyadmin.svg";
 import adminer from "./adminer.svg";
 import ngrok from "./ngrok.svg";
+import composer from "./composer.svg";
 
 // Keyed by component key (same keys as get_installed_versions / check_existing_components).
 export const LOGOS: Record<string, string> = {
@@ -17,4 +18,5 @@ export const LOGOS: Record<string, string> = {
   phpmyadmin,
   adminer,
   ngrok,
+  composer,
 };

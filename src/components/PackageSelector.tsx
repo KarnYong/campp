@@ -31,6 +31,7 @@ export function PackageSelector({ onSelectionChange, initialSelection, initialEn
       postgresql: "postgresql-18.3",
       adminer: "adminer-5.1",
       ngrok: "ngrok-3",
+      composer: "composer-2",
       db_engine: "mysql",
     }
   );
@@ -44,6 +45,7 @@ export function PackageSelector({ onSelectionChange, initialSelection, initialEn
       postgresql: false,
       adminer: false,
       ngrok: false,
+      composer: true,
     }
   );
 
@@ -169,6 +171,7 @@ export function PackageSelector({ onSelectionChange, initialSelection, initialEn
       password: { value: postgresPassword || "", onChange: onPostgresPasswordChange },
     },
     { key: "adminer", name: "Adminer", tag: "DB admin", options: packages.adminer as PhpMyAdminPackage[], value: selection.adminer, onChange: (v) => setSelection({ ...selection, adminer: v }) },
+    { key: "composer", name: "Composer", tag: "PHP packages", options: (packages.composer || []) as PhpMyAdminPackage[], value: selection.composer, onChange: (v) => setSelection({ ...selection, composer: v }) },
     // ngrok — Windows only (upcoming on Linux/macOS)
     ...(currentPlatform === "windows"
       ? [{ key: "ngrok", name: "ngrok", tag: "Dev tunnel", options: (packages.ngrok || []) as MySQLPackage[], value: selection.ngrok, onChange: (v: string) => setSelection({ ...selection, ngrok: v }) }]

@@ -25,11 +25,12 @@ const DEFAULT_SELECTION: PackageSelection = {
   postgresql: "postgresql-18.3",
   adminer: "adminer-5.1",
   ngrok: "ngrok-3",
+  composer: "composer-2",
 };
 
 // All but the target go in the skip list. The backend still installs
 // Caddy/PHP if they are missing.
-const ALL_COMPONENTS = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer", "ngrok"];
+const ALL_COMPONENTS = ["caddy", "php", "mysql", "mariadb", "phpmyadmin", "postgresql", "adminer", "ngrok", "composer"];
 
 type Phase = "select" | "running" | "done" | "error";
 

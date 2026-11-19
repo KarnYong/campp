@@ -515,6 +515,8 @@ fn start_php_fpm(service_process: &mut ServiceProcess, paths: &RuntimePaths) -> 
     if !paths.php_ini.exists() {
         crate::config::generator::generate_php_ini(&paths.php_ini, paths)?;
     }
+    // Older php.ini files lack zip/fileinfo/pdo_sqlite/sqlite3 (Composer, Laravel)
+    crate::config::generator::ensure_php_ini_extensions(&paths.php_ini)?;
 
     // Open log file with retry logic
     let log_path = paths.logs_dir.join("php-fpm.log");
