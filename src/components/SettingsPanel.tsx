@@ -4,7 +4,7 @@ import { PasswordInput } from "./PasswordInput";
 import { BusyDialog } from "./BusyDialog";
 import { isWeakPassword } from "../utils/password";
 import { useState, useEffect, useCallback } from "react";
-import { AppSettings, getDatabaseDisplayName } from "../types/services";
+import { AppSettings, dbKeyFor, getDatabaseDisplayName } from "../types/services";
 import { detectPlatform } from "../utils/platform";
 import { LOGOS } from "../assets/logos";
 
@@ -17,7 +17,7 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({ onClose, onSettingsChanged, servicesActive = false, ...props }: SettingsPanelProps) {
-  const dbComponentKey = detectPlatform() === "linux" ? "mariadb" : "mysql";
+  const dbComponentKey = dbKeyFor(detectPlatform());
   const [settings, setSettings] = useState<AppSettings>({
     web_port: 8080,
     php_port: 9000,

@@ -99,6 +99,56 @@ pub struct PackageSelection {
     pub adminer: String,
     #[serde(default = "default_ngrok")]
     pub ngrok: String,
+    /// Windows only: "mysql" (default) or "mariadb". Ignored on macOS/Linux,
+    /// where the engine is fixed. Old settings files load as "mysql".
+    #[serde(default = "default_db_engine")]
+    pub db_engine: String,
+}
+
+/// The MySQL-compatible database engine that fills the database slot.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DbEngine {
+    MySql,
+    MariaDb,
+}
+
+impl DbEngine {
+    /// Runtime component key ("mysql" / "mariadb").
+    pub fn key(&self) -> &'static str {
+        match self {
+            DbEngine::MySql => "mysql",
+            DbEngine::MariaDb => "mariadb",
+        }
+    }
+
+    pub fn display(&self) -> &'static str {
+        match self {
+            DbEngine::MySql => "MySQL",
+            DbEngine::MariaDb => "MariaDB",
+        }
+    }
+}
+
+/// Linux is MariaDB-only, macOS MySQL-only; Windows follows the user's choice.
+pub fn engine_for(os: &str, db_engine: &str) -> DbEngine {
+    match os {
+        "linux" => DbEngine::MariaDb,
+        "windows" if db_engine == "mariadb" => DbEngine::MariaDb,
+        _ => DbEngine::MySql,
+    }
+}
+
+/// The active database engine on this machine.
+// ponytail: reads settings.json per call; fine for start/locate/download paths, cache if it ever lands in a hot loop.
+pub fn active_db_engine() -> DbEngine {
+    engine_for(
+        std::env::consts::OS,
+        &crate::config::settings::AppSettings::load().package_selection.db_engine,
+    )
+}
+
+fn default_db_engine() -> String {
+    "mysql".to_string()
 }
 
 fn default_mariadb() -> String {
@@ -127,6 +177,7 @@ impl Default for PackageSelection {
             postgresql: "postgresql-18.3".to_string(),
             adminer: "adminer-5.1".to_string(),
             ngrok: "ngrok-3".to_string(),
+            db_engine: default_db_engine(),
         }
     }
 }
@@ -185,6 +236,9 @@ pub struct VersionInfo {
     #[serde(default)]
     pub checksums: Checksums,
     pub urls: Urls,
+    /// Upstream URLs tried when the (mirrored) `urls` download fails. Same file, same checksum.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback_urls: Option<Urls>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -229,6 +283,9 @@ pub struct VersionInfoSingleUrl {
     #[serde(default)]
     pub checksum: Option<String>,
     pub url: String,
+    /// Upstream URL tried when the (mirrored) `url` download fails.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -245,6 +302,21 @@ pub struct Urls {
     pub macos_x64: Option<String>,
     #[serde(rename = "macOSArm64")]
     pub macos_arm64: Option<String>,
+}
+
+impl Urls {
+    /// URL for a platform key ("windowsX64", "linuxArm64", ...), if any.
+    pub fn for_key(&self, key: &str) -> Option<String> {
+        match key {
+            "windowsX64" => self.windows_x64.clone(),
+            "windowsArm64" => self.windows_arm64.clone(),
+            "linuxX64" => self.linux_x64.clone(),
+            "linuxArm64" => self.linux_arm64.clone(),
+            "macOSX64" => self.macos_x64.clone(),
+            "macOSArm64" => self.macos_arm64.clone(),
+            _ => None,
+        }
+    }
 }
 
 /// Global runtime config cache
@@ -331,18 +403,6 @@ pub fn load_runtime_config_from_file() -> Option<RuntimeConfig> {
     None
 }
 
-/// Get the platform-appropriate database display name
-fn get_database_display_name(display_name: &str) -> String {
-    // On Linux, show "MariaDB", on Windows/macOS show "MySQL"
-    #[cfg(target_os = "linux")]
-    {
-        display_name.replace("MySQL", "MariaDB")
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        display_name.replace("MariaDB", "MySQL")
-    }
-}
 
 /// Get all available packages from config file or defaults
 pub fn get_available_packages() -> PackagesConfig {
@@ -500,6 +560,7 @@ pub fn get_selected_package_ids() -> PackageSelection {
             ngrok: cfg.binaries.ngrok.as_ref()
                 .and_then(|nc| nc.versions.iter().find(|v| v.selected).map(|v| v.id.clone()))
                 .unwrap_or_else(|| "ngrok-3".to_string()),
+            db_engine: default_db_engine(),
         }
     } else {
         PackageSelection::default()
@@ -665,8 +726,8 @@ fn get_default_packages() -> PackagesConfig {
                 id: "mariadb-12.3".to_string(),
                 version: "12.3.3".to_string(),
                 display_name: "MariaDB 12.3.3 LTS (Latest)".to_string(),
-                windows_x64: String::new(),
-                windows_arm64: String::new(),
+                windows_x64: "https://archive.mariadb.org/mariadb-12.3.3/winx64-packages/mariadb-12.3.3-winx64.zip".to_string(),
+                windows_arm64: "https://archive.mariadb.org/mariadb-12.3.3/winx64-packages/mariadb-12.3.3-winx64.zip".to_string(),
                 linux_x64: "https://archive.mariadb.org/mariadb-12.3.3/bintar-linux-systemd-x86_64/mariadb-12.3.3-linux-systemd-x86_64.tar.gz".to_string(),
                 linux_arm64: String::new(),
                 macos_x64: String::new(),
@@ -733,5 +794,45 @@ fn get_default_packages() -> PackagesConfig {
                 recommended: true,
             },
         ],
+    }
+}
+
+#[cfg(test)]
+mod db_engine_tests {
+    use super::*;
+
+    #[test]
+    fn engine_is_fixed_on_linux_and_macos_and_chosen_on_windows() {
+        assert_eq!(engine_for("linux", "mysql"), DbEngine::MariaDb);
+        assert_eq!(engine_for("macos", "mariadb"), DbEngine::MySql);
+        assert_eq!(engine_for("windows", "mariadb"), DbEngine::MariaDb);
+        assert_eq!(engine_for("windows", "mysql"), DbEngine::MySql);
+        assert_eq!(engine_for("windows", "bogus"), DbEngine::MySql);
+    }
+
+    #[test]
+    fn fallback_urls_are_optional_and_resolve_per_platform() {
+        let with = r#"{"id":"postgresql-17","version":"17.12.0","selected":false,"display_name":"PostgreSQL 17",
+            "urls":{"linuxX64":"https://mirror/pg.tar.gz"},
+            "fallback_urls":{"linuxX64":"https://upstream/pg.tar.gz"}}"#;
+        let v: VersionInfo = serde_json::from_str(with).unwrap();
+        assert_eq!(v.fallback_urls.unwrap().for_key("linuxX64").as_deref(), Some("https://upstream/pg.tar.gz"));
+
+        let without = r#"{"id":"php-8.4","version":"8.4.27","selected":false,"display_name":"PHP","urls":{}}"#;
+        let v: VersionInfo = serde_json::from_str(without).unwrap();
+        assert!(v.fallback_urls.is_none());
+        assert!(!serde_json::to_string(&v).unwrap().contains("fallback"), "absent field must not be written");
+
+        let single = r#"{"id":"adminer-6.1","version":"6.3.0","selected":false,"display_name":"Adminer",
+            "url":"https://mirror/a.php","fallback_url":"https://upstream/a.php"}"#;
+        let s: VersionInfoSingleUrl = serde_json::from_str(single).unwrap();
+        assert_eq!(s.fallback_url.as_deref(), Some("https://upstream/a.php"));
+    }
+
+    #[test]
+    fn old_selection_without_db_engine_loads_as_mysql() {
+        let old = r#"{"php":"php-8.5","mysql":"mysql-8.4","phpmyadmin":"phpmyadmin-5.2"}"#;
+        let sel: PackageSelection = serde_json::from_str(old).unwrap();
+        assert_eq!(sel.db_engine, "mysql");
     }
 }

@@ -8,6 +8,8 @@ import {
   PackageSelection,
   DependencyCheckResult,
   getDatabaseDisplayName,
+  dbKeyFor,
+  setActiveDbEngine,
 } from "../types/services";
 import { PackageSelector } from "./PackageSelector";
 import { NgrokAntivirusNotice } from "./NgrokAntivirusNotice";
@@ -90,7 +92,12 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
     postgresql: "postgresql-18.3",
     adminer: "adminer-5.1",
     ngrok: "ngrok-3",
+    db_engine: "mysql",
   });
+  // Keep every database label in sync with the engine picked here (Windows).
+  useEffect(() => setActiveDbEngine(packageSelection.db_engine), [packageSelection.db_engine]);
+  const dbKey = dbKeyFor(currentPlatform, packageSelection.db_engine);
+  const dbName = getDatabaseDisplayName(currentPlatform, packageSelection.db_engine);
   const [existingComponents, setExistingComponents] = useState<ExistingComponent[]>([]);
   const [hasExistingOnWelcome, setHasExistingOnWelcome] = useState(false);
   const [dependencyCheckResult, setDependencyCheckResult] = useState<DependencyCheckResult | null>(null);
@@ -180,9 +187,8 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
   const startDownload = async () => {
     setError(null);
 
-    const dbKey = currentPlatform === "linux" ? "mariadb" : "mysql";
     if (enabledComponents[dbKey] && !mysqlPassword.trim()) {
-      setError("MySQL password is required.");
+      setError(`${dbName} password is required.`);
       return;
     }
     if (enabledComponents.postgresql && !postgresPassword.trim()) {
@@ -208,9 +214,6 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
     try {
       const existing = await invoke<Record<string, string>>("check_existing_components");
 
-      // Determine which database component to show based on platform
-      const dbKey = currentPlatform === "linux" ? "mariadb" : "mysql";
-
       // All components that should be shown
       const allComponents: ExistingComponent[] = [
         {
@@ -228,7 +231,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
         {
           name: dbKey,
           version: existing[dbKey] || "",
-          displayName: getDatabaseDisplayName(currentPlatform),
+          displayName: dbName,
           isExisting: !!existing[dbKey],
         },
         {
@@ -456,7 +459,6 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
 
   const STEPS = ["Welcome", "Components", "Review", "Install", "Done"];
   const currentStepNum = getStepNumber();
-  const dbKey = currentPlatform === "linux" ? "mariadb" : "mysql";
   const versionOf = (key: string): string | undefined => {
     if (key === "caddy") return caddyVersion;
     const id = packageSelection[key as keyof PackageSelection];
@@ -538,7 +540,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
               <div className="wiz__intro">
                 <h2>Welcome to CAMPP</h2>
                 <p>
-                  CAMPP needs a few runtime binaries: Caddy, PHP-FPM, {getDatabaseDisplayName(currentPlatform)} and
+                  CAMPP needs a few runtime binaries: Caddy, PHP-FPM, {dbName} and
                   phpMyAdmin. You pick the versions on the next screen. Everything installs into the CAMPP folder, so
                   no admin rights are needed.
                 </p>
@@ -726,7 +728,7 @@ export function FirstRunWizard({ onComplete, ...props }: FirstRunWizardProps) {
                 {[
                   { name: "Caddy", key: "caddy" },
                   { name: "PHP", key: "php" },
-                  { name: getDatabaseDisplayName(currentPlatform), key: dbKey },
+                  { name: dbName, key: dbKey },
                   { name: "phpMyAdmin", key: "phpmyadmin" },
                   { name: "PostgreSQL", key: "postgresql" },
                   { name: "Adminer", key: "adminer" },

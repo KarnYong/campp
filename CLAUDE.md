@@ -77,7 +77,9 @@ src-tauri/src/
 **Service Management**: The `ProcessManager` in `process/manager.rs` manages three core services:
 - Caddy (web server) - port 8080
 - PHP-FPM - port 9000 (internal)
-- MariaDB - port 3307
+- MySQL/MariaDB - port 3307
+
+**Database engine**: one MySQL-compatible engine fills the database slot. Linux = MariaDB, macOS = MySQL, Windows = the user's choice (`PackageSelection.db_engine`, default `mysql`). Always branch on `runtime::packages::active_db_engine()`, never on `cfg(target_os = "linux")`, for engine behaviour (binary, init, start flags, user SQL, labels). Frontend: `dbKeyFor()` / `getDatabaseDisplayName()` in `src/types/services.ts`.
 
 **Config Generation**: Mustache templates in `templates/` are rendered by `config/generator.rs` to produce service configs.
 
@@ -87,7 +89,8 @@ src-tauri/src/
 ```
 ~/.campp/
 ├── config/           # Generated configs (Caddyfile, php-fpm.conf, etc.)
-├── mysql/data/       # MariaDB datadir
+├── mysql/data/       # MySQL datadir (Windows/macOS) or MariaDB datadir (Linux)
+├── mariadb/data/     # Windows only: MariaDB datadir when MariaDB is the chosen engine
 ├── logs/             # Service logs
 ├── projects/         # User projects
 └── runtime/          # Downloaded binaries

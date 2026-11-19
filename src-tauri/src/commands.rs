@@ -377,7 +377,10 @@ pub async fn do_reset_installation(pm: Arc<Mutex<ProcessManager>>) -> Result<Str
     let paths = crate::runtime::locator::get_app_data_paths()?;
 
     // Delete runtime binaries, config, data, and logs — but preserve projects
-    for dir in [&paths.runtime_dir, &paths.config_dir, &paths.mysql_data_dir, &paths.pgsql_data_dir, &paths.logs_dir] {
+    // Both engine datadirs: on Windows MySQL and MariaDB each keep their own.
+    let mysql_data = paths.base_dir.join("mysql").join("data");
+    let mariadb_data = paths.base_dir.join("mariadb").join("data");
+    for dir in [&paths.runtime_dir, &paths.config_dir, &paths.mysql_data_dir, &mysql_data, &mariadb_data, &paths.pgsql_data_dir, &paths.logs_dir] {
         if dir.exists() {
             remove_dir_all_with_retry(dir)?;
         }
@@ -552,11 +555,51 @@ pub async fn get_package_selection() -> Result<PackageSelection, String> {
 #[tauri::command]
 pub async fn update_package_selection(
     package_selection: PackageSelection,
+    state: State<'_, AppState>,
 ) -> Result<(), String> {
     let mut settings = AppSettings::load();
+    if engine_switch_needed(
+        std::env::consts::OS,
+        &settings.package_selection.db_engine,
+        &package_selection.db_engine,
+    ) {
+        if crate::backup::is_busy() {
+            return Err("Can't switch database engine while a backup or restore is running".to_string());
+        }
+        // Stop the old engine (only one may run) and forget its located
+        // binary/datadir so the next start picks up the new engine.
+        let pm = state.process_manager.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut manager = pm.lock()
+                .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+            let _ = manager.stop(ServiceType::MySQL);
+            manager.reset_runtime_paths();
+            Ok::<(), String>(())
+        }).await.map_err(|e| format!("Task error: {}", e))??;
+    }
     settings.package_selection = package_selection;
     settings.save()?;
     Ok(())
+}
+
+/// The engine choice only exists on Windows; elsewhere db_engine is ignored.
+fn engine_switch_needed(os: &str, old: &str, new: &str) -> bool {
+    os == "windows"
+        && crate::runtime::packages::engine_for(os, old) != crate::runtime::packages::engine_for(os, new)
+}
+
+#[cfg(test)]
+mod engine_switch_tests {
+    use super::engine_switch_needed;
+
+    #[test]
+    fn switch_only_counts_on_windows_and_on_a_real_change() {
+        assert!(engine_switch_needed("windows", "mysql", "mariadb"));
+        assert!(!engine_switch_needed("windows", "mysql", "mysql"));
+        assert!(!engine_switch_needed("windows", "mysql", "bogus")); // bogus = mysql
+        assert!(!engine_switch_needed("linux", "mysql", "mariadb"));
+        assert!(!engine_switch_needed("macos", "mysql", "mariadb"));
+    }
 }
 
 /// Update database root passwords in settings and apply to running databases
@@ -932,7 +975,9 @@ pub async fn uninstall_component(
     let service_type = match component.as_str() {
         "caddy" => Some(ServiceType::Caddy),
         "php" => Some(ServiceType::PhpFpm),
-        "mysql" | "mariadb" => Some(ServiceType::MySQL),
+        // Only stop the database if it's the engine being removed; on Windows the
+        // other engine may be installed (and running) side by side.
+        "mysql" | "mariadb" if component == crate::runtime::packages::active_db_engine().key() => Some(ServiceType::MySQL),
         "postgresql" => Some(ServiceType::PostgreSQL),
         _ => None,
     };

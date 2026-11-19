@@ -114,7 +114,34 @@ export interface PackageSelection {
   postgresql: string;
   adminer: string;
   ngrok: string;
+  /** Windows only: which engine fills the database slot. Absent = "mysql". */
+  db_engine?: DbEngine;
 }
+
+export type DbEngine = "mysql" | "mariadb";
+
+// The active Windows database engine, set wherever the package selection is loaded
+// or changed. ponytail: module state so every label helper stays synchronous; move
+// to context if components ever need to re-render on change without a reload.
+let activeDbEngine: DbEngine = "mysql";
+export const setActiveDbEngine = (engine: DbEngine | undefined) => {
+  activeDbEngine = engine === "mariadb" ? "mariadb" : "mysql";
+};
+
+const detect = () => {
+  const ua = window.navigator.userAgent.toLowerCase();
+  if (ua.includes("win")) return "windows";
+  if (ua.includes("mac")) return "darwin";
+  return "linux";
+};
+
+/** Runtime component key of the database engine: Linux MariaDB, macOS MySQL, Windows the user's choice. */
+export const dbKeyFor = (platform?: string, engine: DbEngine | undefined = activeDbEngine): DbEngine => {
+  const p = platform || detect();
+  if (p === "linux") return "mariadb";
+  if (p === "windows" && engine === "mariadb") return "mariadb";
+  return "mysql";
+};
 
 export const DEFAULT_PORTS = {
   [ServiceType.Caddy]: 8080,
@@ -132,21 +159,9 @@ export const SERVICE_DISPLAY_NAMES = {
   [ServiceType.Ngrok]: "ngrok",
 } as const;
 
-// Platform-specific display name for MySQL/MariaDB
-export const getDatabaseDisplayName = (platform?: string): string => {
-  // Auto-detect platform if not provided
-  const p = platform || (() => {
-    const ua = window.navigator.userAgent.toLowerCase();
-    if (ua.includes("win")) return "windows";
-    if (ua.includes("mac")) return "darwin";
-    return "linux";
-  })();
-  // Show "MySQL" for Windows and macOS, "MariaDB" for Linux
-  if (p === "windows" || p === "darwin") {
-    return "MySQL";
-  }
-  return "MariaDB";
-};
+// Display name of the active database engine (see dbKeyFor)
+export const getDatabaseDisplayName = (platform?: string, engine?: DbEngine): string =>
+  dbKeyFor(platform, engine ?? activeDbEngine) === "mariadb" ? "MariaDB" : "MySQL";
 
 export const SERVICE_DESCRIPTIONS = {
   [ServiceType.Caddy]: "Web Server",

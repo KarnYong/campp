@@ -542,7 +542,9 @@ impl RuntimeDownloader {
         "zip".to_string()
     }
 
-    /// Download a single binary component
+    /// Download a single binary component: the configured (mirror) URL first, then
+    /// the upstream fallback URL if the mirror fails for any reason (network, HTTP,
+    /// wrong file type, checksum). Both must match the same checksum.
     async fn download_component(
         &self,
         component: BinaryComponent,
@@ -552,6 +554,30 @@ impl RuntimeDownloader {
         total: u8,
     ) -> Result<PathBuf, String> {
         let url = self.get_binary_url(component);
+        match self.download_component_from(component, &url, dest_dir, progress_cb, current, total).await {
+            Ok(path) => Ok(path),
+            Err(e) => match self.get_fallback_url(&component).filter(|f| !f.is_empty() && *f != url) {
+                Some(fallback) => {
+                    tracing::warn!("{} download failed ({}); trying upstream {}", component.name(), e, fallback);
+                    self.download_component_from(component, &fallback, dest_dir, progress_cb, current, total)
+                        .await
+                        .map_err(|e2| format!("{}\n\nUpstream fallback also failed: {}", e, e2))
+                }
+                None => Err(e),
+            },
+        }
+    }
+
+    async fn download_component_from(
+        &self,
+        component: BinaryComponent,
+        url: &str,
+        dest_dir: &Path,
+        progress_cb: &ProgressCallback,
+        _current: u8,
+        total: u8,
+    ) -> Result<PathBuf, String> {
+        let url = url.to_string();
         let extension = Self::get_extension_from_url(&url);
 
         tracing::debug!("Platform: {:?}", self.platform);
@@ -867,21 +893,58 @@ impl RuntimeDownloader {
                 }
                 None
             }
-            BinaryComponent::PhpMyAdmin => {
-                let version = config.binaries.phpmyadmin.versions.iter()
-                    .find(|v| v.selected)?;
-                version.checksum.clone()
-            }
-            BinaryComponent::Adminer => {
-                if let Some(ac) = &config.binaries.adminer {
-                    let version = ac.versions.iter()
-                        .find(|v| v.selected)?;
-                    version.checksum.clone()
-                } else {
-                    None
-                }
+            // Single-file components: the chosen version's checksum (it used to
+            // always take the default's, so picking a non-default version failed).
+            BinaryComponent::PhpMyAdmin | BinaryComponent::Adminer => {
+                self.single_file_entry(&config, component)?.checksum
             }
         }
+    }
+
+    /// Config entry a single-file component (phpMyAdmin/Adminer) download targets:
+    /// the package selection's id, else the `selected` default.
+    fn single_file_entry(
+        &self,
+        config: &crate::runtime::packages::RuntimeConfig,
+        component: &BinaryComponent,
+    ) -> Option<crate::runtime::packages::VersionInfoSingleUrl> {
+        let (versions, id) = match component {
+            BinaryComponent::PhpMyAdmin => (
+                &config.binaries.phpmyadmin.versions,
+                self.package_selection.as_ref().map(|s| s.phpmyadmin.clone()),
+            ),
+            BinaryComponent::Adminer => (
+                &config.binaries.adminer.as_ref()?.versions,
+                self.package_selection.as_ref().map(|s| s.adminer.clone()),
+            ),
+            _ => return None,
+        };
+        versions.iter()
+            .find(|v| id.as_deref() == Some(v.id.as_str()))
+            .or_else(|| versions.iter().find(|v| v.selected))
+            .cloned()
+    }
+
+    /// Upstream fallback URL for the version/platform this download targets.
+    fn get_fallback_url(&self, component: &BinaryComponent) -> Option<String> {
+        let config = get_config()?;
+        if matches!(component, BinaryComponent::PhpMyAdmin | BinaryComponent::Adminer) {
+            return self.single_file_entry(&config, component)?.fallback_url;
+        }
+        let (versions, id) = match component {
+            BinaryComponent::Caddy => (Some(&config.binaries.caddy), None),
+            BinaryComponent::Php => (Some(&config.binaries.php), self.package_selection.as_ref().map(|s| s.php.clone())),
+            BinaryComponent::MySQL => (Some(&config.binaries.mysql), self.package_selection.as_ref().map(|s| s.mysql.clone())),
+            BinaryComponent::MariaDB => (config.binaries.mariadb.as_ref(), self.package_selection.as_ref().map(|s| s.mariadb.clone())),
+            BinaryComponent::PostgreSQL => (config.binaries.postgresql.as_ref(), self.package_selection.as_ref().map(|s| s.postgresql.clone())),
+            BinaryComponent::Ngrok => (config.binaries.ngrok.as_ref(), self.package_selection.as_ref().map(|s| s.ngrok.clone())),
+            _ => return None,
+        };
+        let versions = &versions?.versions;
+        let entry = versions.iter()
+            .find(|v| id.as_deref() == Some(v.id.as_str()))
+            .or_else(|| versions.iter().find(|v| v.selected))?;
+        entry.fallback_urls.as_ref()?.for_key(&self.platform.url_key())
     }
 
     /// Append antivirus-quarantine guidance to an error when Windows Defender
@@ -1062,11 +1125,15 @@ impl RuntimeDownloader {
         let temp_dir = std::env::temp_dir().join("campp-download");
         let _ = fs::remove_dir_all(&temp_dir);
 
-        // On Linux, use MariaDB instead of MySQL
-        let db_component = match self.platform {
-            Platform::LinuxX64 | Platform::LinuxArm64 => BinaryComponent::MariaDB,
-            _ => BinaryComponent::MySQL,
+        // Linux: MariaDB; macOS: MySQL; Windows: the user's choice
+        let active_db = match crate::runtime::packages::active_db_engine() {
+            crate::runtime::packages::DbEngine::MariaDb => BinaryComponent::MariaDB,
+            crate::runtime::packages::DbEngine::MySql => BinaryComponent::MySQL,
         };
+        // Windows can hold both engines. A targeted install of the inactive one
+        // (skip list excludes it but includes the active one) downloads it;
+        // a full install only ever fetches the active engine.
+        let db_component = db_for_download(cfg!(target_os = "windows"), active_db, skip_list);
 
         // Build the effective download list with the skip logic applied once.
         // Caddy and PHP are required: they are only skipped when already
@@ -1324,7 +1391,8 @@ impl RuntimeDownloader {
             let caddy_exe = runtime_dir.join("caddy").join("caddy.exe");
             let php_exe = runtime_dir.join("php").join("php.exe");
             let mysql_exe = runtime_dir.join("mysql").join("bin").join("mysqld.exe");
-            caddy_exe.exists() || php_exe.exists() || mysql_exe.exists()
+            let mariadb_exe = runtime_dir.join("mariadb").join("bin").join("mariadbd.exe");
+            caddy_exe.exists() || php_exe.exists() || mysql_exe.exists() || mariadb_exe.exists()
         };
         #[cfg(not(target_os = "windows"))]
         let bin_check = {
@@ -1413,28 +1481,7 @@ impl RuntimeDownloader {
                     }
                 }
             }
-            "mysql" => {
-                let mut removed = Self::remove_entries(&runtime_dir, &["mysql", "mariadb"])?;
-                removed |= Self::remove_versioned_dirs(&runtime_dir, "mysql-")?;
-                removed |= Self::remove_versioned_dirs(&runtime_dir, "mariadb-")?;
-                // Standalone binaries
-                for name in ["mysqld", "mysqld.exe", "mariadbd"] {
-                    let p = runtime_dir.join(name);
-                    if p.exists() {
-                        let _ = fs::remove_file(&p);
-                    }
-                }
-                if !removed {
-                    // Try mysql/ and mariadb/ directories
-                    for dir_name in ["mysql", "mariadb"] {
-                        let d = runtime_dir.join(dir_name);
-                        if d.exists() {
-                            fs::remove_dir_all(&d)
-                                .map_err(|e| format!("Failed to remove {} dir: {}", dir_name, e))?;
-                        }
-                    }
-                }
-            }
+            "mysql" | "mariadb" => Self::remove_db_engine(&runtime_dir, component)?,
             "phpmyadmin" => {
                 Self::remove_versioned_dirs(&runtime_dir, "phpMyAdmin")?;
                 // Also lowercase variants
@@ -1498,6 +1545,19 @@ impl RuntimeDownloader {
     }
 
     /// Remove entries (files or directories) in runtime_dir that match exact names
+    /// Remove one database engine's binaries only. On Windows MySQL and MariaDB can
+    /// be installed side by side, so uninstalling one must never touch the other.
+    /// Data directories are never touched here.
+    fn remove_db_engine(runtime_dir: &Path, engine: &str) -> Result<(), String> {
+        Self::remove_entries(runtime_dir, &[engine])?;
+        Self::remove_versioned_dirs(runtime_dir, &format!("{engine}-"))?;
+        let bins: &[&str] = if engine == "mysql" { &["mysqld", "mysqld.exe"] } else { &["mariadbd", "mariadbd.exe"] };
+        for name in bins {
+            let _ = fs::remove_file(runtime_dir.join(name));
+        }
+        Ok(())
+    }
+
     fn remove_entries(runtime_dir: &Path, names: &[&str]) -> Result<bool, String> {
         let mut removed = false;
         for name in names {
@@ -1678,6 +1738,19 @@ fn extract_tar_entries<R: std::io::Read>(
     Ok(())
 }
 
+/// Which database engine a download run should fetch (see `download_all_with_skip`).
+fn db_for_download(windows: bool, active: BinaryComponent, skip_list: &[&str]) -> BinaryComponent {
+    let other = match active {
+        BinaryComponent::MySQL => BinaryComponent::MariaDB,
+        _ => BinaryComponent::MySQL,
+    };
+    if windows && skip_list.contains(&active.binary_name()) && !skip_list.contains(&other.binary_name()) {
+        other
+    } else {
+        active
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::RuntimeDownloader;
@@ -1703,6 +1776,36 @@ mod tests {
             assert!(left.iter().any(|n| n == keep), "{keep} must stay: {left:?}");
         }
         assert_eq!(versioned_dir_prefix(BinaryComponent::Caddy), None, "flat components untouched");
+    }
+
+    #[test]
+    fn targeted_install_can_fetch_the_inactive_engine_on_windows_only() {
+        use super::db_for_download;
+        use super::BinaryComponent::{MariaDB, MySQL};
+        let reinstall_mariadb = ["caddy", "php", "mysql", "phpmyadmin", "postgresql", "adminer", "ngrok"];
+        assert_eq!(db_for_download(true, MySQL, &reinstall_mariadb), MariaDB);
+        assert_eq!(db_for_download(false, MariaDB, &reinstall_mariadb), MariaDB); // Linux: fixed
+        // Full install (nothing skipped) fetches only the active engine
+        assert_eq!(db_for_download(true, MySQL, &[]), MySQL);
+        // Reinstalling the active engine
+        let reinstall_mysql = ["caddy", "php", "mariadb", "phpmyadmin", "postgresql", "adminer", "ngrok"];
+        assert_eq!(db_for_download(true, MySQL, &reinstall_mysql), MySQL);
+    }
+
+    #[test]
+    fn uninstalling_one_db_engine_keeps_the_other() {
+        let rt = tempfile::TempDir::new().unwrap();
+        for d in ["mysql-8.4.13-winx64/bin", "mariadb-11.8.10-winx64/bin"] {
+            std::fs::create_dir_all(rt.path().join(d)).unwrap();
+        }
+        RuntimeDownloader::remove_db_engine(rt.path(), "mariadb").unwrap();
+        assert!(rt.path().join("mysql-8.4.13-winx64").exists());
+        assert!(!rt.path().join("mariadb-11.8.10-winx64").exists());
+
+        std::fs::create_dir_all(rt.path().join("mariadb-11.8.10-winx64/bin")).unwrap();
+        RuntimeDownloader::remove_db_engine(rt.path(), "mysql").unwrap();
+        assert!(!rt.path().join("mysql-8.4.13-winx64").exists());
+        assert!(rt.path().join("mariadb-11.8.10-winx64").exists());
     }
 
     #[test]

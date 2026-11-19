@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Dashboard } from "./components/Dashboard";
 import { FirstRunWizard } from "./components/FirstRunWizard";
 import { applyTheme } from "./utils/theme";
+import { PackageSelection, setActiveDbEngine } from "./types/services";
 import "./App.css";
 
 function App() {
@@ -38,6 +39,11 @@ function App() {
 
   const checkRuntimeInstalled = async () => {
     try {
+      // Load the Windows database engine before first render so every
+      // MySQL/MariaDB label is right from the start.
+      await invoke<PackageSelection>("get_package_selection")
+        .then((s) => setActiveDbEngine(s.db_engine))
+        .catch(() => {});
       const installed = await invoke<boolean>("check_runtime_installed");
       setIsFirstRun(!installed);
     } catch (error) {

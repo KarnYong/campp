@@ -72,11 +72,18 @@ pub fn get_app_data_paths() -> Result<AppDataPaths, String> {
             .ok_or_else(|| "Cannot get installation directory".to_string())?
             .to_path_buf();
 
+        // Windows MariaDB gets its own datadir so switching engines never mixes
+        // data; MySQL keeps mysql/data so existing installs don't move.
+        let db_dir = match crate::runtime::packages::active_db_engine() {
+            crate::runtime::packages::DbEngine::MariaDb => "mariadb",
+            crate::runtime::packages::DbEngine::MySql => "mysql",
+        };
+
         Ok(AppDataPaths {
             base_dir: install_dir.clone(),
             runtime_dir: install_dir.join("runtime"),
             config_dir: install_dir.join("config"),
-            mysql_data_dir: install_dir.join("mysql").join("data"),
+            mysql_data_dir: install_dir.join(db_dir).join("data"),
             pgsql_data_dir: install_dir.join("pgsql").join("data"),
             logs_dir: install_dir.join("logs"),
             projects_dir: install_dir.join("projects"),
@@ -376,6 +383,16 @@ fn detect_php_ext_dir(runtime_dir: &Path) -> Result<PathBuf, String> {
     }
 }
 
+/// First `<prefix>*/bin/<exe>` under `runtime_dir` (versioned extraction trees).
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn find_db_binary_in(runtime_dir: &Path, prefix: &str, exe: &str) -> Option<PathBuf> {
+    fs::read_dir(runtime_dir).ok()?.flatten().find_map(|entry| {
+        let name = entry.file_name().into_string().ok()?;
+        let bin = entry.path().join("bin").join(exe);
+        (name.starts_with(prefix) && bin.exists()).then_some(bin)
+    })
+}
+
 /// Detect MySQL/MariaDB server binary based on platform
 ///
 /// **IMPORTANT Platform Differences:**
@@ -389,7 +406,21 @@ fn detect_php_ext_dir(runtime_dir: &Path) -> Result<PathBuf, String> {
 /// - Uses MySQL 8.x (binary name: mysqld)
 /// - Extracted from platform-specific archives
 /// - Directory: mysql-X.X.X/bin/mysqld
+///
+/// **Windows with MariaDB selected:**
+/// - mariadb-X.X.X-winx64/bin/mariadbd.exe (the zip also ships a mysqld.exe,
+///   but it lives under `mariadb-*`, so the `mysql*` search never picks it up)
 fn detect_mysql_binary(runtime_dir: &Path) -> Result<PathBuf, String> {
+    #[cfg(target_os = "windows")]
+    if crate::runtime::packages::active_db_engine() == crate::runtime::packages::DbEngine::MariaDb {
+        return find_db_binary_in(runtime_dir, "mariadb", "mariadbd.exe")
+            .or_else(|| Some(runtime_dir.join("mariadb").join("bin").join("mariadbd.exe")).filter(|p| p.exists()))
+            .ok_or_else(|| format!(
+                "MariaDB binary not found in {}. Please ensure runtime binaries are downloaded.",
+                runtime_dir.display()
+            ));
+    }
+
     #[cfg(target_os = "windows")]
     {
         // ============================================================
@@ -802,6 +833,22 @@ mod tests {
     use std::io::Write;
     use std::path::Path;
     use tempfile::TempDir;
+
+    #[test]
+    fn find_db_binary_picks_the_engine_by_folder_prefix() {
+        let rt = TempDir::new().unwrap();
+        for (dir, exe) in [("mysql-8.4.13-winx64", "mysqld.exe"), ("mariadb-11.8.10-winx64", "mariadbd.exe"),
+                           ("mariadb-11.8.10-winx64", "mysqld.exe")] {
+            fs::create_dir_all(rt.path().join(dir).join("bin")).unwrap();
+            File::create(rt.path().join(dir).join("bin").join(exe)).unwrap();
+        }
+        let maria = find_db_binary_in(rt.path(), "mariadb", "mariadbd.exe").unwrap();
+        assert!(maria.starts_with(rt.path().join("mariadb-11.8.10-winx64")));
+        // MariaDB's compat mysqld.exe must never be mistaken for MySQL
+        let mysql = find_db_binary_in(rt.path(), "mysql", "mysqld.exe").unwrap();
+        assert!(mysql.starts_with(rt.path().join("mysql-8.4.13-winx64")));
+        assert!(find_db_binary_in(rt.path(), "mariadb", "nope.exe").is_none());
+    }
 
     fn create_mock_binary(path: &Path) -> Result<(), String> {
         let mut file = File::create(path)

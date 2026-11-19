@@ -1371,43 +1371,91 @@ select.input option {
 }
 
 /* Package rows */
+/* Choose components: one compact line per component.
+   [switch] [logo] [name · tag] [version] [root password (databases only)] */
 .wiz-pkg {
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 34px 18px minmax(0, 1fr) 190px 150px;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 6px;
+  padding: 9px 12px;
+  background-color: var(--bg-app);
 }
 
-.wiz-pkg .list-row__main > .wiz-muted {
+.wiz-pkg + .wiz-pkg {
+  border-top: 1px solid var(--border-color);
+}
+
+.wiz-pkg__logo {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.wiz-pkg__name {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.wiz-pkg__name span:first-child {
+  font-weight: 500;
+}
+
+.wiz-pkg__name .wiz-muted {
   font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wiz-pkg__ver {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Rows without a password still keep the column, so selects line up */
+.wiz-pkg__ver:last-child {
+  grid-column: 4;
 }
 
 .wiz-pkg--off .logo-tile,
 .wiz-pkg--off .list-row__main,
-.wiz-pkg--off .wiz-pkg__controls,
+.wiz-pkg--off .wiz-pkg__logo,
+.wiz-pkg--off .wiz-pkg__name,
+.wiz-pkg--off .wiz-pkg__ver,
+.wiz-pkg--off .wiz-pkg__pw,
 .wiz-pkg--off .wiz-ver {
   opacity: 0.45;
 }
 
-.wiz-pkg__controls {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
 .wiz-pkg__select {
-  width: 160px;
-  padding: 5px 8px;
+  width: 100%;
+  padding: 4px 8px;
   font-size: 12.5px;
 }
 
 .wiz-pkg .wiz-pkg__pw {
-  width: 160px;
-  max-width: 100%;
-  margin-top: 6px;
+  width: 100%;
 }
 
 .wiz-pkg__pw .input {
-  padding: 5px 30px 5px 8px;
+  padding: 4px 30px 4px 8px;
   font-size: 12.5px;
+}
+
+.switch.switch--sm {
+  width: 34px;
+  height: 18px;
+  border-radius: 9px;
+}
+
+.switch--sm .switch__knob {
+  width: 14px;
+  height: 14px;
 }
 
 /* Required component: always on, can't be toggled */
@@ -1416,23 +1464,17 @@ select.input option {
   cursor: not-allowed;
 }
 
-.wiz-pkg .list-row__main {
-  flex: 1 1 110px;
-}
-
-@media (max-width: 560px) {
-  .wiz-pkg__controls {
-    order: 3;
-    flex-basis: 100%;
+/* Narrow windows: version and password drop under the name */
+@media (max-width: 620px) {
+  .wiz-pkg {
+    grid-template-columns: 34px 18px minmax(0, 1fr);
   }
 
-  .wiz-pkg__select {
-    flex: 1;
-    width: auto;
-  }
-
+  .wiz-pkg__ver,
+  .wiz-pkg__ver:last-child,
   .wiz-pkg .wiz-pkg__pw {
-    width: 100%;
+    grid-column: 3;
+    justify-content: stretch;
   }
 }
 
@@ -1756,4 +1798,13 @@ select.input option {
 
 .modal__foot .btn-danger-solid {
   border-radius: 0.5rem;
+}
+
+/* Components page: "Active database" picker (Windows). .input is width:100%,
+   which would squeeze the label column in a flex row. */
+.db-engine-select {
+  width: 140px;
+  flex: none;
+  padding: 4px 8px;
+  font-size: 12.5px;
 }

@@ -1,53 +1,61 @@
 use crate::runtime::locator::RuntimePaths;
+use crate::runtime::packages::{active_db_engine, DbEngine};
 use std::fs;
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 use crate::process::manager::configure_no_window;
 
-pub fn initialize_mysql(paths: &RuntimePaths) -> Result<(), String> {
-    let mysql_dir = paths.mysql_data_dir.join("mysql");
-    if mysql_dir.exists() {
-        let entries: Vec<_> = mysql_dir.read_dir()
-            .and_then(|e| e.collect::<Result<_, _>>())
-            .unwrap_or_default();
-
-        let has_sdi_files = entries.iter().any(|entry| {
+/// Has this engine already initialized the data dir? MySQL 8 leaves `.sdi` files in
+/// `mysql/`; MariaDB leaves Aria/system tables there (no `.sdi`). Windows'
+/// mariadb-install-db.exe refuses a non-empty datadir, so MariaDB must not re-init.
+fn is_initialized(engine: DbEngine, mysql_dir: &Path) -> bool {
+    let entries: Vec<_> = mysql_dir.read_dir()
+        .and_then(|e| e.collect::<Result<_, _>>())
+        .unwrap_or_default();
+    match engine {
+        DbEngine::MySql => entries.iter().any(|entry| {
             entry.path().extension()
                 .and_then(|ext| ext.to_str())
                 .map(|ext| ext.eq_ignore_ascii_case("sdi"))
                 .unwrap_or(false)
-        });
+        }),
+        DbEngine::MariaDb => !entries.is_empty(),
+    }
+}
 
-        if has_sdi_files {
-            #[cfg(target_os = "linux")]
-            tracing::info!("MariaDB data directory already initialized");
-            #[cfg(not(target_os = "linux"))]
-            tracing::info!("MySQL data directory already initialized");
-            return Ok(());
-        }
+pub fn initialize_mysql(paths: &RuntimePaths) -> Result<(), String> {
+    let engine = active_db_engine();
+    let name = engine.display();
+    let mysql_dir = paths.mysql_data_dir.join("mysql");
+    if is_initialized(engine, &mysql_dir) {
+        tracing::info!("{} data directory already initialized", name);
+        return Ok(());
     }
 
-    #[cfg(target_os = "linux")]
     fs::create_dir_all(&paths.mysql_data_dir)
-        .map_err(|e| format!("Failed to create MariaDB data directory: {}", e))?;
-    #[cfg(not(target_os = "linux"))]
-    fs::create_dir_all(&paths.mysql_data_dir)
-        .map_err(|e| format!("Failed to create MySQL data directory: {}", e))?;
+        .map_err(|e| format!("Failed to create {} data directory: {}", name, e))?;
 
     let data_dir_str = paths.mysql_data_dir.to_string_lossy().replace('\\', "/");
 
-    #[cfg(target_os = "linux")]
-    {
-        tracing::info!("MariaDB 12.x: Initializing data directory using mariadb-install-db");
+    if engine == DbEngine::MariaDb {
+        tracing::info!("MariaDB: Initializing data directory using mariadb-install-db");
 
         let mariadbd_dir = paths.mysql.parent()
             .ok_or("Failed to get MariaDB binary directory")?;
 
-        let scripts_dir = mariadbd_dir.parent()
-            .ok_or("Failed to get MariaDB base directory")?
-            .join("scripts");
-        let install_db_script = scripts_dir.join("mariadb-install-db");
-        let install_db_fallback = scripts_dir.join("mysql_install_db");
+        // Linux bintar ships the script in scripts/; the Windows zip ships
+        // mariadb-install-db.exe next to mariadbd.exe in bin/.
+        #[cfg(target_os = "windows")]
+        let (install_db_script, install_db_fallback) =
+            (mariadbd_dir.join("mariadb-install-db.exe"), mariadbd_dir.join("mysql_install_db.exe"));
+        #[cfg(not(target_os = "windows"))]
+        let (install_db_script, install_db_fallback) = {
+            let scripts_dir = mariadbd_dir.parent()
+                .ok_or("Failed to get MariaDB base directory")?
+                .join("scripts");
+            (scripts_dir.join("mariadb-install-db"), scripts_dir.join("mysql_install_db"))
+        };
 
         // Resolve the actual init script. (Previously the fallback was checked
         // for existence but never selected, so a MariaDB build shipping only
@@ -76,10 +84,12 @@ pub fn initialize_mysql(paths: &RuntimePaths) -> Result<(), String> {
             .map_err(|e| format!("Failed to create init log file: {}", e))?;
 
         let mut cmd = configure_no_window(Command::new(&init_script));
-        cmd.arg(format!("--datadir={}", data_dir_str))
-            .arg(format!("--basedir={}", mariadbd_dir.parent().unwrap().display()))
-            .arg("--user=")
-            .stdout(Stdio::from(init_log_file.try_clone().unwrap()))
+        cmd.arg(format!("--datadir={}", data_dir_str));
+        // Unix script options; the Windows .exe takes only --datadir here.
+        #[cfg(not(target_os = "windows"))]
+        cmd.arg(format!("--basedir={}", mariadbd_dir.parent().unwrap().display()))
+            .arg("--user=");
+        cmd.stdout(Stdio::from(init_log_file.try_clone().unwrap()))
             .stderr(Stdio::from(init_log_file));
 
         let mut child = cmd.spawn()
@@ -131,8 +141,7 @@ pub fn initialize_mysql(paths: &RuntimePaths) -> Result<(), String> {
         }
     }
 
-    #[cfg(not(target_os = "linux"))]
-    {
+    else {
         tracing::info!("MySQL 8.x: Initializing data directory at: {}", data_dir_str);
 
         let mysqld = &paths.mysql;
@@ -235,5 +244,24 @@ pub fn get_connection_info() -> ConnectionInfo {
         port: 3307,
         user: "root".to_string(),
         password: String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn initialized_check_is_engine_specific() {
+        let d = tempfile::TempDir::new().unwrap();
+        let sys = d.path().join("mysql");
+        assert!(!is_initialized(DbEngine::MariaDb, &sys)); // missing dir
+        fs::create_dir_all(&sys).unwrap();
+        assert!(!is_initialized(DbEngine::MariaDb, &sys)); // empty dir
+        fs::write(sys.join("global_priv.MAD"), "").unwrap();
+        assert!(is_initialized(DbEngine::MariaDb, &sys));
+        assert!(!is_initialized(DbEngine::MySql, &sys)); // MySQL needs .sdi
+        fs::write(sys.join("mysql.sdi"), "").unwrap();
+        assert!(is_initialized(DbEngine::MySql, &sys));
     }
 }

@@ -1,5 +1,6 @@
 use super::{ServiceInfo, ServiceMap, ServiceState, ServiceType};
 use crate::runtime::locator::{locate_runtime_binaries, RuntimePaths};
+use crate::runtime::packages::{active_db_engine, DbEngine};
 use std::collections::HashMap;
 use std::process::{Child, Command, Stdio};
 use std::fs::{self, File, OpenOptions};
@@ -164,6 +165,12 @@ impl ProcessManager {
     }
 
     /// Initialize the process manager with runtime paths
+    /// Forget located binaries/data dirs so the next start re-locates them
+    /// (used after the Windows database engine is switched).
+    pub fn reset_runtime_paths(&mut self) {
+        self.runtime_paths = None;
+    }
+
     pub fn initialize(&mut self) -> Result<(), String> {
         let paths = locate_runtime_binaries()?;
         self.runtime_paths = Some(paths);
@@ -180,12 +187,8 @@ impl ProcessManager {
             fs::create_dir_all(&php_sessions_dir)
                 .map_err(|e| format!("Failed to create PHP sessions dir: {}", e))?;
 
-            #[cfg(target_os = "linux")]
             fs::create_dir_all(&paths.mysql_data_dir)
-                .map_err(|e| format!("Failed to create MariaDB data dir: {}", e))?;
-            #[cfg(not(target_os = "linux"))]
-            fs::create_dir_all(&paths.mysql_data_dir)
-                .map_err(|e| format!("Failed to create MySQL data dir: {}", e))?;
+                .map_err(|e| format!("Failed to create {} data dir: {}", active_db_engine().display(), e))?;
 
             // Create PostgreSQL data dir only if PostgreSQL binaries are present
             #[cfg(target_os = "windows")]
@@ -603,16 +606,15 @@ fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths, setti
 
     // Always create init file to keep password in sync with settings
     let init_file = paths.logs_dir.join("mysql_init_user.sql");
-    let init_sql = mysql_init_sql(&settings.mysql_root_password, settings.listen_all_interfaces);
+    let engine = active_db_engine();
+    let db_name = engine.display();
+    let init_sql = mysql_init_sql(&settings.mysql_root_password, settings.listen_all_interfaces, engine);
     fs::write(&init_file, init_sql)
         .map_err(|e| format!("Failed to create init file: {}", e))?;
 
     // Open log file with retry logic
     let log_path = paths.logs_dir.join("mysql.log");
-    #[cfg(target_os = "linux")]
-    let log_file = open_log_file_with_retry(&log_path, "MariaDB")?;
-    #[cfg(not(target_os = "linux"))]
-    let log_file = open_log_file_with_retry(&log_path, "MySQL")?;
+    let log_file = open_log_file_with_retry(&log_path, db_name)?;
 
     // Build MySQL command — always pass init file to keep password synced.
     // Ensure the binary is executable (tar extraction drops the exec bit on
@@ -633,10 +635,11 @@ fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths, setti
         .arg(format!("--bind-address={}", settings.bind_address()))
         .arg("--socket")
         .arg(&socket_str);
-    // MySQL-specific: Disable X Protocol to avoid port 33060 and mysqlx.sock conflicts
-    // MariaDB (used on Linux) doesn't have X Protocol, so this is MySQL-only
-    #[cfg(not(target_os = "linux"))]
-    cmd.arg("--mysqlx=0");
+    // MySQL-specific: Disable X Protocol to avoid port 33060 and mysqlx.sock conflicts.
+    // MariaDB has no X Protocol (and rejects the option).
+    if engine == DbEngine::MySql {
+        cmd.arg("--mysqlx=0");
+    }
     cmd.arg("--console")
         .arg("--skip-name-resolve")
         .arg("--init-file")
@@ -648,10 +651,6 @@ fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths, setti
         .spawn()
         .map_err(|e| {
             let log_content = fs::read_to_string(&log_path).unwrap_or_else(|_| String::from("Could not read log"));
-            #[cfg(target_os = "linux")]
-            let db_name = "MariaDB";
-            #[cfg(not(target_os = "linux"))]
-            let db_name = "MySQL";
             format!("Failed to start {}: {}\n\n{} log:\n{}", db_name, e, db_name, log_content)
         })?;
 
@@ -662,10 +661,14 @@ fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths, setti
     match child.try_wait() {
         Ok(Some(status)) => {
             let _ = fs::remove_file(&init_file);
-            #[cfg(target_os = "linux")]
-            let db_name = "MariaDB";
-            #[cfg(not(target_os = "linux"))]
-            let db_name = "MySQL";
+            let log = fs::read_to_string(&log_path).unwrap_or_default();
+            if is_port_in_use_log(&log) {
+                return Err(format!(
+                    "{} could not start: port {} is already in use by another program \
+                     (another CAMPP or MySQL/MariaDB?). Stop it or change the port in Settings.\n\nCheck logs at: {:?}",
+                    db_name, service_process.port, log_path
+                ));
+            }
             Err(format!(
                 "{} exited immediately with status: {:?}\n\nCheck logs at: {:?}",
                 db_name, status, log_path
@@ -675,10 +678,7 @@ fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths, setti
             // Mark user as created after successful start
             if needs_init_file {
                 let _ = fs::write(&user_created_flag, "done");
-                #[cfg(target_os = "linux")]
-                tracing::info!("MariaDB root@127.0.0.1 user created during startup");
-                #[cfg(not(target_os = "linux"))]
-                tracing::info!("MySQL root@127.0.0.1 user created during startup");
+                tracing::info!("{} root@127.0.0.1 user created during startup", db_name);
             }
             service_process.child = Some(child);
             service_process.log_file = Some(log_path);
@@ -688,7 +688,7 @@ fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths, setti
         }
         Err(e) => {
             let _ = fs::remove_file(&init_file);
-            Err(format!("Failed to check MariaDB process: {}", e))
+            Err(format!("Failed to check {} process: {}", db_name, e))
         }
     }
 }
@@ -1000,7 +1000,12 @@ fn remove_init_file_when_ready(init_file: PathBuf, port: u16) {
 
 /// SQL run via `--init-file` on every MySQL/MariaDB start, keeping every root
 /// account on the saved password.
-fn mysql_init_sql(password: &str, listen_all_interfaces: bool) -> String {
+/// Both servers log a bind failure this way when the port is taken.
+fn is_port_in_use_log(log: &str) -> bool {
+    log.contains("Bind on TCP/IP port") || log.contains("Can't start server: Bind")
+}
+
+fn mysql_init_sql(password: &str, listen_all_interfaces: bool, engine: DbEngine) -> String {
     let pw = mysql_string_literal(password);
     let mut sql = format!(
         "CREATE USER IF NOT EXISTS 'root'@'127.0.0.1' IDENTIFIED BY {pw};\n\
@@ -1011,12 +1016,12 @@ fn mysql_init_sql(password: &str, listen_all_interfaces: bool) -> String {
     // with no usable password (MySQL --initialize-insecure: empty; mariadb-install-db:
     // unix_socket, so any process running as this OS user gets in). Put it on the
     // same password. MariaDB spells it out so unix_socket is replaced, not kept as an OR.
-    #[cfg(target_os = "linux")]
-    sql.push_str(&format!(
-        "ALTER USER IF EXISTS 'root'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD({pw});\n"
-    ));
-    #[cfg(not(target_os = "linux"))]
-    sql.push_str(&format!("ALTER USER IF EXISTS 'root'@'localhost' IDENTIFIED BY {pw};\n"));
+    match engine {
+        DbEngine::MariaDb => sql.push_str(&format!(
+            "ALTER USER IF EXISTS 'root'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD({pw});\n"
+        )),
+        DbEngine::MySql => sql.push_str(&format!("ALTER USER IF EXISTS 'root'@'localhost' IDENTIFIED BY {pw};\n")),
+    }
     if listen_all_interfaces {
         sql.push_str(&format!(
             "CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY {pw};\n\
@@ -1105,13 +1110,25 @@ mod tests {
 
     #[test]
     fn mysql_init_sql_sets_password_on_every_root_account() {
-        let sql = mysql_init_sql("s3cret", false);
-        for host in ["127.0.0.1", "localhost", "%"] {
-            assert!(sql.contains(&format!("'root'@'{host}'")), "missing root@{host}");
+        for engine in [DbEngine::MySql, DbEngine::MariaDb] {
+            let sql = mysql_init_sql("s3cret", false, engine);
+            for host in ["127.0.0.1", "localhost", "%"] {
+                assert!(sql.contains(&format!("'root'@'{host}'")), "missing root@{host}");
+            }
+            assert_eq!(sql.matches("'s3cret'").count(), 4);
+            assert!(!sql.contains("CREATE USER IF NOT EXISTS 'root'@'%'"), "LAN off must not create root@%");
+            assert!(mysql_init_sql("s3cret", true, engine).contains("CREATE USER IF NOT EXISTS 'root'@'%'"));
         }
-        assert_eq!(sql.matches("'s3cret'").count(), 4);
-        assert!(!sql.contains("CREATE USER IF NOT EXISTS 'root'@'%'"), "LAN off must not create root@%");
-        assert!(mysql_init_sql("s3cret", true).contains("CREATE USER IF NOT EXISTS 'root'@'%'"));
+        // MariaDB must replace unix_socket auth on root@localhost, not OR it in
+        assert!(mysql_init_sql("x", false, DbEngine::MariaDb).contains("IDENTIFIED VIA mysql_native_password"));
+        assert!(!mysql_init_sql("x", false, DbEngine::MySql).contains("IDENTIFIED VIA"));
+    }
+
+    #[test]
+    fn port_in_use_is_detected_for_both_engines() {
+        assert!(is_port_in_use_log("[ERROR] [MY-010262] [Server] Can't start server: Bind on TCP/IP port: Only one usage"));
+        assert!(is_port_in_use_log("[ERROR] Can't start server: Bind on TCP/IP port. Got error: 10048"));
+        assert!(!is_port_in_use_log("InnoDB initialization has ended."));
     }
 
     #[test]

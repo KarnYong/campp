@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { showAlert, showConfirm } from "./Dialog";
 import { useState, useEffect, useCallback } from "react";
-import { getDatabaseDisplayName } from "../types/services";
+import { DbEngine, PackageSelection, dbKeyFor, getDatabaseDisplayName, setActiveDbEngine } from "../types/services";
 import { detectPlatform } from "../utils/platform";
 import { NgrokAntivirusNotice } from "./NgrokAntivirusNotice";
 import { ReinstallDialog } from "./ReinstallDialog";
@@ -14,13 +14,22 @@ interface ComponentInfo {
   version: string | null;
 }
 
+const PLATFORM = detectPlatform();
+
+// Windows can hold both engines side by side; macOS/Linux have one fixed engine.
+const DB_ROWS: { key: string; getDisplayName: () => string }[] =
+  PLATFORM === "windows"
+    ? [
+        { key: "mysql", getDisplayName: () => "MySQL" },
+        { key: "mariadb", getDisplayName: () => "MariaDB" },
+      ]
+    : [{ key: dbKeyFor(PLATFORM), getDisplayName: () => getDatabaseDisplayName(PLATFORM) }];
+
 const COMPONENT_ORDER: { key: string; getDisplayName: () => string }[] = (() => {
-  const platform = detectPlatform();
-  const dbKey = platform === "linux" ? "mariadb" : "mysql";
   return [
     { key: "caddy", getDisplayName: () => "Caddy" },
     { key: "php", getDisplayName: () => "PHP" },
-    { key: dbKey, getDisplayName: () => getDatabaseDisplayName(platform) },
+    ...DB_ROWS,
     { key: "phpmyadmin", getDisplayName: () => "phpMyAdmin" },
     { key: "postgresql", getDisplayName: () => "PostgreSQL" },
     { key: "adminer", getDisplayName: () => "Adminer" },
@@ -35,6 +44,7 @@ export function ComponentsPage({ servicesActive, onChanged }: { servicesActive: 
   // Last uninstall error (install errors are shown inside ReinstallDialog).
   const [componentError, setComponentError] = useState<string | null>(null);
   const [installTarget, setInstallTarget] = useState<ComponentInfo | null>(null);
+  const [engine, setEngine] = useState<DbEngine>(dbKeyFor(PLATFORM));
 
   const loadComponents = useCallback(async () => {
     try {
@@ -62,13 +72,34 @@ export function ComponentsPage({ servicesActive, onChanged }: { servicesActive: 
   // Clear a stale error when a new action starts.
   const clearComponentError = () => setComponentError(null);
 
+  // Windows: switch which engine fills the database slot. The backend stops the
+  // running database; each engine keeps its own data folder.
+  const handleEngineChange = async (next: DbEngine) => {
+    clearComponentError();
+    setComponentAction("engine");
+    try {
+      const sel = await invoke<PackageSelection>("get_package_selection");
+      await invoke("update_package_selection", { packageSelection: { ...sel, db_engine: next } });
+      setActiveDbEngine(next);
+      setEngine(next);
+      onChanged?.();
+      const target = components.find((c) => c.key === next);
+      if (target && !target.installed) setInstallTarget(target);
+    } catch (e) {
+      setComponentError(`Failed to switch database engine: ${e}`);
+    } finally {
+      setComponentAction(null);
+    }
+  };
+
   const handleUninstall = async (componentKey: string) => {
     clearComponentError();
     if (componentKey === "php" || componentKey === "mysql" || componentKey === "mariadb") {
-      const name = componentKey === "php" ? "PHP" : getDatabaseDisplayName();
+      const dbName = components.find((c) => c.key === componentKey)?.displayName ?? getDatabaseDisplayName();
+      const name = componentKey === "php" ? "PHP" : dbName;
       const msg = componentKey === "php"
         ? "PHP is required by Caddy for serving PHP files and phpMyAdmin. Uninstall anyway?"
-        : `${getDatabaseDisplayName()} is required by phpMyAdmin. Uninstall anyway?`;
+        : `${dbName} is required by phpMyAdmin. Uninstall anyway? Its databases are kept.`;
       if (!(await showConfirm(`Uninstall ${name}?`, msg, "Uninstall", true))) return;
     }
 
@@ -123,6 +154,30 @@ export function ComponentsPage({ servicesActive, onChanged }: { servicesActive: 
               <button type="button" onClick={clearComponentError} className="btn-secondary btn-xs btn-danger">
                 Dismiss
               </button>
+            </div>
+          </div>
+        )}
+        {PLATFORM === "windows" && (
+          <div className="list-box" style={{ marginBottom: "0.75rem" }}>
+            <div className="list-row">
+              <div className="list-row__main">
+                <label htmlFor="db-engine">Active database</label>
+                <span className="wiz-muted">
+                  Switching stops the database (and briefly restarts services if a download is needed);
+                  your other engine's databases are kept.
+                </span>
+              </div>
+              <select
+                id="db-engine"
+                className="input db-engine-select"
+                value={engine}
+                disabled={busy}
+                title={busyTitle}
+                onChange={(e) => handleEngineChange(e.target.value as DbEngine)}
+              >
+                <option value="mysql">MySQL</option>
+                <option value="mariadb">MariaDB</option>
+              </select>
             </div>
           </div>
         )}

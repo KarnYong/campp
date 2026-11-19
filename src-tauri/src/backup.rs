@@ -12,10 +12,12 @@ use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Folders captured, relative to the app base dir (same layout on every OS).
-const DIRS: [&str; 3] = ["projects", "mysql/data", "pgsql/data"];
+/// `mariadb/data` only exists on Windows when MariaDB was chosen (MySQL keeps `mysql/data`).
+const DIRS: [&str; 4] = ["projects", "mysql/data", "mariadb/data", "pgsql/data"];
 const MANIFEST: &str = "campp-backup.json";
 
 #[derive(Serialize, serde::Deserialize)]
@@ -84,7 +86,31 @@ fn list_in(dir: &Path) -> Vec<BackupInfo> {
 
 /// Write a new backup zip. `suffix` tags automatic ones (e.g. "pre-restore").
 pub fn create_backup(suffix: Option<&str>) -> Result<String, String> {
+    let _busy = BusyGuard::new();
     create_in(&app_base()?, suffix, &installed_versions())
+}
+
+/// Set while a backup or restore runs, so the database engine can't be switched mid-way.
+static BUSY: AtomicBool = AtomicBool::new(false);
+
+pub fn is_busy() -> bool {
+    BUSY.load(Ordering::SeqCst)
+}
+
+/// Clears BUSY on every exit path, including `?` early returns.
+struct BusyGuard;
+
+impl BusyGuard {
+    fn new() -> Self {
+        BUSY.store(true, Ordering::SeqCst);
+        BusyGuard
+    }
+}
+
+impl Drop for BusyGuard {
+    fn drop(&mut self) {
+        BUSY.store(false, Ordering::SeqCst);
+    }
 }
 
 fn create_in(base: &Path, suffix: Option<&str>, versions: &HashMap<String, String>) -> Result<String, String> {
@@ -212,11 +238,12 @@ fn check_compatible(
     backup: &HashMap<String, String>,
     current: &HashMap<String, String>,
     has_mysql_data: bool,
+    has_mariadb_data: bool,
     has_pg_data: bool,
     backup_os: &str,
     current_os: &str,
 ) -> Result<(), String> {
-    if (has_mysql_data || has_pg_data) && !backup_os.is_empty() && backup_os != current_os {
+    if (has_mysql_data || has_mariadb_data || has_pg_data) && !backup_os.is_empty() && backup_os != current_os {
         return Err(format!(
             "This backup was made on {}. Database files can't be moved to {}. \
              To move databases between computers with different systems, export them with \
@@ -224,20 +251,35 @@ fn check_compatible(
             os_name(backup_os), os_name(current_os)
         ));
     }
-    if has_mysql_data {
-        if let Some((engine, bver)) = ["mysql", "mariadb"].iter().find_map(|k| backup.get(*k).map(|v| (*k, v))) {
-            let name = if engine == "mysql" { "MySQL" } else { "MariaDB" };
-            let cur = current.get(engine).ok_or_else(|| {
-                format!("This backup holds {} {} data, but {} is not installed here.", name, bver, name)
-            })?;
-            let (b, c) = (parse_ver(bver), parse_ver(cur));
-            if b.iter().take(2).cmp(c.iter().take(2)) == std::cmp::Ordering::Greater {
-                return Err(format!(
-                    "This backup is from {} {}, which is newer than the installed {}. Install {} {} or later first.",
-                    name, bver, cur, name, bver
-                ));
-            }
+    // Each datadir is checked against the engine that owns it: mysql/data belongs to
+    // the platform's default engine (MariaDB on Linux, MySQL elsewhere); mariadb/data
+    // is Windows MariaDB. Legacy backups recorded only the engine they used.
+    let check_engine = |engine: &str| -> Result<(), String> {
+        let Some(bver) = backup.get(engine) else { return Ok(()) };
+        let name = if engine == "mysql" { "MySQL" } else { "MariaDB" };
+        let cur = current.get(engine).ok_or_else(|| {
+            format!("This backup holds {} {} data, but {} is not installed here.", name, bver, name)
+        })?;
+        let (b, c) = (parse_ver(bver), parse_ver(cur));
+        if b.iter().take(2).cmp(c.iter().take(2)) == std::cmp::Ordering::Greater {
+            return Err(format!(
+                "This backup is from {} {}, which is newer than the installed {}. Install {} {} or later first.",
+                name, bver, cur, name, bver
+            ));
         }
+        Ok(())
+    };
+    if has_mysql_data {
+        let default = if current_os == "linux" { "mariadb" } else { "mysql" };
+        let engine = if backup.contains_key(default) {
+            default
+        } else {
+            ["mysql", "mariadb"].into_iter().find(|k| backup.contains_key(*k)).unwrap_or(default)
+        };
+        check_engine(engine)?;
+    }
+    if has_mariadb_data {
+        check_engine("mariadb")?;
     }
     if has_pg_data {
         if let Some(bver) = backup.get("postgresql") {
@@ -275,7 +317,7 @@ pub fn delete_all_data() -> Result<(), String> {
 }
 
 fn delete_all_in(base: &Path) -> Result<(), String> {
-    for rel in ["mysql/data", "pgsql/data"] {
+    for rel in ["mysql/data", "mariadb/data", "pgsql/data"] {
         let dir = base.join(rel);
         if dir.exists() {
             crate::commands::remove_dir_all_with_retry(&dir)?;
@@ -298,6 +340,7 @@ fn delete_all_in(base: &Path) -> Result<(), String> {
 /// Replace projects + database data with the backup's. Takes a "pre-restore" backup
 /// of the current state first, so a restore can always be undone.
 pub fn restore_backup(name: &str) -> Result<String, String> {
+    let _busy = BusyGuard::new();
     restore_in(&app_base()?, name, &installed_versions())
 }
 
@@ -323,6 +366,7 @@ fn restore_in(base: &Path, name: &str, current: &HashMap<String, String>) -> Res
         &manifest.versions,
         current,
         present.contains(&"mysql/data"),
+        present.contains(&"mariadb/data"),
         present.contains(&"pgsql/data"),
         &manifest.os,
         std::env::consts::OS,
@@ -561,7 +605,7 @@ mod tests {
     #[test]
     fn compatibility_rules() {
         let cur = m(&[("mysql", "8.4.11"), ("postgresql", "18.6.1")]);
-        let ok = |b: &HashMap<String, String>, my: bool, pg: bool| check_compatible(b, &cur, my, pg, "windows", "windows");
+        let ok = |b: &HashMap<String, String>, my: bool, pg: bool| check_compatible(b, &cur, my, false, pg, "windows", "windows");
         // Same engine, older/equal MySQL, same PG major: ok
         assert!(ok(&m(&[("mysql", "8.0.46"), ("postgresql", "18.3.0")]), true, true).is_ok());
         // MySQL downgrade refused
@@ -575,10 +619,37 @@ mod tests {
 
         let same = m(&[("mysql", "8.4.11")]);
         // Database data from another OS refused (lower_case_table_names / PG locales differ)
-        assert!(check_compatible(&same, &cur, true, false, "windows", "macos").is_err());
+        assert!(check_compatible(&same, &cur, true, false, false, "windows", "macos").is_err());
         // Projects-only backup moves between OSes fine
-        assert!(check_compatible(&same, &cur, false, false, "windows", "macos").is_ok());
+        assert!(check_compatible(&same, &cur, false, false, false, "windows", "macos").is_ok());
         // Old backups without a recorded OS: not blocked
-        assert!(check_compatible(&same, &cur, true, false, "", "macos").is_ok());
+        assert!(check_compatible(&same, &cur, true, false, false, "", "macos").is_ok());
+    }
+
+    #[test]
+    fn per_engine_datadirs_on_windows() {
+        let both = m(&[("mysql", "8.4.13"), ("mariadb", "11.8.10")]);
+        let only_mysql = m(&[("mysql", "8.4.13")]);
+        // Backup with both datadirs restores when both engines are installed
+        assert!(check_compatible(&both, &both, true, true, false, "windows", "windows").is_ok());
+        // ...and is refused, naming MariaDB, when MariaDB isn't installed
+        let err = check_compatible(&both, &only_mysql, true, true, false, "windows", "windows").unwrap_err();
+        assert!(err.contains("MariaDB"), "{err}");
+        // Legacy Windows backup: only mysql/data + mysql version -> MySQL
+        assert!(check_compatible(&only_mysql, &both, true, false, false, "windows", "windows").is_ok());
+        // Linux: mysql/data belongs to MariaDB
+        let linux = m(&[("mariadb", "12.3.3")]);
+        assert!(check_compatible(&linux, &m(&[("mariadb", "12.3.4")]), true, false, false, "linux", "linux").is_ok());
+    }
+
+    #[test]
+    fn busy_flag_clears_even_on_error() {
+        fn failing() -> Result<(), String> {
+            let _busy = BusyGuard::new();
+            assert!(is_busy());
+            Err("boom".into())
+        }
+        assert!(failing().is_err());
+        assert!(!is_busy());
     }
 }

@@ -117,6 +117,10 @@
                 "properties": {
                   "urls": {
                     "$ref": "#/definitions/urls"
+                  },
+                  "fallback_urls": {
+                    "$ref": "#/definitions/urls",
+                    "description": "Upstream URLs tried when the mirrored urls fail (same file, same checksum)"
                   }
                 }
               }
@@ -147,6 +151,11 @@
                     "type": "string",
                     "format": "uri",
                     "description": "Download URL (platform-independent)"
+                  },
+                  "fallback_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "Upstream URL tried when the mirrored url fails (same file, same checksum)"
                   }
                 }
               }
