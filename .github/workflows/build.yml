@@ -689,7 +689,11 @@ jobs:
       - name: Compute SHA256SUMS.txt and release-assets.json
         run: |
           set -euo pipefail
-          cd assets
+          # Flatten exactly like create-release does (artifacts keep build subfolders,
+          # e.g. aarch64-apple-darwin/release/bundle/dmg/), so we hash what gets attached.
+          mkdir -p flat
+          find assets -type f -exec cp {} flat/ \;
+          cd flat
           # Never hash checksum files themselves (a re-run may have downloaded old ones)
           ls | grep -v -x -e SHA256SUMS.txt -e release-assets.json | while IFS= read -r f; do
             sha256sum "$f"
