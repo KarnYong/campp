@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Bump the CAMPP version everywhere it is recorded, in one step:
 //   npm run bump -- 0.4.0
 // Edits only the version text in place (formatting and CRLF/LF survive), checks every
