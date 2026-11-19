@@ -9,9 +9,16 @@ on:
     paths-ignore: ['**.md', 'src-tauri/MANUAL.html']
   pull_request:
   workflow_dispatch:
+  # Called by build.yml so every release is gated on this exact suite (FR-001)
+  workflow_call:
+
+permissions:
+  contents: read
 
 concurrency:
-  group: test-${{ github.ref }}
+  # Inside a workflow_call github.workflow is the caller's name, so a release run never
+  # cancels (or is cancelled by) a push run of the same ref.
+  group: test-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -30,6 +37,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
+          # Keep in sync with build.yml (FR-009)
           node-version: '22'
           cache: 'npm'
 
@@ -44,10 +52,13 @@ jobs:
             librsvg2-dev
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        # Pinned to a commit: the toolchain must then be named explicitly
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable (2026-11-15)
+        with:
+          toolchain: stable
 
       - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri
 
@@ -62,4 +73,5 @@ jobs:
 
       - name: Rust tests
         working-directory: src-tauri
-        run: cargo test --lib
+        # Library + integration tests (tests/*.rs); doc tests were never part of the suite
+        run: cargo test --lib --tests

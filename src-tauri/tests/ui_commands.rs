@@ -8,11 +8,12 @@ mod ui_command_tests {
         let manager = ProcessManager::new();
         let statuses = manager.get_all_statuses();
 
-        // Should return all three services
-        assert_eq!(statuses.len(), 3);
-        assert!(statuses.contains_key(&ServiceType::Caddy));
-        assert!(statuses.contains_key(&ServiceType::PhpFpm));
-        assert!(statuses.contains_key(&ServiceType::MariaDB));
+        // Every managed service: Caddy, PHP-FPM, the MySQL-compatible DB slot
+        // (MySQL or MariaDB engine), PostgreSQL and ngrok
+        assert_eq!(statuses.len(), 5);
+        for ty in [ServiceType::Caddy, ServiceType::PhpFpm, ServiceType::MySQL, ServiceType::PostgreSQL, ServiceType::Ngrok] {
+            assert!(statuses.contains_key(&ty), "missing {:?}", ty);
+        }
     }
 
     /// Test that initial service state is Stopped
@@ -35,8 +36,9 @@ mod ui_command_tests {
     #[test]
     fn test_service_type_display_names() {
         assert_eq!(ServiceType::Caddy.display_name(), "Caddy");
-        assert_eq!(ServiceType::PhpFpm.display_name(), "PHP-FPM 8.4");
-        assert_eq!(ServiceType::MariaDB.display_name(), "MariaDB");
+        assert_eq!(ServiceType::PhpFpm.display_name(), "PHP-FPM 8.5");
+        // The DB slot is engine-neutral in the backend; the UI shows MySQL/MariaDB per engine
+        assert_eq!(ServiceType::MySQL.display_name(), "MySQL");
     }
 
     /// Test that service type has correct ports
@@ -44,7 +46,7 @@ mod ui_command_tests {
     fn test_service_type_ports() {
         assert_eq!(ServiceType::Caddy.default_port(), 8080);
         assert_eq!(ServiceType::PhpFpm.default_port(), 9000);
-        assert_eq!(ServiceType::MariaDB.default_port(), 3307);
+        assert_eq!(ServiceType::MySQL.default_port(), 3307);
     }
 
     /// Test that service type has correct descriptions
@@ -52,7 +54,7 @@ mod ui_command_tests {
     fn test_service_type_descriptions() {
         assert_eq!(ServiceType::Caddy.description(), "Web Server");
         assert_eq!(ServiceType::PhpFpm.description(), "PHP Runtime");
-        assert_eq!(ServiceType::MariaDB.description(), "Database Server");
+        assert_eq!(ServiceType::MySQL.description(), "Database Server");
     }
 
     /// Test service state serialization for frontend
@@ -92,8 +94,9 @@ mod ui_command_tests {
         let caddy_json = serde_json::to_string(&ServiceType::Caddy).unwrap();
         assert_eq!(caddy_json, "\"caddy\"");
 
-        let mariadb_json = serde_json::to_string(&ServiceType::MariaDB).unwrap();
-        assert_eq!(mariadb_json, "\"mariadb\"");
+        // The DB slot serialises as "mysql" for both engines (frontend ServiceType.MySQL)
+        let db_json = serde_json::to_string(&ServiceType::MySQL).unwrap();
+        assert_eq!(db_json, "\"mysql\"");
     }
 
     /// Test that status check returns correct state
@@ -146,7 +149,7 @@ mod ui_command_tests {
         let mut set = HashSet::new();
         set.insert(ServiceType::Caddy);
         set.insert(ServiceType::PhpFpm);
-        set.insert(ServiceType::MariaDB);
+        set.insert(ServiceType::MySQL);
 
         assert_eq!(set.len(), 3);
     }
@@ -159,7 +162,7 @@ mod ui_command_tests {
 
         assert_eq!(statuses[&ServiceType::Caddy].port, 8080);
         assert_eq!(statuses[&ServiceType::PhpFpm].port, 9000);
-        assert_eq!(statuses[&ServiceType::MariaDB].port, 3307);
+        assert_eq!(statuses[&ServiceType::MySQL].port, 3307);
     }
 
     /// Test ServiceMap operations
@@ -169,12 +172,12 @@ mod ui_command_tests {
 
         map.insert(ServiceType::Caddy, ServiceInfo::new(ServiceType::Caddy));
         map.insert(ServiceType::PhpFpm, ServiceInfo::new(ServiceType::PhpFpm));
-        map.insert(ServiceType::MariaDB, ServiceInfo::new(ServiceType::MariaDB));
+        map.insert(ServiceType::MySQL, ServiceInfo::new(ServiceType::MySQL));
 
         assert_eq!(map.len(), 3);
         assert!(map.contains_key(&ServiceType::Caddy));
         assert!(map.contains_key(&ServiceType::PhpFpm));
-        assert!(map.contains_key(&ServiceType::MariaDB));
+        assert!(map.contains_key(&ServiceType::MySQL));
     }
 
     /// Test ServiceMap serialization
@@ -183,7 +186,7 @@ mod ui_command_tests {
         let mut map: ServiceMap = ServiceMap::new();
         map.insert(ServiceType::Caddy, ServiceInfo::new(ServiceType::Caddy));
         map.insert(ServiceType::PhpFpm, ServiceInfo::new(ServiceType::PhpFpm));
-        map.insert(ServiceType::MariaDB, ServiceInfo::new(ServiceType::MariaDB));
+        map.insert(ServiceType::MySQL, ServiceInfo::new(ServiceType::MySQL));
 
         // Serialize to JSON
         let json = serde_json::to_string(&map).unwrap();

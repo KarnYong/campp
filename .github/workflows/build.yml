@@ -12,8 +12,9 @@ on:
         default: true
         type: boolean
 
+# Read-only by default; only create-release gets contents: write (FR-008)
 permissions:
-  contents: write
+  contents: read
 
 # Never run two builds for the same tag/branch at once (racing release uploads).
 concurrency:
@@ -36,7 +37,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '22'
+          node-version: '22' # Keep in sync with test.yml (FR-009)
           cache: 'npm'
 
       - name: Install frontend dependencies
@@ -77,8 +78,15 @@ jobs:
       - name: Typecheck frontend
         run: npx tsc --noEmit
 
+  # Full test suite (tsc, vitest, cargo lib + integration tests) on Linux, macOS and
+  # Windows. Every platform build needs it, so a failing commit can't become a release.
+  tests:
+    uses: ./.github/workflows/test.yml
+    permissions:
+      contents: read
+
   build-macos:
-    needs: verify
+    needs: [verify, tests]
     runs-on: macos-15
     timeout-minutes: 180
 
@@ -94,16 +102,18 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '22'
+          node-version: '22' # Keep in sync with test.yml (FR-009)
           cache: 'npm'
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        # Pinned to a commit: the toolchain must then be named explicitly
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable (2026-11-15)
         with:
+          toolchain: stable
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri
 
@@ -441,8 +451,9 @@ jobs:
             src-tauri/target/universal-apple-darwin/release/bundle/macos/CAMPP-*-portable.zip
           if-no-files-found: error
   build-windows:
-    needs: verify
+    needs: [verify, tests]
     runs-on: windows-latest
+    timeout-minutes: 90
 
     steps:
       - name: Checkout repository
@@ -451,14 +462,16 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '22'
+          node-version: '22' # Keep in sync with test.yml (FR-009)
           cache: 'npm'
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable (2026-11-15)
+        with:
+          toolchain: stable
 
       - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri
 
@@ -552,8 +565,9 @@ jobs:
           Get-ChildItem -Path src-tauri/target/release/bundle -Recurse -File | ForEach-Object { Write-Host $_.FullName }
 
   build-linux:
-    needs: verify
+    needs: [verify, tests]
     runs-on: ubuntu-22.04
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repository
@@ -562,14 +576,16 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '22'
+          node-version: '22' # Keep in sync with test.yml (FR-009)
           cache: 'npm'
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable (2026-11-15)
+        with:
+          toolchain: stable
 
       - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri
 
@@ -653,12 +669,60 @@ jobs:
           echo "=== Linux bundle files ==="
           find src-tauri/target/release/bundle -type f | sort || true
 
+  # SHA-256 + size of every asset. Always runs (also for create_release=false) so the
+  # files can be checked before publishing; campp-web copies release-assets.json (FR-005).
+  checksums:
+    needs: [build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: assets
+          pattern: CAMPP-*
+          merge-multiple: true
+
+      - name: Compute SHA256SUMS.txt and release-assets.json
+        run: |
+          set -euo pipefail
+          cd assets
+          # Never hash checksum files themselves (a re-run may have downloaded old ones)
+          ls | grep -v -x -e SHA256SUMS.txt -e release-assets.json | while IFS= read -r f; do
+            sha256sum "$f"
+          done | sort -k2 > ../SHA256SUMS.txt
+          python3 - ../SHA256SUMS.txt > ../release-assets.json <<'EOF'
+          import json, os, sys
+          rows = []
+          for line in open(sys.argv[1]):
+              # "<64-hex><space><mode: ' ' or '*'><name>" - name starts at column 66
+              line = line.rstrip()
+              sha, name = line[:64], line[66:]
+              rows.append({"name": name, "size": os.path.getsize(name), "sha256": sha})
+          json.dump(sorted(rows, key=lambda r: r["name"]), sys.stdout, indent=2)
+          print()
+          EOF
+          cat ../SHA256SUMS.txt
+
+      - name: Upload checksum files
+        uses: actions/upload-artifact@v7
+        with:
+          name: CAMPP-checksums
+          path: |
+            SHA256SUMS.txt
+            release-assets.json
+          if-no-files-found: error
+
   create-release:
-    needs: [verify, build-macos, build-windows, build-linux]
+    needs: [verify, checksums]
     if: |
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
       (github.event_name == 'workflow_dispatch' && inputs.create_release == true)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: write
 
@@ -682,9 +746,11 @@ jobs:
           find artifacts -type f -exec cp {} release-assets/ \;
           echo "=== Release assets ==="
           ls -la release-assets/
+          # The attached files must be exactly the ones that were hashed
+          cd release-assets && sha256sum -c SHA256SUMS.txt
 
       - name: Create Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: ${{ needs.verify.outputs.tag }}
           name: CAMPP ${{ needs.verify.outputs.tag }}
