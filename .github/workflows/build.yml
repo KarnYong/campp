@@ -807,6 +807,8 @@ jobs:
           draft: true
           prerelease: ${{ needs.verify.outputs.prerelease == 'true' }}
           generate_release_notes: true
+          body: |
+            Windows files are signed. [Code signing policy](https://github.com/KarnYong/campp#code-signing-policy)
           files: |
             release-assets/*
           fail_on_unmatched_files: false

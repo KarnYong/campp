@@ -16,7 +16,7 @@ Download the latest release from [GitHub Releases](https://github.com/KarnYong/c
 | `CAMPP-<version>-x64-portable-offline.zip` | Portable with runtimes bundled, works fully offline |
 
 1. Run the installer. No admin permissions are required.
-2. If SmartScreen warns, click **More info → Run anyway**.
+2. If SmartScreen warns, click **More info → Run anyway**. See the [Code signing policy](#code-signing-policy).
 3. Launch CAMPP from the Start Menu or desktop shortcut.
 
 For the portable zips, extract anywhere you can write to and run `CAMPP.exe`.
@@ -191,7 +191,8 @@ Free code signing provided by [SignPath.io](https://about.signpath.io), certific
 
 Windows release files (`.exe`, `.msi`, and `CAMPP.exe` in the portable zips) are signed. They are built from this repository by GitHub Actions (`.github/workflows/build.yml`) and each signing request is approved by hand.
 
-- Committers and reviewers: [KarnYong](https://github.com/KarnYong)
+- Authors: [KarnYong](https://github.com/KarnYong)
+- Reviewers: [KarnYong](https://github.com/KarnYong)
 - Approvers: [KarnYong](https://github.com/KarnYong)
 
 ### Privacy
