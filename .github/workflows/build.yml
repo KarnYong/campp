@@ -453,7 +453,11 @@ jobs:
   build-windows:
     needs: [verify, tests]
     runs-on: windows-latest
-    timeout-minutes: 90
+    # Includes up to 60 min waiting for a SignPath approver (see "Sign with SignPath")
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      actions: read # SignPath downloads the unsigned artifact through this job's token
 
     steps:
       - name: Checkout repository
@@ -524,6 +528,39 @@ jobs:
           Copy-Item "src-tauri/MANUAL.html","src-tauri/runtime-config.json","src-tauri/runtime-config.schema.json" $stage
           Compress-Archive -Path "$stage/*" -DestinationPath "src-tauri/target/release/CAMPP-$version-x64-portable.zip" -Force
 
+      - name: Collect files to release
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item "src-tauri/target/release/bundle/msi/*.msi","src-tauri/target/release/bundle/nsis/*.exe","src-tauri/target/release/CAMPP-*-portable.zip" dist
+          Get-ChildItem dist | ForEach-Object { Write-Host $_.Name }
+
+      # Code signing via SignPath Foundation. Off until the repository variable
+      # SIGNPATH_ORGANIZATION_ID and secret SIGNPATH_API_TOKEN exist; unsigned builds
+      # keep working until then. What gets signed: .signpath/artifact-configuration.xml
+      - name: Upload unsigned Windows files for signing
+        id: unsigned
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-unsigned # not CAMPP-*, so checksums/create-release never pick it up
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Sign with SignPath
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'campp' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG || 'initial' }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600 # a person approves each request
+          output-artifact-directory: dist # signed files replace the unsigned ones
+
       - name: Pre-populate runtime (offline portable)
         shell: pwsh
         run: |
@@ -542,20 +579,29 @@ jobs:
       - name: Create Windows offline portable zip (with runtimes)
         shell: pwsh
         run: |
+          # Built from the (signed, if enabled) portable zip, so the 350 MB offline zip
+          # never has to go through SignPath and its CAMPP.exe is signed too.
           $version = "${{ steps.get_version.outputs.version }}"
-          $stage = "portable/CAMPP"
+          $stage = "offline/CAMPP"
+          Expand-Archive "dist/CAMPP-$version-x64-portable.zip" -DestinationPath $stage -Force
           Copy-Item "src-tauri/target/release/runtime" $stage -Recurse -Force
-          Compress-Archive -Path "$stage/*" -DestinationPath "src-tauri/target/release/CAMPP-$version-x64-portable-offline.zip" -Force
+          Compress-Archive -Path "$stage/*" -DestinationPath "dist/CAMPP-$version-x64-portable-offline.zip" -Force
+
+      - name: Report signatures
+        shell: pwsh
+        run: |
+          $version = "${{ steps.get_version.outputs.version }}"
+          Expand-Archive "dist/CAMPP-$version-x64-portable.zip" -DestinationPath sigcheck -Force
+          foreach ($f in @(Get-ChildItem dist/*.exe, dist/*.msi) + (Get-Item sigcheck/CAMPP.exe)) {
+            $sig = Get-AuthenticodeSignature $f.FullName
+            Write-Host ("{0,-40} {1,-12} {2}" -f $f.Name, $sig.Status, $sig.SignerCertificate.Subject)
+          }
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v7
         with:
           name: CAMPP-Windows
-          path: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/CAMPP-*-portable.zip
-            src-tauri/target/release/CAMPP-*-portable-offline.zip
+          path: dist/*
           if-no-files-found: error
 
       - name: List Windows artifacts

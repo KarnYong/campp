@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration for the Windows release files (build.yml, "Sign with SignPath").
+  Paste this into the SignPath project's artifact configuration; this copy is the reference.
+  The GitHub artifact "windows-unsigned" is a zip holding:
+    CAMPP-<version>-x64.exe           NSIS installer
+    CAMPP-<version>-x64.msi           MSI installer
+    CAMPP-<version>-x64-portable.zip  portable app (CAMPP.exe inside is signed)
+  The offline portable zip is built afterwards from the signed portable zip.
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="CAMPP-*-x64.exe">
+      <authenticode-sign />
+    </pe-file>
+    <msi-file path="CAMPP-*-x64.msi">
+      <authenticode-sign />
+    </msi-file>
+    <zip-file path="CAMPP-*-x64-portable.zip">
+      <pe-file path="CAMPP.exe">
+        <authenticode-sign />
+      </pe-file>
+    </zip-file>
+  </zip-file>
+</artifact-configuration>

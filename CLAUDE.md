@@ -150,6 +150,8 @@ git push origin v0.3.4
 **Required Secrets** (for macOS signing/notarization):
 `APPLE_CERTIFICATE_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_APP_PASSWORD`, `APPLE_TEAM_ID`
 
+**Windows signing (SignPath Foundation)**: on when repo variable `SIGNPATH_ORGANIZATION_ID` + secret `SIGNPATH_API_TOKEN` are set (optional vars: `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_SIGNING_POLICY_SLUG`, `SIGNPATH_ARTIFACT_CONFIGURATION_SLUG`). Signs installers + portable `CAMPP.exe` per `.signpath/artifact-configuration.xml`; each request waits (≤60 min) for manual approval in SignPath. The offline zip is built from the signed portable zip.
+
 **Can also be triggered manually** via `workflow_dispatch` with a `create_release` toggle.
 
 ## Platform-Specific Notes

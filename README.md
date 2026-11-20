@@ -185,6 +185,19 @@ campp/
 - **Linux**: Ubuntu 22.04+ or a similar distribution with webkit2gtk
 - **macOS**: macOS 13 (Ventura) or later, on Apple Silicon or Intel
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+Windows release files (`.exe`, `.msi`, and `CAMPP.exe` in the portable zips) are signed. They are built from this repository by GitHub Actions (`.github/workflows/build.yml`) and each signing request is approved by hand.
+
+- Committers and reviewers: [KarnYong](https://github.com/KarnYong)
+- Approvers: [KarnYong](https://github.com/KarnYong)
+
+### Privacy
+
+This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. CAMPP connects to the internet only to download the components you choose to install (from the URLs in `src-tauri/runtime-config.json`) and, if you start it, to run an ngrok tunnel.
+
 ## License
 
 MIT
