@@ -16,10 +16,19 @@ Download the latest release from [GitHub Releases](https://github.com/KarnYong/c
 | `CAMPP-<version>-x64-portable-offline.zip` | Portable with runtimes bundled, works fully offline |
 
 1. Run the installer. No admin permissions are required.
-2. If SmartScreen warns, click **More info → Run anyway**. See the [Code signing policy](#code-signing-policy).
+2. If SmartScreen warns, click **More info → Run anyway**. See [Code signing](#code-signing).
 3. Launch CAMPP from the Start Menu or desktop shortcut.
 
 For the portable zips, extract anywhere you can write to and run `CAMPP.exe`.
+
+#### Scoop (Windows)
+
+```powershell
+scoop bucket add campp https://github.com/KarnYong/campp
+scoop install campp/campp
+```
+
+Runtimes, databases, projects and settings are kept across `scoop update campp`. Projects are in `~\scoop\persist\campp\projects`.
 
 ### Linux (Ubuntu/Debian/Fedora)
 
@@ -185,15 +194,15 @@ campp/
 - **Linux**: Ubuntu 22.04+ or a similar distribution with webkit2gtk
 - **macOS**: macOS 13 (Ventura) or later, on Apple Silicon or Intel
 
-## Code signing policy
+## Code signing
 
-Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+macOS builds are signed and notarized. Windows release files are **not code-signed yet**, so SmartScreen may warn on first run (**More info → Run anyway**). Installing with [Scoop](#scoop-windows) avoids the warning.
 
-Windows release files (`.exe`, `.msi`, and `CAMPP.exe` in the portable zips) are signed. They are built from this repository by GitHub Actions (`.github/workflows/build.yml`) and each signing request is approved by hand.
+Every release file is built from this repository by GitHub Actions (`.github/workflows/build.yml`), and each release includes `SHA256SUMS.txt`. To check a download:
 
-- Authors: [KarnYong](https://github.com/KarnYong)
-- Reviewers: [KarnYong](https://github.com/KarnYong)
-- Approvers: [KarnYong](https://github.com/KarnYong)
+```powershell
+Get-FileHash .\CAMPP-<version>-x64.exe -Algorithm SHA256
+```
 
 ### Privacy
 

@@ -808,7 +808,7 @@ jobs:
           prerelease: ${{ needs.verify.outputs.prerelease == 'true' }}
           generate_release_notes: true
           body: |
-            Windows files are signed. [Code signing policy](https://github.com/KarnYong/campp#code-signing-policy)
+            ${{ vars.SIGNPATH_ORGANIZATION_ID != '' && 'Windows files are signed. [Code signing](https://github.com/KarnYong/campp#code-signing)' || 'Windows files are not code-signed yet. If SmartScreen warns, click **More info → Run anyway**, and check the file against `SHA256SUMS.txt`. [Code signing](https://github.com/KarnYong/campp#code-signing)' }}
           files: |
             release-assets/*
           fail_on_unmatched_files: false

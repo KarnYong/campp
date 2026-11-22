@@ -152,6 +152,8 @@ git push origin v0.3.4
 
 **Windows signing (SignPath Foundation)**: on when repo variable `SIGNPATH_ORGANIZATION_ID` + secret `SIGNPATH_API_TOKEN` are set (optional vars: `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_SIGNING_POLICY_SLUG`, `SIGNPATH_ARTIFACT_CONFIGURATION_SLUG`). Signs installers + portable `CAMPP.exe` per `.signpath/artifact-configuration.xml`; each request waits (≤60 min) for manual approval in SignPath. The offline zip is built from the signed portable zip.
 
+**Scoop manifest** (`bucket/campp.json`, installs the x64 portable zip): after publishing a release, run `~\scoop\apps\scoop\current\bin\checkver.ps1 -App campp -Dir bucket -Update` (takes the hash from `SHA256SUMS.txt`) and commit.
+
 **Can also be triggered manually** via `workflow_dispatch` with a `create_release` toggle.
 
 ## Platform-Specific Notes
