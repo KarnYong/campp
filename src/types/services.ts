@@ -27,6 +27,22 @@ export interface ServiceInfo {
 
 export type ServiceMap = Record<ServiceType, ServiceInfo>;
 
+/** Sites page (spec 005, contracts/list-sites.md) */
+export type SiteStatus = "ok" | "invalid_name" | "uppercase" | "conflict";
+export type SiteKind = "framework" | "plain";
+export interface SiteInfo {
+  name: string;
+  host: string | null;
+  url: string | null;
+  kind: SiteKind;
+  status: SiteStatus;
+}
+export interface SitesResponse {
+  projects_dir: string;
+  web_port: number;
+  sites: SiteInfo[];
+}
+
 export interface AppSettings {
   web_port: number;
   mysql_port: number;

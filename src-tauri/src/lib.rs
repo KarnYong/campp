@@ -6,6 +6,7 @@ mod database;
 mod error;
 mod process;
 mod runtime;
+mod sites;
 mod terminal;
 
 // Re-exports
@@ -165,6 +166,7 @@ pub fn run() {
             commands::cleanup_all_services,
             commands::uninstall_component,
             commands::open_terminal,
+            commands::list_sites,
             commands::get_debug_info,
             commands::get_ngrok_public_url,
             commands::add_windows_defender_exclusion,

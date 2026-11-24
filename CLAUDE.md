@@ -83,6 +83,8 @@ src-tauri/src/
 
 **Open terminal** (`src-tauri/src/terminal.rs`): writes `php`/`composer` launchers into `<base>/bin` (paths relative to the launcher, always `-c <php.ini>`) and opens the OS terminal in the projects folder with `<base>/bin` first on PATH for that window only. Windows CLI = `php.exe` next to `php-cgi.exe`; Linux/macOS CLI = `<runtime>/php`, from the `php_cli` config section (ids match `php`, installed automatically with PHP, same version as php-fpm). Composer is a single-file component (`binaries.composer`, `<runtime>/composer/composer.phar`). `ensure_php_ini_extensions` adds zip/fileinfo/pdo_sqlite/sqlite3 to older php.ini files.
 
+**Local sites** (spec 005): the generated Caddyfile has a second site, `http://*.localhost:<web port>`, that maps `{labels.1}` (blog.localhost → `projects/blog`) per request. There's no per-folder config and no reload. Folders with `public/index.php` and no top-level `index.php` are served from `public/` with Caddy's default front-controller fallback (Laravel). `src-tauri/src/sites.rs` (`list_sites`) feeds the Sites page with the same name rules.
+
 **Config Generation**: Mustache templates in `templates/` are rendered by `config/generator.rs` to produce service configs.
 
 **Runtime Binaries**: Downloaded on first-run to platform-specific data directory (`~/.campp/runtime/` on Unix, `C:\Users\<user>\.campp\runtime\` on Windows).

@@ -263,6 +263,16 @@ $pg = new PDO(
   </ul>
   <p>When the folder has no <code>index.php</code>, <code>http://localhost:8080</code> shows the CAMPP welcome page.</p>
 
+  <h3 id="sites">Site addresses</h3>
+  <p>Each project folder also has its own address: <code>http://&lt;folder&gt;.localhost:8080</code>. For example, <code>projects/my-site</code> opens at <code>http://my-site.localhost:8080</code>, with that folder as the site root, so links like <code>/css/style.css</code> stay inside the project. New folders work immediately. Nothing on your computer needs to be edited, and no admin rights are needed.</p>
+  <ul>
+    <li><strong>Laravel, Symfony and similar:</strong> a folder with <code>public/index.php</code> (and no <code>index.php</code> at the top) is served from <code>public/</code>, and every route goes to the app, so <code>http://myapp.localhost:8080/about</code> just works.</li>
+    <li><strong>Folder names:</strong> use letters, digits and hyphens (<code>my-site</code>, <code>shop2</code>). Names with spaces, dots, underscores or non-Latin letters have no address. They still work at <code>http://localhost:8080/&lt;folder&gt;/</code>.</li>
+    <li><strong>Linux:</strong> folder names are case-sensitive, so use lowercase names (<code>blog</code>, not <code>Blog</code>).</li>
+    <li>These addresses work in Chrome, Edge and Firefox. If a browser or tool can't open one, use <code>http://localhost:8080/&lt;folder&gt;/</code>.</li>
+  </ul>
+  <p>Open <strong>Sites</strong> in the sidebar to see every project with its address and an <strong>Open</strong> button. If a folder has no address, the page says why.</p>
+
   <h2 id="components">Components</h2>
   <p>Open <strong>Components</strong> in the sidebar to install, reinstall (for example, to switch version) or uninstall each component. At least one component must remain installed. PHP is required by Caddy and phpMyAdmin.</p>
 

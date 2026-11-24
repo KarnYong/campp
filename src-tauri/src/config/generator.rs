@@ -108,6 +108,68 @@ pub fn generate_caddyfile(path: &PathBuf, paths: &RuntimePaths, port: u16, php_p
     content.push_str("    }\n");
     content.push_str("}\n");
 
+    // Spec 005: every project folder at http://<folder>.localhost:<port>. One block for
+    // all folders: {labels.1} is the folder name (blog.localhost -> blog), resolved per
+    // request, so a new folder works without regenerating or reloading anything.
+    // Caddy picks this more specific site for *.localhost hosts; localhost, LAN IP and
+    // ngrok hosts keep using the site above. http:// = no automatic HTTPS listeners.
+    let bind = if bind_address != "0.0.0.0" { format!("    bind {bind_address}\n") } else { String::new() };
+    content.push_str(&format!(
+        r#"
+http://*.localhost:{port} {{
+{bind}
+    @badname not expression `size({{labels.1}}) <= 63 && {{labels.1}}.matches('^[a-z0-9]([a-z0-9-]*[a-z0-9])?$')`
+    @framework {{
+        file {{
+            root "{projects}/{{labels.1}}"
+            try_files public/index.php
+        }}
+        not file {{
+            root "{projects}/{{labels.1}}"
+            try_files index.php
+        }}
+    }}
+    @plain file {{
+        root "{projects}"
+        try_files {{labels.1}}/
+    }}
+
+    handle @badname {{
+        respond "No site named {{labels.1}}. Project folders live in {projects}" 404
+    }}
+    # Laravel/Symfony layout: public/ is the root; Caddy's default php_fastcgi sends
+    # every path that isn't a file to public/index.php (the front controller).
+    handle @framework {{
+        root * "{projects}/{{labels.1}}/public"
+        php_fastcgi 127.0.0.1:{php_port}
+        file_server
+    }}
+    handle @plain {{
+        root * "{projects}/{{labels.1}}"
+        php_fastcgi 127.0.0.1:{php_port} {{
+            index index.php
+            try_files {{path}} {{path}}/index.php {{path}}/index.html =404
+        }}
+        file_server
+    }}
+    handle {{
+        respond "No site named {{labels.1}}. Project folders live in {projects}" 404
+    }}
+
+    log {{
+        output file "{log_file}"
+        format json
+    }}
+    encode gzip
+    header {{
+        X-Content-Type-Options nosniff
+        X-Frame-Options SAMEORIGIN
+        Referrer-Policy no-referrer
+    }}
+}}
+"#
+    ));
+
     let mut file = File::create(path)
         .map_err(|e| format!("Failed to create Caddyfile: {}", e))?;
     file.write_all(content.as_bytes())
@@ -629,6 +691,64 @@ mod tests {
         // index.html folders redirect to the trailing slash like index.php folders.
         assert!(cf.contains("redir @htmlDir {path}/ 308"), "{cf}");
         assert!(cf.contains("respond \"404 Not Found\" 404"), "{cf}");
+    }
+
+    fn caddyfile_for(bind: &str) -> (String, String) {
+        use crate::runtime::locator::RuntimePaths;
+        let dir = tempfile::TempDir::new().unwrap();
+        let p = |n: &str| dir.path().join(n);
+        let paths = RuntimePaths {
+            caddy: p("caddy"), php_cgi: p("php-cgi"), php_ini: p("php.ini"), php_ext_dir: p("ext"),
+            mysql: p("mysqld"), phpmyadmin: p("phpmyadmin"), pgsql_dir: p("pgsql"), adminer: p("adminer"),
+            mysql_data_dir: p("data"), pgsql_data_dir: p("pgdata"), logs_dir: p("logs"),
+            config_dir: p("config"), projects_dir: p("projects"), ngrok: p("ngrok"),
+        };
+        let file = dir.path().join("Caddyfile");
+        super::generate_caddyfile(&file, &paths, 18080, 19000, bind).unwrap();
+        let projects = paths.projects_dir.to_str().unwrap().replace('\\', "/");
+        (std::fs::read_to_string(&file).unwrap(), projects)
+    }
+
+    #[test]
+    fn caddyfile_serves_each_project_at_its_own_localhost_name() {
+        // Spec 005 US1, contracts/caddyfile-sites.md
+        let (cf, p) = caddyfile_for("127.0.0.1");
+        let main = cf.find(":18080 {").expect("main site");
+        let sites = cf.find("http://*.localhost:18080 {").expect("*.localhost site");
+        assert!(main < sites, "main site stays first");
+        let (main_block, site_block) = cf.split_at(sites);
+
+        // The shared site is unchanged.
+        assert!(main_block.contains("try_files {path} {path}/index.php {path}/index.html =404"));
+        assert!(main_block.contains("respond \"404 Not Found\" 404"));
+
+        // Folder name from the host, validated before it touches the file system.
+        assert!(site_block.contains(
+            "@badname not expression `size({labels.1}) <= 63 && {labels.1}.matches('^[a-z0-9]([a-z0-9-]*[a-z0-9])?$')`"
+        ), "{site_block}");
+        // Laravel/Symfony layout: public/index.php and no top-level index.php.
+        assert!(site_block.contains(&format!(
+            "    @framework {{\n        file {{\n            root \"{p}/{{labels.1}}\"\n            try_files public/index.php\n        }}\n        not file {{\n            root \"{p}/{{labels.1}}\"\n            try_files index.php\n        }}\n    }}\n"
+        )), "{site_block}");
+        assert!(site_block.contains(&format!(
+            "    @plain file {{\n        root \"{p}\"\n        try_files {{labels.1}}/\n    }}\n"
+        )), "{site_block}");
+        // Framework: public/ root and Caddy's default front-controller fallback (no =404).
+        assert!(site_block.contains(&format!(
+            "    handle @framework {{\n        root * \"{p}/{{labels.1}}/public\"\n        php_fastcgi 127.0.0.1:19000\n        file_server\n    }}\n"
+        )), "{site_block}");
+        assert!(site_block.contains(&format!("    handle @plain {{\n        root * \"{p}/{{labels.1}}\"\n")), "{site_block}");
+        assert!(site_block.contains("try_files {path} {path}/index.php {path}/index.html =404"));
+        let no_site = format!("respond \"No site named {{labels.1}}. Project folders live in {p}\" 404");
+        assert_eq!(site_block.matches(&no_site).count(), 2, "{site_block}");
+        assert!(site_block.contains("bind 127.0.0.1"));
+    }
+
+    #[test]
+    fn lan_mode_binds_both_sites_to_all_interfaces() {
+        let (cf, _) = caddyfile_for("0.0.0.0");
+        assert!(cf.contains("http://*.localhost:18080 {"));
+        assert!(!cf.contains("bind "), "{cf}");
     }
 
     #[test]

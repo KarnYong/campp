@@ -1103,3 +1103,11 @@ pub async fn get_debug_info(app: tauri::AppHandle) -> serde_json::Value {
 pub async fn open_terminal() -> Result<String, String> {
     crate::terminal::open_terminal()
 }
+
+/// Project folders with their `<name>.localhost` addresses (Sites page, spec 005 US2).
+#[tauri::command]
+pub async fn list_sites() -> Result<crate::sites::SitesResponse, String> {
+    tokio::task::spawn_blocking(crate::sites::list_sites)
+        .await
+        .map_err(|e| format!("Task error: {}", e))?
+}

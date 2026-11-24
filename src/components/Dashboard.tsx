@@ -10,6 +10,7 @@ import { StatusBar } from "./StatusBar";
 import { SettingsPanel } from "./SettingsPanel";
 import { DebugPage } from "./DebugPage";
 import { BackupPage } from "./BackupPage";
+import { SitesPage } from "./SitesPage";
 import { ComponentsPage } from "./ComponentsPage";
 import { ThemeSwitch } from "./ThemeSwitch";
 import { Icon } from "./icons";
@@ -25,7 +26,7 @@ export function Dashboard() {
   // observe the transient Starting/Stopping state) — track it here so the card
   // can show a spinner immediately on click.
   const [busy, setBusy] = useState<Partial<Record<ServiceType, "start" | "stop" | "restart">>>({});
-  const [view, setView] = useState<"services" | "components" | "settings" | "backup" | "debug">("services");
+  const [view, setView] = useState<"services" | "sites" | "components" | "settings" | "backup" | "debug">("services");
   const [projectRoot, setProjectRoot] = useState<string>("");
   const [installDir, setInstallDir] = useState<string>("");
   const [installedVersions, setInstalledVersions] = useState<Record<string, string>>({});
@@ -281,6 +282,15 @@ export function Dashboard() {
             </button>
             <button
               type="button"
+              className={`nav-item${view === "sites" ? " nav-item--active" : ""}`}
+              aria-current={view === "sites" ? "page" : undefined}
+              onClick={() => setView("sites")}
+            >
+              <Icon name="globe" size={16} />
+              Sites
+            </button>
+            <button
+              type="button"
               className={`nav-item${view === "components" ? " nav-item--active" : ""}`}
               aria-current={view === "components" ? "page" : undefined}
               onClick={() => setView("components")}
@@ -356,6 +366,8 @@ export function Dashboard() {
                 await loadInstalledVersions();
               }}
             />
+          ) : view === "sites" ? (
+            <SitesPage webRunning={isCaddyRunning} />
           ) : view === "backup" ? (
             <BackupPage servicesActive={anyServiceActive} />
           ) : view === "debug" ? (
