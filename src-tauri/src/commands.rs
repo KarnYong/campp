@@ -35,8 +35,13 @@ pub async fn open_folder(path: String) -> Result<(), String> {
     let settings = crate::config::AppSettings::load();
     allowed_dirs.push(std::path::PathBuf::from(&settings.project_root));
 
-    if let Some(data_dir) = dirs::data_local_dir() {
-        allowed_dirs.push(data_dir.join("campp"));
+    match crate::runtime::locator::home_override() {
+        Some(home) => allowed_dirs.push(home),
+        None => {
+            if let Some(data_dir) = dirs::data_local_dir() {
+                allowed_dirs.push(data_dir.join("campp"));
+            }
+        }
     }
 
     // Canonicalize the requested path and check it's under an allowed directory
@@ -246,25 +251,33 @@ pub async fn validate_settings(settings: crate::config::AppSettings) -> Result<V
 /// Check if specific ports are available
 #[tauri::command]
 pub async fn check_ports(web_port: u16, php_port: u16, mysql_port: u16, postgres_port: u16) -> serde_json::Value {
-    use crate::config::is_port_available;
+    let all = [web_port, php_port, mysql_port, postgres_port];
+    // `port`/`available` as before; `reason`, `range`, `suggested` added (spec 006
+    // contracts/check-ports.md) so the UI can say "reserved by Windows" and offer a port.
+    let entry = |port: u16| {
+        use crate::config::ports::{port_status, suggest_port, PortStatus};
+        let status = port_status(port);
+        let (reason, range) = match status {
+            PortStatus::Free => (None, None),
+            PortStatus::InUse => (Some("in_use"), None),
+            PortStatus::Reserved { range } => (Some("reserved"), range.map(|(a, b)| [a, b])),
+        };
+        let avoid: Vec<u16> = all.iter().copied().filter(|p| *p != port).collect();
+        let suggested = if status == PortStatus::Free { None } else { suggest_port(port, &avoid) };
+        serde_json::json!({
+            "port": port,
+            "available": status == PortStatus::Free,
+            "reason": reason,
+            "range": range,
+            "suggested": suggested,
+        })
+    };
 
     serde_json::json!({
-        "web": {
-            "port": web_port,
-            "available": is_port_available(web_port)
-        },
-        "php": {
-            "port": php_port,
-            "available": is_port_available(php_port)
-        },
-        "mysql": {
-            "port": mysql_port,
-            "available": is_port_available(mysql_port)
-        },
-        "postgres": {
-            "port": postgres_port,
-            "available": is_port_available(postgres_port)
-        }
+        "web": entry(web_port),
+        "php": entry(php_port),
+        "mysql": entry(mysql_port),
+        "postgres": entry(postgres_port),
     })
 }
 
@@ -440,6 +453,9 @@ pub async fn get_runtime_dir() -> Result<String, String> {
 /// Get the installation directory (where the exe is located)
 #[tauri::command]
 pub async fn get_install_dir() -> Result<String, String> {
+    if let Some(home) = crate::runtime::locator::home_override() {
+        return Ok(home.to_string_lossy().to_string());
+    }
     #[cfg(target_os = "windows")]
     {
         let exe_path = std::env::current_exe()

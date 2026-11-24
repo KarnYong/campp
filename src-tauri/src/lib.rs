@@ -39,19 +39,10 @@ impl AppState {
 /// download-on-demand. ponytail: reuses RuntimeDownloader so the fragile
 /// extract/marker/checksum logic lives in exactly one place instead of being
 /// reimplemented in the CI YAML.
-pub fn prepare_runtime() -> i32 {
-    // runtime-config.json ships next to the exe in a bundle, but in CI we run
-    // the raw target/release binary — try the exe dir first, then the cwd.
-    let dirs = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-        .into_iter()
-        .chain(std::env::current_dir().ok());
-    for dir in dirs {
-        if dir.join("runtime-config.json").exists() {
-            crate::runtime::packages::load_config_from_resource_dir(&dir);
-            break;
-        }
+pub fn prepare_runtime(include: &[String]) -> i32 {
+    if let Err(e) = headless_preflight() {
+        eprintln!("prepare-runtime: {e}");
+        return 1;
     }
 
     let downloader = match crate::runtime::downloader::RuntimeDownloader::new() {
@@ -62,9 +53,13 @@ pub fn prepare_runtime() -> i32 {
         }
     };
 
-    let skip: &[&str] = &["postgresql", "adminer", "ngrok", "composer"];
+    // `--include <id>` pulls an optional component in (the Laravel e2e needs composer).
+    let skip: Vec<&str> = ["postgresql", "adminer", "ngrok", "composer"]
+        .into_iter()
+        .filter(|id| !include.iter().any(|i| i == id))
+        .collect();
     let cb: crate::runtime::downloader::ProgressCallback = Box::new(|_| {});
-    match tauri::async_runtime::block_on(downloader.download_all_with_skip(cb, skip)) {
+    match tauri::async_runtime::block_on(downloader.download_all_with_skip(cb, &skip)) {
         Ok(files) => {
             eprintln!("prepare-runtime: installed {} component archive(s)", files.len());
             0
@@ -76,19 +71,117 @@ pub fn prepare_runtime() -> i32 {
     }
 }
 
+/// Shared setup for headless modes: a bad CAMPP_HOME fails up front, and
+/// runtime-config.json is loaded. It ships next to the exe in a bundle, but CI and
+/// the e2e run the raw target/ binary, so try the exe dir first, then the cwd.
+fn headless_preflight() -> Result<(), String> {
+    runtime::locator::base_dir()?;
+    let dirs = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .into_iter()
+        .chain(std::env::current_dir().ok());
+    for dir in dirs {
+        if dir.join("runtime-config.json").exists() {
+            crate::runtime::packages::load_config_from_resource_dir(&dir);
+            break;
+        }
+    }
+    Ok(())
+}
+
+/// Headless `--serve` (spec 006): start PHP, the database and Caddy with the saved
+/// settings, print `CAMPP_READY {json}`, and run until stdin closes or Ctrl+C/SIGTERM.
+/// Used by the Laravel e2e with CAMPP_HOME so it never touches an installed CAMPP.
+/// Closing stdin as the stop signal means a crashed test runner can't leave services
+/// running. Release builds on Windows have no console (windows_subsystem), so this is
+/// meant for debug builds and CI.
+pub fn serve_headless() -> i32 {
+    use std::io::Write;
+    let fail = |msg: String| {
+        println!("CAMPP_ERROR {}", msg.replace('\n', " "));
+        let _ = std::io::stdout().flush();
+        1
+    };
+    if let Err(e) = headless_preflight() {
+        return fail(e);
+    }
+
+    let mut pm = ProcessManager::with_settings(config::AppSettings::load());
+    if let Err(e) = pm.initialize() {
+        return fail(e);
+    }
+    // Database before PHP-FPM/Caddy, so a page never hits a missing DB.
+    for service in [ServiceType::MySQL, ServiceType::PhpFpm, ServiceType::Caddy] {
+        if let Err(e) = pm.start(service) {
+            let _ = pm.stop_all();
+            return fail(format!("{service:?}: {e}"));
+        }
+    }
+    let bin = match terminal::prepare_launchers() {
+        Ok((bin, _)) => bin,
+        Err(e) => {
+            let _ = pm.stop_all();
+            return fail(e);
+        }
+    };
+
+    let s = pm.get_settings();
+    let ready = serde_json::json!({
+        "web": s.web_port, "php": s.php_port, "mysql": s.mysql_port,
+        "bin": bin.to_string_lossy(),
+    });
+    println!("CAMPP_READY {ready}");
+    let _ = std::io::stdout().flush();
+
+    let (tx, rx) = std::sync::mpsc::channel::<()>();
+    let on_eof = tx.clone();
+    std::thread::spawn(move || {
+        let _ = std::io::copy(&mut std::io::stdin(), &mut std::io::sink());
+        let _ = on_eof.send(());
+    });
+    std::thread::spawn(move || {
+        tauri::async_runtime::block_on(async {
+            #[cfg(unix)]
+            {
+                use tokio::signal::unix::{signal, SignalKind};
+                let mut term = signal(SignalKind::terminate()).expect("SIGTERM handler");
+                tokio::select! {
+                    _ = tokio::signal::ctrl_c() => {}
+                    _ = term.recv() => {}
+                }
+            }
+            #[cfg(not(unix))]
+            let _ = tokio::signal::ctrl_c().await;
+        });
+        let _ = tx.send(());
+    });
+    let _ = rx.recv();
+
+    let _ = pm.stop_all();
+    println!("CAMPP_STOPPED");
+    let _ = std::io::stdout().flush();
+    0
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt::init();
 
-    tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+    let mut builder = tauri::Builder::default().plugin(tauri_plugin_opener::init());
+    // A CAMPP_HOME (test/dev) build must run beside the installed CAMPP, so it skips
+    // the one-instance lock; normal installs keep it.
+    if runtime::locator::home_override().is_none() {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // Another instance was launched — show and focus the existing window
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.set_focus();
             }
-        }))
+        }));
+    }
+
+    builder
         .manage(AppState::new())
         .on_menu_event(handle_menu_event)
         .setup(|app| {

@@ -14,7 +14,8 @@
     "test:run": "vitest run",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint . --ext ts,tsx --fix",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "e2e:laravel": "node scripts/e2e-laravel.mjs"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.2.2",

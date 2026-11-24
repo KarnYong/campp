@@ -236,6 +236,17 @@ $pg = new PDO(
     'root',
     'your-password'
 );</code></pre>
+  <h3 id="laravel">Laravel</h3>
+  <p>Click <strong>Copy .env settings</strong> on the database card. It copies the <code>DB_</code> lines for a Laravel <code>.env</code> file, with your current port and password. Then:</p>
+  <ol>
+    <li>Click <strong>Open terminal</strong> on the dashboard, then run <code>composer create-project laravel/laravel myapp</code></li>
+    <li>In <code>myapp/.env</code>, replace the <code>DB_</code> lines with the copied ones and change <code>DB_DATABASE</code> to your database name</li>
+    <li>Create that database in phpMyAdmin</li>
+    <li>Run <code>cd myapp</code>, then <code>php artisan migrate</code></li>
+    <li>Start the services and open <code>http://myapp.localhost:8080</code> (or click <strong>Open</strong> on the <a href="#sites">Sites</a> page). <code>php artisan serve</code> also works (see <a href="#reserved-ports">Reserved ports</a> if it says the port is forbidden).</li>
+  </ol>
+  <p>CAMPP's PHP includes the extensions Laravel needs (intl, mbstring, pdo_mysql, zip, gd, sodium and more), in the terminal and in the web server.</p>
+
   <div class="note">
     <strong>Note:</strong> Use <code>127.0.0.1</code> rather than <code>localhost</code> for MySQL. With <code>localhost</code>, PHP tries a Unix socket instead of the TCP port. MySQL (Windows/macOS) and MariaDB (Linux) are compatible and work the same way from PHP.
   </div>
@@ -344,6 +355,17 @@ $pg = new PDO(
     <li>Change the port in Settings (stop all services first)</li>
     <li>Check the error on the service card and the files in the logs folder</li>
   </ul>
+
+  <h3 id="reserved-ports">Reserved ports (Windows)</h3>
+  <p>If a service card says a port is <strong>reserved by Windows</strong>, no program is using it. Windows has set the port aside for Hyper-V, WSL2 or Docker, and refuses to let any app open it. The reserved blocks can move after each restart, so a port that worked yesterday can be blocked today.</p>
+  <ul>
+    <li><strong>Quick fix:</strong> click <strong>Use port N</strong> on the card. CAMPP switches to a free port and starts the service.</li>
+    <li>The same happens to <code>php artisan serve</code> ("Failed to listen on 127.0.0.1:8000 ... forbidden by its access permissions"). Run it on another port: <code>php artisan serve --port=8060</code>.</li>
+    <li>To see the reserved blocks: <code>netsh interface ipv4 show excludedportrange protocol=tcp</code></li>
+  </ul>
+  <p><strong>Permanent fix (optional, needs an administrator):</strong> the blocks can land on ports like 8000 or 8080 only when Windows' dynamic port range starts low. Putting back the Windows default keeps them above 49152. In an administrator terminal run the two commands below, then restart the computer. CAMPP never runs these itself.</p>
+  <pre><code>netsh int ipv4 set dynamic tcp start=49152 num=16384
+netsh int ipv6 set dynamic tcp start=49152 num=16384</code></pre>
 
   <h3>phpMyAdmin or Adminer shows errors</h3>
   <ul>

@@ -61,51 +61,81 @@ impl AppDataPaths {
     }
 }
 
-/// Get the application data directory paths
-pub fn get_app_data_paths() -> Result<AppDataPaths, String> {
+/// Env var that roots the whole CAMPP base folder (settings, runtime, data, logs,
+/// projects) somewhere else. Development/testing only (spec 006, constitution §I):
+/// lets a source build run beside an installed CAMPP without touching it.
+pub const HOME_ENV: &str = "CAMPP_HOME";
+
+fn home_from(value: Option<std::ffi::OsString>) -> Option<PathBuf> {
+    value.filter(|v| !v.is_empty()).map(PathBuf::from)
+}
+
+/// `CAMPP_HOME` when set and non-empty. Normal installs never set it.
+pub fn home_override() -> Option<PathBuf> {
+    home_from(std::env::var_os(HOME_ENV))
+}
+
+/// The base folder without an override: the install folder (where the exe is)
+/// on Windows, `<data_local_dir>/campp` on macOS/Linux.
+fn default_base_dir() -> Result<PathBuf, String> {
     #[cfg(target_os = "windows")]
     {
-        // On Windows, use the installation folder (where the exe is located)
         let exe_path = std::env::current_exe()
             .map_err(|e| format!("Cannot get exe path: {}", e))?;
-        let install_dir = exe_path.parent()
+        Ok(exe_path.parent()
             .ok_or_else(|| "Cannot get installation directory".to_string())?
-            .to_path_buf();
-
-        // Windows MariaDB gets its own datadir so switching engines never mixes
-        // data; MySQL keeps mysql/data so existing installs don't move.
-        let db_dir = match crate::runtime::packages::active_db_engine() {
-            crate::runtime::packages::DbEngine::MariaDb => "mariadb",
-            crate::runtime::packages::DbEngine::MySql => "mysql",
-        };
-
-        Ok(AppDataPaths {
-            base_dir: install_dir.clone(),
-            runtime_dir: install_dir.join("runtime"),
-            config_dir: install_dir.join("config"),
-            mysql_data_dir: install_dir.join(db_dir).join("data"),
-            pgsql_data_dir: install_dir.join("pgsql").join("data"),
-            logs_dir: install_dir.join("logs"),
-            projects_dir: install_dir.join("projects"),
-        })
+            .to_path_buf())
     }
 
     #[cfg(not(target_os = "windows"))]
     {
-        let data_dir = dirs::data_local_dir()
+        Ok(dirs::data_local_dir()
             .ok_or_else(|| "Cannot find data directory".to_string())?
-            .join("campp");
-
-        Ok(AppDataPaths {
-            base_dir: data_dir.clone(),
-            runtime_dir: data_dir.join("runtime"),
-            config_dir: data_dir.join("config"),
-            mysql_data_dir: data_dir.join("mysql").join("data"),
-            pgsql_data_dir: data_dir.join("pgsql").join("data"),
-            logs_dir: data_dir.join("logs"),
-            projects_dir: data_dir.join("projects"),
-        })
+            .join("campp"))
     }
+}
+
+fn resolve_base_dir(home: Option<PathBuf>) -> Result<PathBuf, String> {
+    let Some(home) = home else { return default_base_dir() };
+    if !home.is_absolute() {
+        return Err(format!("{HOME_ENV} must be an absolute path"));
+    }
+    fs::create_dir_all(&home)
+        .map_err(|e| format!("Cannot create {HOME_ENV} folder {}: {}", home.display(), e))?;
+    Ok(home)
+}
+
+/// The CAMPP base folder: `CAMPP_HOME` if set, else the per-OS default.
+/// Every path CAMPP owns hangs off this.
+pub fn base_dir() -> Result<PathBuf, String> {
+    resolve_base_dir(home_override())
+}
+
+fn app_data_paths_in(base: PathBuf) -> AppDataPaths {
+    // Windows MariaDB gets its own datadir so switching engines never mixes
+    // data; MySQL keeps mysql/data so existing installs don't move.
+    #[cfg(target_os = "windows")]
+    let db_dir = match crate::runtime::packages::active_db_engine() {
+        crate::runtime::packages::DbEngine::MariaDb => "mariadb",
+        crate::runtime::packages::DbEngine::MySql => "mysql",
+    };
+    #[cfg(not(target_os = "windows"))]
+    let db_dir = "mysql";
+
+    AppDataPaths {
+        runtime_dir: base.join("runtime"),
+        config_dir: base.join("config"),
+        mysql_data_dir: base.join(db_dir).join("data"),
+        pgsql_data_dir: base.join("pgsql").join("data"),
+        logs_dir: base.join("logs"),
+        projects_dir: base.join("projects"),
+        base_dir: base,
+    }
+}
+
+/// Get the application data directory paths
+pub fn get_app_data_paths() -> Result<AppDataPaths, String> {
+    Ok(app_data_paths_in(base_dir()?))
 }
 
 /// Locate runtime binaries after download
@@ -994,5 +1024,45 @@ mod tests {
         assert_eq!(paths1.base_dir, paths2.base_dir);
         assert_eq!(paths1.runtime_dir, paths2.runtime_dir);
         assert_eq!(paths1.config_dir, paths2.config_dir);
+    }
+
+    // CAMPP_HOME (spec 006): the pure helpers are tested, so no test mutates the process env.
+
+    #[test]
+    fn campp_home_empty_or_unset_is_no_override() {
+        assert_eq!(home_from(None), None);
+        assert_eq!(home_from(Some("".into())), None);
+        assert_eq!(home_from(Some("/x".into())), Some(PathBuf::from("/x")));
+    }
+
+    #[test]
+    fn campp_home_override_is_used_and_created() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().join("e2e-home");
+        assert_eq!(resolve_base_dir(Some(home.clone())).unwrap(), home);
+        assert!(home.is_dir());
+    }
+
+    #[test]
+    fn campp_home_must_be_absolute() {
+        let err = resolve_base_dir(Some(PathBuf::from("relative/home"))).unwrap_err();
+        assert_eq!(err, "CAMPP_HOME must be an absolute path");
+    }
+
+    #[test]
+    fn no_override_keeps_default_base_dir() {
+        assert_eq!(resolve_base_dir(None).unwrap(), default_base_dir().unwrap());
+    }
+
+    #[test]
+    fn app_data_paths_live_under_base() {
+        let base = PathBuf::from("/campp-home");
+        let p = app_data_paths_in(base.clone());
+        assert_eq!(p.base_dir, base);
+        for dir in [&p.runtime_dir, &p.config_dir, &p.mysql_data_dir, &p.pgsql_data_dir, &p.logs_dir, &p.projects_dir] {
+            assert!(dir.starts_with(&base), "{} not under base", dir.display());
+        }
+        assert_eq!(p.runtime_dir, base.join("runtime"));
+        assert_eq!(p.projects_dir, base.join("projects"));
     }
 }

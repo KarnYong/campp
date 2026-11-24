@@ -13,9 +13,20 @@ fn main() {
         }
     }
 
+    let args: Vec<String> = std::env::args().collect();
     // Headless runtime pre-population for building the offline portable release.
-    if std::env::args().any(|a| a == "--prepare-runtime") {
-        std::process::exit(tauri_app_lib::prepare_runtime());
+    // `--include <id>` (repeatable) also installs an optional component.
+    if args.iter().any(|a| a == "--prepare-runtime") {
+        let include: Vec<String> = args
+            .windows(2)
+            .filter(|w| w[0] == "--include")
+            .map(|w| w[1].clone())
+            .collect();
+        std::process::exit(tauri_app_lib::prepare_runtime(&include));
+    }
+    // Headless services for the isolated Laravel e2e (run with CAMPP_HOME set).
+    if args.iter().any(|a| a == "--serve") {
+        std::process::exit(tauri_app_lib::serve_headless());
     }
     tauri_app_lib::run()
 }

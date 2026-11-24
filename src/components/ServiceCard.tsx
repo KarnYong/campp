@@ -1,5 +1,58 @@
+import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { ServiceType, ServiceState, SERVICE_DISPLAY_NAMES, SERVICE_DESCRIPTIONS, DEFAULT_PORTS, getDatabaseDisplayName } from "../types/services";
+import type { AppSettings } from "../types/services";
 import { LOGOS } from "../assets/logos";
+import { buildEnvBlock } from "../lib/envBlock";
+
+/** Copy the Laravel `.env` DB lines for CAMPP's database (spec 006 US4). Settings are
+ *  read on click, so a changed port/password is always current. The password is
+ *  never shown unless the user presses Show (only the clipboard-failure box shows it). */
+function CopyEnvButton() {
+  const [status, setStatus] = useState<"idle" | "copied" | "manual">("idle");
+  const [block, setBlock] = useState("");
+  const [password, setPassword] = useState("");
+  const [revealed, setRevealed] = useState(false);
+
+  const copy = async () => {
+    const s = await invoke<AppSettings>("get_settings");
+    const text = buildEnvBlock({ port: s.mysql_port, password: s.mysql_root_password || "" });
+    setBlock(text);
+    setPassword(s.mysql_root_password || "");
+    setRevealed(false);
+    try {
+      await navigator.clipboard.writeText(text);
+      setStatus("copied");
+    } catch {
+      setStatus("manual");
+    }
+  };
+
+  const masked = password ? block.replace(/^DB_PASSWORD=.*$/m, "DB_PASSWORD=••••") : block;
+  return (
+    <div className="env-copy">
+      <button type="button" className="env-copy__btn" onClick={copy} data-testid="copy-env-button">
+        Copy .env settings
+      </button>
+      {status === "copied" && (
+        <span className="service-row__note" role="status">
+          Copied. Create the database first (e.g. in phpMyAdmin) and change DB_DATABASE.
+        </span>
+      )}
+      {status === "manual" && (
+        <>
+          <span className="service-row__note">Couldn't use the clipboard. Select and copy:</span>
+          <textarea className="env-copy__box mono" readOnly rows={6} value={revealed ? block : masked} data-testid="env-block" />
+          {password && (
+            <button type="button" className="env-copy__btn" onClick={() => setRevealed((r) => !r)}>
+              {revealed ? "Hide password" : "Show password"}
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 // Semantic color class per state (drives styling + is asserted by tests).
 const STATUS_COLOR_CLASS: Record<ServiceState, string> = {
@@ -26,7 +79,17 @@ interface ServiceCardProps {
   onStart: () => void;
   onStop: () => void;
   onRestart: () => void;
+  /** Switch this service to another port and start it (reserved-port fix, spec 006 US3). */
+  onUsePort?: (port: number) => void;
   [key: string]: any; // Allow additional props like data-testid
+}
+
+/** The suggested port from the backend's reserved-port message (process/manager.rs
+ *  `reserved_port_message`, contracts/check-ports.md), or null if not that error. */
+export function reservedPortSuggestion(error?: string): number | null {
+  if (!error?.includes("reserved by Windows")) return null;
+  const m = error.match(/Switch to port (\d+)/);
+  return m ? Number(m[1]) : null;
 }
 
 export function ServiceCard({
@@ -41,8 +104,11 @@ export function ServiceCard({
   onStart,
   onStop,
   onRestart,
+  onUsePort,
   ...props
 }: ServiceCardProps) {
+  const reserved = !!error?.includes("reserved by Windows");
+  const suggestedPort = reservedPortSuggestion(error);
   const displayName = serviceType === ServiceType.MySQL
     ? getDatabaseDisplayName()
     : SERVICE_DISPLAY_NAMES[serviceType];
@@ -85,10 +151,23 @@ export function ServiceCard({
             <span className="service-row__note">Connecting…</span>
           )
         )}
+        {serviceType === ServiceType.MySQL && !notInstalled && <CopyEnvButton />}
         {!notInstalled && isError && error && (
           <p className="service-row__error" title={error}>
-            {error.length > 100 ? error.substring(0, 100) + "..." : error}
+            {/* The reserved-port message is the fix itself, so it is never cut short. */}
+            {!reserved && error.length > 100 ? error.substring(0, 100) + "..." : error}
           </p>
+        )}
+        {!notInstalled && isError && suggestedPort !== null && onUsePort && (
+          <button
+            type="button"
+            className="env-copy__btn"
+            onClick={() => onUsePort(suggestedPort)}
+            disabled={loading}
+            data-testid={`use-port-button-${serviceType}`}
+          >
+            Use port {suggestedPort}
+          </button>
         )}
       </div>
 

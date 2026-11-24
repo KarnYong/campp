@@ -4,9 +4,11 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { ServiceCard } from './ServiceCard';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { invoke } from '@tauri-apps/api/core';
+import { ServiceCard, reservedPortSuggestion } from './ServiceCard';
 import { ServiceType, ServiceState, getDatabaseDisplayName } from '../types/services';
+import { buildEnvBlock } from '../lib/envBlock';
 
 describe('ServiceCard Component', () => {
   const mockHandlers = {
@@ -363,6 +365,88 @@ describe('ServiceCard Component', () => {
       expect(screen.getByText(getDatabaseDisplayName())).toBeInTheDocument();
       expect(screen.getByText(':3307')).toBeInTheDocument();
       expect(screen.getByText('Database Server')).toBeInTheDocument();
+    });
+  });
+
+  describe('Port reserved by Windows (spec 006 US3)', () => {
+    // Exact text from process/manager.rs reserved_port_message.
+    const reservedError =
+      'Port 8000 (web server) is reserved by Windows (range 7949–8048), not used by a program. ' +
+      'Switch to port 8049, or see "Reserved ports" in the manual for the permanent fix.';
+
+    it('reads the suggested port only from a reserved-port error', () => {
+      expect(reservedPortSuggestion(reservedError)).toBe(8049);
+      expect(reservedPortSuggestion('Port 8080 is already in use by another program')).toBeNull();
+      expect(reservedPortSuggestion(undefined)).toBeNull();
+    });
+
+    it('shows the whole message and a Use port button that reports the port', () => {
+      const onUsePort = vi.fn();
+      render(
+        <ServiceCard serviceType={ServiceType.Caddy} state={ServiceState.Error} port={8000}
+          error={reservedError} onUsePort={onUsePort} {...mockHandlers} />
+      );
+      expect(screen.getByText(reservedError)).toBeInTheDocument(); // not cut at 100 chars
+      fireEvent.click(screen.getByTestId('use-port-button-caddy'));
+      expect(onUsePort).toHaveBeenCalledWith(8049);
+    });
+
+    it('has no Use port button for an ordinary error', () => {
+      render(
+        <ServiceCard serviceType={ServiceType.Caddy} state={ServiceState.Error} port={8080}
+          error="Port 8080 is already in use by another program" onUsePort={vi.fn()} {...mockHandlers} />
+      );
+      expect(screen.queryByTestId('use-port-button-caddy')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Copy .env settings (spec 006 US4)', () => {
+    const settings = { mysql_port: 13307, mysql_root_password: 's3cr$t"pw' };
+    const expected = buildEnvBlock({ port: 13307, password: 's3cr$t"pw' });
+
+    beforeEach(() => {
+      vi.mocked(invoke).mockResolvedValue(settings);
+    });
+
+    it('is shown only on the database card', () => {
+      render(<ServiceCard serviceType={ServiceType.Caddy} state={ServiceState.Stopped} {...mockHandlers} />);
+      expect(screen.queryByTestId('copy-env-button')).not.toBeInTheDocument();
+      render(<ServiceCard serviceType={ServiceType.MySQL} state={ServiceState.Stopped} {...mockHandlers} />);
+      expect(screen.getByTestId('copy-env-button')).toBeInTheDocument();
+    });
+
+    it('is hidden when the database is not installed', () => {
+      render(<ServiceCard serviceType={ServiceType.MySQL} state={ServiceState.Stopped} notInstalled {...mockHandlers} />);
+      expect(screen.queryByTestId('copy-env-button')).not.toBeInTheDocument();
+    });
+
+    it('copies the current settings and never shows the password', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+      render(<ServiceCard serviceType={ServiceType.MySQL} state={ServiceState.Running} {...mockHandlers} />);
+
+      fireEvent.click(screen.getByTestId('copy-env-button'));
+
+      await waitFor(() => expect(writeText).toHaveBeenCalledWith(expected));
+      expect(invoke).toHaveBeenCalledWith('get_settings');
+      expect(await screen.findByRole('status')).toHaveTextContent('Copied');
+      expect(document.body.textContent).not.toContain('s3cr');
+    });
+
+    it('falls back to a masked box when the clipboard fails, revealed only on Show', async () => {
+      const writeText = vi.fn().mockRejectedValue(new Error('denied'));
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+      render(<ServiceCard serviceType={ServiceType.MySQL} state={ServiceState.Running} {...mockHandlers} />);
+
+      fireEvent.click(screen.getByTestId('copy-env-button'));
+
+      const box = (await screen.findByTestId('env-block')) as HTMLTextAreaElement;
+      expect(box.value).toContain('DB_PORT=13307');
+      expect(box.value).toContain('DB_PASSWORD=••••');
+      expect(box.value).not.toContain('s3cr');
+
+      fireEvent.click(screen.getByText('Show password'));
+      expect(box.value).toBe(expected);
     });
   });
 });

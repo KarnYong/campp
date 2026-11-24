@@ -241,6 +241,11 @@ impl ProcessManager {
             }
         }
 
+        let other_ports: Vec<u16> = self.services.iter()
+            .filter(|(t, _)| **t != service && **t != ServiceType::Ngrok)
+            .map(|(_, s)| s.port)
+            .collect();
+
         let service_process = self
             .services
             .get_mut(&service)
@@ -249,6 +254,23 @@ impl ProcessManager {
         // Check if already running
         if service_process.state.is_running() {
             return Ok(());
+        }
+
+        // A port Windows reserved (Hyper-V/WSL/Docker) fails with a vague "exited
+        // immediately"; say what it is. Only the reserved case is checked here: an
+        // "in use" pre-check would also trip on our own leftover process, which the
+        // start_* functions clean up just below.
+        if service != ServiceType::Ngrok {
+            if let crate::config::ports::PortStatus::Reserved { range } =
+                crate::config::ports::port_status(service_process.port)
+            {
+                let port = service_process.port;
+                let suggested = crate::config::ports::suggest_port(port, &other_ports);
+                let msg = reserved_port_message(service_label(service), port, range, suggested);
+                service_process.state = ServiceState::Error;
+                service_process.error_message = Some(msg.clone());
+                return Err(msg);
+            }
         }
 
         service_process.state = ServiceState::Starting;
@@ -1003,6 +1025,25 @@ fn remove_init_file_when_ready(init_file: PathBuf, port: u16) {
 /// SQL run via `--init-file` on every MySQL/MariaDB start, keeping every root
 /// account on the saved password.
 /// Both servers log a bind failure this way when the port is taken.
+fn service_label(service: ServiceType) -> String {
+    match service {
+        ServiceType::Caddy => "web server".to_string(),
+        ServiceType::PhpFpm => "PHP".to_string(),
+        ServiceType::MySQL => active_db_engine().display().to_string(),
+        ServiceType::PostgreSQL => "PostgreSQL".to_string(),
+        ServiceType::Ngrok => "ngrok".to_string(),
+    }
+}
+
+/// Spec 006 contracts/check-ports.md wording for a Windows-reserved port.
+fn reserved_port_message(service: String, port: u16, range: Option<(u16, u16)>, suggested: Option<u16>) -> String {
+    let range = range.map(|(a, b)| format!(" (range {a}–{b})")).unwrap_or_default();
+    let switch = suggested.map(|p| format!(" Switch to port {p}, or see")).unwrap_or_else(|| " Pick another port in Settings, or see".to_string());
+    format!(
+        "Port {port} ({service}) is reserved by Windows{range}, not used by a program.{switch} \"Reserved ports\" in the manual for the permanent fix."
+    )
+}
+
 fn is_port_in_use_log(log: &str) -> bool {
     log.contains("Bind on TCP/IP port") || log.contains("Can't start server: Bind")
 }
@@ -1131,6 +1172,19 @@ mod tests {
         assert!(is_port_in_use_log("[ERROR] [MY-010262] [Server] Can't start server: Bind on TCP/IP port: Only one usage"));
         assert!(is_port_in_use_log("[ERROR] Can't start server: Bind on TCP/IP port. Got error: 10048"));
         assert!(!is_port_in_use_log("InnoDB initialization has ended."));
+    }
+
+    #[test]
+    fn reserved_port_message_names_range_and_fix() {
+        let m = reserved_port_message("web server".into(), 8000, Some((7949, 8048)), Some(8049));
+        assert_eq!(
+            m,
+            "Port 8000 (web server) is reserved by Windows (range 7949–8048), not used by a program. \
+             Switch to port 8049, or see \"Reserved ports\" in the manual for the permanent fix."
+        );
+        let m = reserved_port_message("PHP".into(), 9000, None, None);
+        assert!(m.starts_with("Port 9000 (PHP) is reserved by Windows, not used by a program. Pick another port"), "{m}");
+        assert!(!m.contains("in use"), "{m}");
     }
 
     #[test]

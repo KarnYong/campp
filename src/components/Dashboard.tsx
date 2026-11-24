@@ -148,6 +148,25 @@ export function Dashboard() {
     }
   };
 
+  // "Use port N" on a card whose port Windows reserved: save just that port, then start.
+  const usePort = async (serviceType: ServiceType, port: number) => {
+    const key = ({
+      [ServiceType.Caddy]: "web_port",
+      [ServiceType.PhpFpm]: "php_port",
+      [ServiceType.MySQL]: "mysql_port",
+      [ServiceType.PostgreSQL]: "postgres_port",
+    } as Partial<Record<ServiceType, string>>)[serviceType];
+    if (!key) return;
+    try {
+      const settings = await invoke<Record<string, unknown>>("get_settings");
+      await invoke("save_settings", { settings: { ...settings, [key]: port } });
+    } catch (error) {
+      void showAlert("Failed to change the port", String(error));
+      return;
+    }
+    await startService(serviceType);
+  };
+
   const saveNgrokTokenAndStart = async () => {
     if (!ngrokTokenInput.trim()) return;
     setNgrokTokenSaving(true);
@@ -440,6 +459,7 @@ export function Dashboard() {
                   onStart={() => startService(serviceType)}
                   onStop={() => stopService(serviceType)}
                   onRestart={() => restartService(serviceType)}
+                  onUsePort={(port) => usePort(serviceType, port)}
                 />
               );
             })}

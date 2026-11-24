@@ -1447,21 +1447,7 @@ impl RuntimeDownloader {
 
     /// Get the runtime directory
     pub fn get_runtime_dir(&self) -> Result<PathBuf, String> {
-        #[cfg(target_os = "windows")]
-        {
-            // On Windows, use the installation folder (where the exe is located)
-            let exe_path = std::env::current_exe()
-                .map_err(|e| format!("Failed to get exe path: {}", e))?;
-            let install_dir = exe_path.parent()
-                .ok_or("Failed to get installation directory")?;
-            Ok(install_dir.join("runtime"))
-        }
-
-        #[cfg(not(target_os = "windows"))]
-        {
-            let data_dir = dirs::data_local_dir().ok_or("Failed to get data directory")?;
-            Ok(data_dir.join("campp").join("runtime"))
-        }
+        Ok(crate::runtime::locator::base_dir()?.join("runtime"))
     }
 
     /// Check if runtime binaries are already installed

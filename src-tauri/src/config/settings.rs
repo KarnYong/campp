@@ -20,6 +20,26 @@ pub struct Ports {
 
 fn default_postgres_port() -> u16 { 5433 }
 
+/// Settings file. Without CAMPP_HOME it stays at the per-user path every install has
+/// always used (FR-021); with it, it lives inside that folder so a test build never
+/// reads or writes the installed CAMPP's settings.
+fn settings_path_for(home: Option<PathBuf>) -> Option<PathBuf> {
+    match home {
+        Some(home) => Some(home.join("config").join("settings.json")),
+        None => dirs::data_local_dir().map(|p| p.join("campp").join("config").join("settings.json")),
+    }
+}
+
+fn default_project_root(home: Option<PathBuf>) -> PathBuf {
+    match home {
+        Some(home) => home.join("projects"),
+        None => dirs::data_local_dir()
+            .unwrap_or_else(|| dirs::home_dir().unwrap_or_default())
+            .join("campp")
+            .join("projects"),
+    }
+}
+
 /// Theme preference: "system" (follow OS), "light", or "dark".
 fn default_theme() -> String { "system".to_string() }
 
@@ -55,10 +75,7 @@ impl Default for AppSettings {
             php_port: DEFAULT_PORTS.php,
             mysql_port: DEFAULT_PORTS.mysql,
             postgres_port: DEFAULT_PORTS.postgres,
-            project_root: dirs::data_local_dir()
-                .unwrap_or_else(|| dirs::home_dir().unwrap_or_default())
-                .join("campp")
-                .join("projects")
+            project_root: default_project_root(crate::runtime::locator::home_override())
                 .to_string_lossy()
                 .to_string(),
             auto_start_services: false,
@@ -80,8 +97,7 @@ impl AppSettings {
 
     /// Get the path to the settings file
     fn settings_path() -> Option<PathBuf> {
-        dirs::data_local_dir()
-            .map(|p| p.join("campp").join("config").join("settings.json"))
+        settings_path_for(crate::runtime::locator::home_override())
     }
 
     /// Load settings from file, or return defaults if file doesn't exist
@@ -197,4 +213,22 @@ pub fn load_settings() -> AppSettings {
 /// Legacy function for backward compatibility
 pub fn save_settings(settings: &AppSettings) -> Result<(), String> {
     settings.save()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn settings_path_unchanged_without_campp_home() {
+        let expected = dirs::data_local_dir().map(|p| p.join("campp").join("config").join("settings.json"));
+        assert_eq!(settings_path_for(None), expected);
+    }
+
+    #[test]
+    fn settings_and_projects_follow_campp_home() {
+        let home = PathBuf::from("/e2e/home");
+        assert_eq!(settings_path_for(Some(home.clone())), Some(home.join("config").join("settings.json")));
+        assert_eq!(default_project_root(Some(home.clone())), home.join("projects"));
+    }
 }

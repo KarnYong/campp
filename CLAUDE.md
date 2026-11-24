@@ -87,11 +87,20 @@ src-tauri/src/
 
 **Config Generation**: Mustache templates in `templates/` are rendered by `config/generator.rs` to produce service configs.
 
-**Runtime Binaries**: Downloaded on first-run to platform-specific data directory (`~/.campp/runtime/` on Unix, `C:\Users\<user>\.campp\runtime\` on Windows).
+**Runtime Binaries**: Downloaded on first run into `<base>/runtime/`. The base folder (`runtime::locator::base_dir()`) is the install folder (next to `CAMPP.exe`) on Windows, and `<data_local_dir>/campp` on macOS (`~/Library/Application Support/campp`) and Linux (`~/.local/share/campp`). Settings live in `<data_local_dir>/campp/config/settings.json` on every OS.
+
+**`CAMPP_HOME`** (dev/testing only, constitution §I): an absolute path that roots everything (settings, runtime, data, logs, projects, bin) in one folder and turns off the single-instance lock, so a source build can run beside an installed CAMPP. Unset = normal behaviour.
+
+### Testing without touching an installed CAMPP
+- Never start services from a source build without `CAMPP_HOME` under `.e2e/` (git-ignored) and ports other than 8080/9000/3307/2019 (use 18080/19000/13307).
+- `CAMPP --prepare-runtime [--include composer]`: headless runtime download into the base folder.
+- `CAMPP --serve`: headless PHP + DB + Caddy; prints `CAMPP_READY {json}`, stops on stdin close/Ctrl+C (`CAMPP_STOPPED`).
+- `npm run e2e:laravel`: builds a Laravel "tasks" app on an isolated instance (`scripts/e2e-laravel.mjs`; run `cargo build` in `src-tauri/` first). Checks the installed CAMPP's settings by mtime/size only.
+- The `#[ignore]`d integration tests in `process/manager.rs` run `taskkill /IM caddy.exe` etc. They kill *every* CAMPP's services, so don't run `cargo test -- --ignored` while an installed CAMPP is in use.
 
 ### App Data Directory Structure
 ```
-~/.campp/
+<base>/
 ├── config/           # Generated configs (Caddyfile, php-fpm.conf, etc.)
 ├── mysql/data/       # MySQL datadir (Windows/macOS) or MariaDB datadir (Linux)
 ├── mariadb/data/     # Windows only: MariaDB datadir when MariaDB is the chosen engine

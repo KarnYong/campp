@@ -98,6 +98,15 @@ fn no_terminal(bin: &Path) -> String {
 
 /// Open the platform terminal in the projects folder with `<base>/bin` first on PATH.
 pub fn open_terminal() -> Result<String, String> {
+    let (bin, projects) = prepare_launchers()?;
+    let _ = fs::create_dir_all(&projects);
+    spawn(&bin, &projects)?;
+    Ok(bin.to_string_lossy().into_owned())
+}
+
+/// Write the `php`/`composer` launchers (php.ini made/upgraded first) and return
+/// `(bin dir, projects dir)`. Shared by Open terminal and headless `--serve`.
+pub(crate) fn prepare_launchers() -> Result<(PathBuf, PathBuf), String> {
     let app = get_app_data_paths()?;
     let paths = locate_runtime_binaries().map_err(|_| "Install PHP first to use the terminal.".to_string())?;
     if !paths.php_cgi.exists() {
@@ -115,10 +124,7 @@ pub fn open_terminal() -> Result<String, String> {
     crate::config::generator::ensure_php_ini_extensions(&paths.php_ini)?;
     let phar = app.runtime_dir.join("composer").join("composer.phar");
     let bin = write_launchers(&app.base_dir, &php, &paths.php_ini, phar.exists().then_some(phar.as_path()))?;
-    let projects = &paths.projects_dir;
-    let _ = fs::create_dir_all(projects);
-    spawn(&bin, projects)?;
-    Ok(bin.to_string_lossy().into_owned())
+    Ok((bin, paths.projects_dir))
 }
 
 #[cfg(target_os = "windows")]

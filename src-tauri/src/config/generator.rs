@@ -17,7 +17,10 @@ pub fn generate_caddyfile(path: &PathBuf, paths: &RuntimePaths, port: u16, php_p
         .ok_or("Invalid log path")?
         .replace('\\', "/");
 
-    let mut content = String::new();
+    // CAMPP never uses Caddy's admin API (it starts with `run --config`, stops by
+    // killing the process). Turning it off frees localhost:2019, so two Caddys (an
+    // installed CAMPP and a CAMPP_HOME test build, or the user's own Caddy) can run.
+    let mut content = String::from("{\n    admin off\n}\n\n");
     // Always use :{port} as the site address so Caddy matches any Host header
     // (needed for ngrok tunnels which forward with the ngrok domain as Host).
     // Use `bind` directive to restrict listen address when not in LAN mode.
@@ -178,6 +181,16 @@ http://*.localhost:{port} {{
     Ok(())
 }
 
+/// `campp-<FNV-1a of the php.ini path>`: stable for one install, different for each
+/// install folder (FNV, not DefaultHasher, whose output may change between Rust versions).
+fn opcache_cache_id(php_ini: &Path) -> String {
+    let hash = php_ini
+        .to_string_lossy()
+        .bytes()
+        .fold(0xcbf29ce484222325u64, |h, b| (h ^ b as u64).wrapping_mul(0x100000001b3));
+    format!("campp-{hash:016x}")
+}
+
 pub fn generate_php_ini(path: &PathBuf, paths: &RuntimePaths) -> Result<(), String> {
     let php_dir = paths.php_cgi.parent()
         .ok_or("Cannot determine PHP directory")?;
@@ -233,6 +246,9 @@ extension=zip
 extension=fileinfo
 extension=pdo_sqlite
 extension=sqlite3
+extension=intl
+extension=gd
+extension=sodium
 
 ; Session settings - use absolute path for Windows compatibility
 session.save_path = "{}"
@@ -264,11 +280,15 @@ opcache.validate_timestamps=1
 opcache.save_comments=1
 opcache.jit=tracing
 opcache.jit_buffer_size=128M
+; Windows: PHP processes of one version under one user share a single OPcache unless
+; their cache_id differs. A second PHP (another CAMPP, a CAMPP_HOME test build, XAMPP)
+; would otherwise attach to it and die with "Opcode handlers are unusable due to ASLR".
+opcache.cache_id={}
 
 ; Realpath cache for better file path resolution (doubled)
 realpath_cache_size=8192K
 realpath_cache_ttl=300
-"#, error_log, ext_dir_str, session_path, session_path);
+"#, error_log, ext_dir_str, session_path, session_path, opcache_cache_id(path));
 
     let mut file = File::create(path)
         .map_err(|e| format!("Failed to create php.ini: {}", e))?;
@@ -614,8 +634,24 @@ tunnels:
 
 /// Extensions Composer/Laravel need that php.ini files written before CAMPP enabled
 /// them lack: zip (Composer unpacks dists), fileinfo, pdo_sqlite + sqlite3 (Laravel's
-/// default DB). On static Linux/macOS builds these are compiled in, so the lines are inert.
-const EXTRA_EXTENSIONS: [&str; 4] = ["zip", "fileinfo", "pdo_sqlite", "sqlite3"];
+/// default DB), intl (Number helpers, `artisan db:show`), gd (images), sodium. On
+/// static Linux/macOS builds these are compiled in, so the lines are inert.
+const EXTRA_EXTENSIONS: [&str; 7] = ["zip", "fileinfo", "pdo_sqlite", "sqlite3", "intl", "gd", "sodium"];
+
+/// The extension a php.ini line names, active or commented out: `extension=intl`,
+/// `; extension = "php_intl.dll"` → `intl`. A commented line counts as present, so a
+/// user's opt-out is never re-enabled (spec 006 FR-005).
+fn ini_extension_name(line: &str) -> Option<String> {
+    let line = line.trim().trim_start_matches(';').trim_start();
+    let (key, value) = line.split_once('=')?;
+    if key.trim() != "extension" {
+        return None;
+    }
+    let name = value.trim().trim_matches('"').to_ascii_lowercase();
+    let name = name.strip_prefix("php_").unwrap_or(&name);
+    let name = name.strip_suffix(".dll").or_else(|| name.strip_suffix(".so")).unwrap_or(name);
+    Some(name.to_string())
+}
 
 /// Add any missing EXTRA_EXTENSIONS lines to an existing php.ini, right after
 /// `extension=pgsql` (else at the end). Idempotent; keeps line endings; touches nothing else.
@@ -629,7 +665,8 @@ pub fn ensure_php_ini_extensions(path: &Path) -> Result<(), String> {
 }
 
 fn add_missing_extensions(text: &str) -> String {
-    let has = |ext: &str| text.lines().any(|l| l.trim() == format!("extension={ext}"));
+    let present: Vec<String> = text.lines().filter_map(ini_extension_name).collect();
+    let has = |ext: &str| present.iter().any(|p| p == ext);
     let missing: Vec<&str> = EXTRA_EXTENSIONS.iter().copied().filter(|e| !has(e)).collect();
     if missing.is_empty() {
         return text.to_string();
@@ -663,10 +700,69 @@ mod tests {
         assert!(!new.replace("\r\n", "").contains('\n'), "keeps CRLF");
         assert_eq!(super::add_missing_extensions(&new), new, "idempotent");
         // Already present (fresh ini) -> unchanged; no pgsql line -> appended
-        let lf = "extension=zip\nextension=fileinfo\nextension=pdo_sqlite\nextension=sqlite3\n";
-        assert_eq!(super::add_missing_extensions(lf), lf);
-        assert!(super::add_missing_extensions("[PHP]")
-            .ends_with("[PHP]\nextension=zip\nextension=fileinfo\nextension=pdo_sqlite\nextension=sqlite3\n"));
+        let all: String = super::EXTRA_EXTENSIONS.iter().map(|e| format!("extension={e}\n")).collect();
+        assert_eq!(super::add_missing_extensions(&all), all);
+        assert_eq!(super::add_missing_extensions("[PHP]"), format!("[PHP]\n{all}"));
+    }
+
+    #[test]
+    fn laravel_extensions_are_added_to_old_ini_files() {
+        // Spec 006 FR-004: intl (Number helpers, db:show), gd, sodium.
+        for e in ["intl", "gd", "sodium"] {
+            assert!(super::EXTRA_EXTENSIONS.contains(&e), "{e}");
+        }
+        let old = "extension=openssl\nextension=pgsql\nextension=zip\n";
+        let new = super::add_missing_extensions(old);
+        for e in ["intl", "gd", "sodium"] {
+            assert_eq!(new.matches(&format!("extension={e}\n")).count(), 1, "{e}");
+        }
+        assert_eq!(new.matches("extension=zip\n").count(), 1);
+    }
+
+    #[test]
+    fn commented_out_extension_is_the_users_choice() {
+        // FR-005: a line the user commented out must not come back enabled.
+        for line in [";extension=intl", "; extension = intl", ";extension=php_intl.dll", "  ;extension=\"intl\""] {
+            let ini = format!("extension=pgsql\n{line}\n");
+            let new = super::add_missing_extensions(&ini);
+            assert!(!new.lines().any(|l| l.trim() == "extension=intl"), "{line}: {new}");
+            assert!(new.contains(line), "user line kept: {line}");
+        }
+        // Other similar names don't count as intl.
+        assert!(super::add_missing_extensions(";extension=intlx\n").contains("\nextension=intl\n"));
+    }
+
+    #[test]
+    fn fresh_php_ini_enables_laravel_extensions() {
+        use crate::runtime::locator::RuntimePaths;
+        let dir = tempfile::TempDir::new().unwrap();
+        let p = |n: &str| dir.path().join(n);
+        let paths = RuntimePaths {
+            caddy: p("caddy"), php_cgi: p("php-cgi"), php_ini: p("php.ini"), php_ext_dir: p("ext"),
+            mysql: p("mysqld"), phpmyadmin: p("phpmyadmin"), pgsql_dir: p("pgsql"), adminer: p("adminer"),
+            mysql_data_dir: p("data"), pgsql_data_dir: p("pgdata"), logs_dir: p("logs"),
+            config_dir: p("config"), projects_dir: p("projects"), ngrok: p("ngrok"),
+        };
+        super::generate_php_ini(&paths.php_ini, &paths).unwrap();
+        let ini = std::fs::read_to_string(&paths.php_ini).unwrap();
+        for e in super::EXTRA_EXTENSIONS {
+            assert_eq!(ini.lines().filter(|l| l.trim() == format!("extension={e}")).count(), 1, "{e}");
+        }
+        // The upgrade pass changes nothing on a fresh file.
+        assert_eq!(super::add_missing_extensions(&ini), ini);
+        // Own OPcache per install, so it can run beside another CAMPP's PHP (Windows).
+        let id = super::opcache_cache_id(&paths.php_ini);
+        assert!(ini.contains(&format!("\nopcache.cache_id={id}\n")), "{ini}");
+    }
+
+    #[test]
+    fn opcache_cache_id_differs_per_install() {
+        use std::path::Path;
+        let a = super::opcache_cache_id(Path::new("C:/CAMPP/runtime/php.ini"));
+        let b = super::opcache_cache_id(Path::new("C:/src/campp/.e2e/home/runtime/php.ini"));
+        assert_ne!(a, b);
+        assert_eq!(a, super::opcache_cache_id(Path::new("C:/CAMPP/runtime/php.ini")));
+        assert!(a.starts_with("campp-") && a.len() == 22, "{a}");
     }
 
     #[test]
@@ -691,6 +787,9 @@ mod tests {
         // index.html folders redirect to the trailing slash like index.php folders.
         assert!(cf.contains("redir @htmlDir {path}/ 308"), "{cf}");
         assert!(cf.contains("respond \"404 Not Found\" 404"), "{cf}");
+        // Admin API off (unused): a second Caddy (installed CAMPP + test build) would
+        // otherwise fail on the shared admin port 2019.
+        assert!(cf.starts_with("{\n    admin off\n}\n\n"), "{cf}");
     }
 
     fn caddyfile_for(bind: &str) -> (String, String) {
@@ -713,6 +812,7 @@ mod tests {
     fn caddyfile_serves_each_project_at_its_own_localhost_name() {
         // Spec 005 US1, contracts/caddyfile-sites.md
         let (cf, p) = caddyfile_for("127.0.0.1");
+        assert!(cf.starts_with("{\n    admin off\n}\n\n"), "{cf}");
         let main = cf.find(":18080 {").expect("main site");
         let sites = cf.find("http://*.localhost:18080 {").expect("*.localhost site");
         assert!(main < sites, "main site stays first");

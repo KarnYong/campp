@@ -11,6 +11,11 @@ on:
   workflow_dispatch:
   # Called by build.yml so every release is gated on this exact suite (FR-001)
   workflow_call:
+    inputs:
+      laravel_e2e:
+        description: Also build a real Laravel app on CAMPP (spec 006; needs network, ~10 min)
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -75,3 +80,63 @@ jobs:
         working-directory: src-tauri
         # Library + integration tests (tests/*.rs); doc tests were never part of the suite
         run: cargo test --lib --tests
+
+  # Spec 006 US5: build a Laravel "tasks" app on CAMPP run from source, isolated via
+  # CAMPP_HOME on ports 18080/19000/13307. Manual runs and the release gate only (not
+  # every push): it downloads runtimes + Laravel and takes ~10 min.
+  e2e-laravel:
+    needs: test
+    if: github.event_name == 'workflow_dispatch' || inputs.laravel_e2e
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          # 22.18+ runs src/lib/envBlock.ts without a build step (type stripping)
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable (2026-11-15)
+        with:
+          toolchain: stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: src-tauri
+
+      - name: Cache CAMPP runtimes for the test home
+        uses: actions/cache@v4
+        with:
+          path: .e2e/home/runtime
+          key: e2e-runtime-${{ runner.os }}-${{ hashFiles('src-tauri/runtime-config.json') }}
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build CAMPP (debug)
+        working-directory: src-tauri
+        run: cargo build
+
+      - name: Laravel end-to-end
+        run: npm run e2e:laravel
