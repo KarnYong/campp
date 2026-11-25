@@ -1,13 +1,13 @@
 {
-    "version": "0.4.0",
+    "version": "0.5.0",
     "description": "Local web dev stack: Caddy, PHP, MySQL/MariaDB, PostgreSQL, phpMyAdmin. No admin rights needed.",
     "homepage": "https://github.com/KarnYong/campp",
     "license": "MIT",
     "notes": "Projects folder: $persist_dir\\projects",
     "architecture": {
         "64bit": {
-            "url": "https://github.com/KarnYong/campp/releases/download/v0.4.0/CAMPP-0.4.0-x64-portable.zip",
-            "hash": "3d84cecce4b4dd25a6c4e1303d4ddff2bacb40da689086e3f78be6b76ea14801"
+            "url": "https://github.com/KarnYong/campp/releases/download/v0.5.0/CAMPP-0.5.0-x64-portable.zip",
+            "hash": "2b621e48a6edcbf586c25f6303c7f94e9d8ec9719ee3a963d7ff9ef628d049e8"
         }
     },
     "shortcuts": [
