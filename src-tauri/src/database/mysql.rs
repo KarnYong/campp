@@ -213,23 +213,6 @@ pub fn initialize_mysql(paths: &RuntimePaths) -> Result<(), String> {
     Ok(())
 }
 
-pub fn create_database(name: &str) -> Result<(), String> {
-    let _ = name;
-    // TODO: Implement database creation
-    Ok(())
-}
-
-pub fn drop_database(name: &str) -> Result<(), String> {
-    let _ = name;
-    // TODO: Implement database deletion
-    Ok(())
-}
-
-pub fn list_databases() -> Result<Vec<String>, String> {
-    // TODO: Implement database listing
-    Ok(vec![])
-}
-
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ConnectionInfo {
     pub host: String,
