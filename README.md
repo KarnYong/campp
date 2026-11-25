@@ -75,6 +75,9 @@ rm -rf ~/.local/share/campp
 - **Self-contained**: every binary lives in CAMPP's own folder, with no separate installations
 - **Version choice**: choose PHP, database, and tool versions in the setup wizard
 - **Optional components**: install only what you need (MySQL/MariaDB, PostgreSQL, phpMyAdmin, Adminer, ngrok), and add, reinstall or remove components later on the Components page
+- **Local site addresses**: every project folder gets its own address, like http://blog.localhost:8080, with no hosts file and no admin rights. The **Sites** page lists them with an Open button.
+- **Laravel and Symfony ready**: folders with `public/index.php` are served from `public/` automatically; PHP includes intl, gd and sodium; the database card has **Copy .env settings** for Laravel's `DB_*` lines
+- **Composer and Open terminal**: Composer 2 is a component, and **Open terminal** opens a terminal in your projects folder with CAMPP's `php` and `composer` ready to use
 - **Service management**: start, stop, and restart services individually, or all at once
 - **Port configuration**: change each service's port in Settings
 - **LAN mode**: make services reachable from other devices on your network
@@ -92,14 +95,15 @@ The default (recommended) version is listed first. Other versions can be picked 
 
 | Component | Versions | Platforms |
 |-----------|----------|-----------|
-| Caddy | **2.11.7**, 2.11.4 | All |
+| Caddy | **2.11.9**, 2.11.7, 2.11.4 | All |
 | PHP-FPM | **8.5**, 8.4, 8.3, 8.2 | All |
 | PHP (legacy) | 7.4.33 | Windows only |
-| MySQL | **8.4.11 LTS**, 8.0.46 | Windows, macOS |
-| MariaDB | **12.3.3 LTS**, 11.8.9, 11.4.13, 10.11.19 | Linux (x64) |
-| PostgreSQL | **18.6.1**, 17.11, 16.15, 15.19 | All (optional) |
+| MySQL | **8.4.13 LTS**, 8.0.46 | Windows, macOS |
+| MariaDB | **12.3.4 LTS**, 11.8.10, 11.4.14, 10.11.20 | Linux (x64), Windows |
+| PostgreSQL | **18.7.0**, 17.12.0, 16.16.0, 15.20.0 | All (optional) |
 | phpMyAdmin | **5.2.3** | All (optional) |
-| Adminer | **5.4.2**, 6.1.2 | All (optional) |
+| Adminer | **5.5.1**, 6.3.0 | All (optional) |
+| Composer | **2.11.2** | All (optional) |
 | ngrok | **3.19.2** | Windows (optional) |
 
 On Linux and macOS, the PHP 8.5 package is a static build from static-php-cli.
@@ -139,7 +143,7 @@ Versions and download URLs are defined in `src-tauri/runtime-config.json`.
 1. **Install** CAMPP from the release that matches your platform.
 2. **First run**: the setup wizard lets you choose components and versions and set database root passwords. It then downloads the runtimes (several hundred MB). The offline portable zip skips the download.
 3. **Start services**: click **Start all** on the dashboard, or start services one at a time.
-4. **Build sites**: put your files in the projects folder (**Quick open → Projects folder**), then browse http://localhost:8080.
+4. **Build sites**: put your files in the projects folder (**Quick open → Projects folder**), then open the **Sites** page. A folder named `blog` is at http://blog.localhost:8080 (or http://localhost:8080/blog/).
 5. **Manage databases**: use phpMyAdmin or Adminer from **Quick open**.
 
 The full user manual (`src-tauri/MANUAL.html`) ships with the app. Open it with **User manual** in the sidebar.
