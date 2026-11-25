@@ -531,9 +531,9 @@ jobs:
       - name: Collect files to release
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item "src-tauri/target/release/bundle/msi/*.msi","src-tauri/target/release/bundle/nsis/*.exe","src-tauri/target/release/CAMPP-*-portable.zip" dist
-          Get-ChildItem dist | ForEach-Object { Write-Host $_.Name }
+          New-Item -ItemType Directory -Force -Path win-dist | Out-Null
+          Copy-Item "src-tauri/target/release/bundle/msi/*.msi","src-tauri/target/release/bundle/nsis/*.exe","src-tauri/target/release/CAMPP-*-portable.zip" win-dist
+          Get-ChildItem win-dist | ForEach-Object { Write-Host $_.Name }
 
       # Code signing via SignPath Foundation. Off until the repository variable
       # SIGNPATH_ORGANIZATION_ID and secret SIGNPATH_API_TOKEN exist; unsigned builds
@@ -544,7 +544,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: windows-unsigned # not CAMPP-*, so checksums/create-release never pick it up
-          path: dist/*
+          path: win-dist/*
           if-no-files-found: error
 
       - name: Sign with SignPath
@@ -559,7 +559,7 @@ jobs:
           github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
           wait-for-completion: true
           wait-for-completion-timeout-in-seconds: 3600 # a person approves each request
-          output-artifact-directory: dist # signed files replace the unsigned ones
+          output-artifact-directory: win-dist # signed files replace the unsigned ones
 
       - name: Pre-populate runtime (offline portable)
         shell: pwsh
@@ -583,16 +583,16 @@ jobs:
           # never has to go through SignPath and its CAMPP.exe is signed too.
           $version = "${{ steps.get_version.outputs.version }}"
           $stage = "offline/CAMPP"
-          Expand-Archive "dist/CAMPP-$version-x64-portable.zip" -DestinationPath $stage -Force
+          Expand-Archive "win-dist/CAMPP-$version-x64-portable.zip" -DestinationPath $stage -Force
           Copy-Item "src-tauri/target/release/runtime" $stage -Recurse -Force
-          Compress-Archive -Path "$stage/*" -DestinationPath "dist/CAMPP-$version-x64-portable-offline.zip" -Force
+          Compress-Archive -Path "$stage/*" -DestinationPath "win-dist/CAMPP-$version-x64-portable-offline.zip" -Force
 
       - name: Report signatures
         shell: pwsh
         run: |
           $version = "${{ steps.get_version.outputs.version }}"
-          Expand-Archive "dist/CAMPP-$version-x64-portable.zip" -DestinationPath sigcheck -Force
-          foreach ($f in @(Get-ChildItem dist/*.exe, dist/*.msi) + (Get-Item sigcheck/CAMPP.exe)) {
+          Expand-Archive "win-dist/CAMPP-$version-x64-portable.zip" -DestinationPath sigcheck -Force
+          foreach ($f in @(Get-ChildItem win-dist/*.exe, win-dist/*.msi) + (Get-Item sigcheck/CAMPP.exe)) {
             $sig = Get-AuthenticodeSignature $f.FullName
             Write-Host ("{0,-40} {1,-12} {2}" -f $f.Name, $sig.Status, $sig.SignerCertificate.Subject)
           }
@@ -601,7 +601,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: CAMPP-Windows
-          path: dist/*
+          path: win-dist/*
           if-no-files-found: error
 
       - name: List Windows artifacts
