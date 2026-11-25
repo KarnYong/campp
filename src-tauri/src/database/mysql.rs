@@ -84,6 +84,10 @@ pub fn initialize_mysql(paths: &RuntimePaths) -> Result<(), String> {
             .map_err(|e| format!("Failed to create init log file: {}", e))?;
 
         let mut cmd = configure_no_window(Command::new(&init_script));
+        // Must be first. Without it a system /etc/mysql/my.cnf (e.g. MySQL's
+        // mysqlx-bind-address) is read and MariaDB aborts on the unknown option.
+        #[cfg(not(target_os = "windows"))]
+        cmd.arg("--no-defaults");
         cmd.arg(format!("--datadir={}", data_dir_str));
         // Unix script options; the Windows .exe takes only --datadir here.
         #[cfg(not(target_os = "windows"))]
@@ -155,6 +159,7 @@ pub fn initialize_mysql(paths: &RuntimePaths) -> Result<(), String> {
             .map_err(|e| format!("Failed to create init log file: {}", e))?;
 
         let mut child = configure_no_window(Command::new(mysqld))
+            .arg("--no-defaults") // must be first: ignore system my.cnf/my.ini
             .arg("--initialize-insecure")
             .arg("--datadir")
             .arg(&data_dir_str)

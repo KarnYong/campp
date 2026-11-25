@@ -652,7 +652,10 @@ fn start_mysql(service_process: &mut ServiceProcess, paths: &RuntimePaths, setti
     let socket_str = socket_path.to_string_lossy().to_string();
 
     let mut cmd = configure_no_window(Command::new(&paths.mysql));
-    cmd.arg("--datadir")
+    // Must be first: ignore system my.cnf/my.ini. Every option CAMPP needs is
+    // passed here; a system MySQL config breaks MariaDB (and vice versa).
+    cmd.arg("--no-defaults")
+        .arg("--datadir")
         .arg(&data_dir_str)
         .arg("--port")
         .arg(service_process.port.to_string())
