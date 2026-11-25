@@ -447,6 +447,10 @@ describe('ServiceCard Component', () => {
 
       fireEvent.click(screen.getByText('Show password'));
       expect(box.value).toBe(expected);
+
+      fireEvent.click(screen.getByText('Close'));
+      expect(screen.queryByTestId('env-block')).not.toBeInTheDocument();
+      expect(document.body.textContent).not.toContain('s3cr');
     });
   });
 });

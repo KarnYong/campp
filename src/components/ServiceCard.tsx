@@ -48,6 +48,9 @@ function CopyEnvButton() {
               {revealed ? "Hide password" : "Show password"}
             </button>
           )}
+          <button type="button" className="env-copy__btn" onClick={() => { setStatus("idle"); setBlock(""); setPassword(""); }}>
+            Close
+          </button>
         </>
       )}
     </div>
